@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api_error.dart';
 import 'app_brand.dart';
 import 'app_update_service.dart';
+import 'app_version.dart';
 import 'gateway_client.dart';
 import 'image_capabilities.dart';
 import 'image_cache_service.dart';
@@ -26,8 +27,8 @@ final appUpdateProvider = Provider<AppUpdateService>((ref) {
     appId: 're0',
     appName: '从零开始生图',
     packageName: 'com.dq52099.re0',
-    currentVersionName: '1.1.19',
-    currentVersionCode: 10119,
+    currentVersionName: AppVersion.name,
+    currentVersionCode: AppVersion.code,
   );
 });
 

@@ -41,6 +41,20 @@ jobs:
       - name: Generate App Icons
         run: dart run flutter_launcher_icons:main
 
+      - name: Read app version
+        id: app_version
+        shell: bash
+        run: |
+          raw_version="$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | head -n 1)"
+          version_name="${raw_version%%+*}"
+          version_code="${raw_version##*+}"
+          if [[ -z "${version_name}" || -z "${version_code}" || "${version_name}" == "${raw_version}" ]]; then
+            echo "::error::pubspec.yaml version must use name+code format, for example 1.1.21+10121."
+            exit 1
+          fi
+          echo "name=${version_name}" >> "${GITHUB_OUTPUT}"
+          echo "code=${version_code}" >> "${GITHUB_OUTPUT}"
+
       - name: Configure release signing
         env:
           RE0_KEYSTORE_BASE64: ${{ secrets.RE0_KEYSTORE_BASE64 }}
@@ -54,7 +68,7 @@ jobs:
           chmod 600 "${RE0_KEYSTORE_PATH}"
 
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --release --dart-define=RE0_VERSION_NAME=${{ steps.app_version.outputs.name }} --dart-define=RE0_VERSION_CODE=${{ steps.app_version.outputs.code }}
 
       - name: Prepare APK
         shell: bash
