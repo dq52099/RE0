@@ -26,7 +26,7 @@ apply plugin: 'kotlin-android'
 apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
 android {
-    namespace 'com.dq52099.boxying_mobile'
+    namespace 'com.dq52099.re0'
     compileSdkVersion 34
     ndkVersion flutter.ndkVersion
 
@@ -44,7 +44,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.dq52099.boxying_mobile"
+        applicationId "com.dq52099.re0"
         minSdkVersion 21
         targetSdkVersion 34
         versionCode flutterVersionCode.toInteger()

@@ -26,7 +26,7 @@ class ImageCacheService {
         );
 
   static const MethodChannel _downloadsChannel =
-      MethodChannel('boxying_image_gateway/downloads');
+      MethodChannel('re0/downloads');
 
   final Dio _dio;
 
@@ -147,7 +147,7 @@ class ImageCacheService {
   }
 
   String _downloadFileName(String url) {
-    return 'boxying-${DateTime.now().millisecondsSinceEpoch}-${_stableHash(url)}${_extensionFromUrl(url)}';
+    return 're0-${DateTime.now().millisecondsSinceEpoch}-${_stableHash(url)}${_extensionFromUrl(url)}';
   }
 
   String _extensionFromUrl(String url) {

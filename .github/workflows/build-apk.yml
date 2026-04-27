@@ -48,12 +48,12 @@ jobs:
           else
             version="dev-${GITHUB_SHA::7}"
           fi
-          cp build/app/outputs/flutter-apk/app-release.apk "build/release/boxying-mobile-${version}.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk "build/release/RE0-${version}.apk"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: boxying-mobile-apk
+          name: RE0-apk
           path: build/release/*.apk
 
       - name: Publish GitHub Release

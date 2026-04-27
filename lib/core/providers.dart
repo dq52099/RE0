@@ -19,13 +19,13 @@ final imageCacheProvider = Provider<ImageCacheService>((ref) {
 
 final appUpdateProvider = Provider<AppUpdateService>((ref) {
   return AppUpdateService(
-    repository: 'dq52099/boxying-mobile',
-    assetNamePrefix: 'boxying-mobile',
-    appId: 'boxying-mobile',
-    appName: 'Boxying Mobile',
-    packageName: 'com.dq52099.boxying_mobile',
-    currentVersionName: '1.0.0',
-    currentVersionCode: 1,
+    repository: 'dq52099/RE0',
+    assetNamePrefix: 'RE0',
+    appId: 're0',
+    appName: 'RE0',
+    packageName: 'com.dq52099.re0',
+    currentVersionName: '1.0.1',
+    currentVersionCode: 101,
   );
 });
 

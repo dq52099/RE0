@@ -4,7 +4,7 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <application
         android:usesCleartextTraffic="true"
-        android:label="Boxying Mobile"
+        android:label="RE0"
         android:name="${applicationName}">
         <activity
             android:name=".MainActivity"

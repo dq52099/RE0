@@ -50,7 +50,7 @@ class AppUpdateService {
         );
 
   static const MethodChannel _channel =
-      MethodChannel('boxying_image_gateway/downloads');
+      MethodChannel('re0/downloads');
 
   final Dio _dio;
   final String repository;

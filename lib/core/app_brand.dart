@@ -118,8 +118,8 @@ class AppBrands {
 
   static final re0 = AppBrand(
     style: BrandStyle.re0,
-    appTitle: '从零生图',
-    loginTitle: '登录从零生图',
+    appTitle: 'RE0',
+    loginTitle: '登录 RE0',
     generateTabLabel: '咏唱',
     editTabLabel: '死亡回归',
     historyTabLabel: '记忆回廊',
@@ -143,7 +143,7 @@ class AppBrands {
     emptyHistoryText: '回廊空空如也',
     pickImageText: '点击选择需要回归的原图',
     consoleTitle: '圣域',
-    galleryAlbumName: '从零生图',
+    galleryAlbumName: 'RE0',
     primaryColor: const Color(0xFF4682B4),
     warningColor: const Color(0xFFD4AF37),
     successColor: const Color(0xFF7FFFD4),
@@ -152,12 +152,12 @@ class AppBrands {
     theme: _re0Theme,
   );
 
-  static List<AppBrand> get all => [botw, re0];
+  static List<AppBrand> get all => [re0, botw];
 
   static AppBrand byId(String? id) {
     return all.firstWhere(
       (brand) => brand.id == id,
-      orElse: () => botw,
+      orElse: () => re0,
     );
   }
 }

@@ -12,19 +12,19 @@ void main() async {
       overrides: [
         sharedPrefsProvider.overrideWithValue(prefs),
       ],
-      child: const BoxyingMobileApp(),
+      child: const Re0App(),
     ),
   );
 }
 
-class BoxyingMobileApp extends ConsumerWidget {
-  const BoxyingMobileApp({super.key});
+class Re0App extends ConsumerWidget {
+  const Re0App({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final brand = ref.watch(brandProvider);
     return MaterialApp(
-      title: brand.appTitle,
+      title: 'RE0',
       debugShowCheckedModeBanner: false,
       theme: brand.theme,
       home: const LoginScreen(),

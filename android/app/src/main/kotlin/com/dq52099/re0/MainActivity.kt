@@ -1,4 +1,4 @@
-package com.dq52099.boxying_mobile
+package com.dq52099.re0
 
 import android.content.ContentValues
 import android.content.Intent
@@ -11,7 +11,7 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
 class MainActivity : FlutterActivity() {
-    private val downloadsChannel = "boxying_image_gateway/downloads"
+    private val downloadsChannel = "re0/downloads"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -19,8 +19,8 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "saveImageToGallery" -> saveImageToGallery(
                     path = call.argument<String>("path"),
-                    fileName = call.argument<String>("fileName") ?: "boxying-image.png",
-                    albumName = call.argument<String>("albumName") ?: "Boxying Mobile",
+                    fileName = call.argument<String>("fileName") ?: "re0-image.png",
+                    albumName = call.argument<String>("albumName") ?: "RE0",
                     result = result,
                 )
                 "openApk" -> openApk(
