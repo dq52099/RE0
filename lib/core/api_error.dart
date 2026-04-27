@@ -20,10 +20,10 @@ String friendlyError(Object error, {String fallback = '操作失败，请稍后�
   if (text.isEmpty) {
     return fallback;
   }
-  return text
+  return _polishMessage(text
       .replaceFirst('Exception: ', '')
       .replaceFirst('Bad state: ', '')
-      .replaceFirst('Invalid argument(s): ', '');
+      .replaceFirst('Invalid argument(s): ', ''), fallback);
 }
 
 GatewayException gatewayException(
@@ -49,7 +49,7 @@ String _messageFromDio(DioException error, {required String fallback}) {
   final statusCode = error.response?.statusCode;
   final detail = _extractDetail(error.response?.data);
   if (detail != null && detail.isNotEmpty) {
-    return detail;
+    return _polishMessage(detail, fallback);
   }
   if (statusCode == 401) {
     return '登录已失效，请重新登录。';
@@ -67,6 +67,43 @@ String _messageFromDio(DioException error, {required String fallback}) {
     return '服务器暂时不可用，请稍后重试。';
   }
   return fallback;
+}
+
+String _polishMessage(String message, String fallback) {
+  final text = message.trim();
+  if (text.isEmpty) {
+    return fallback;
+  }
+
+  final normalized = text.toLowerCase();
+  if (normalized.contains('invalid username') ||
+      normalized.contains('invalid password') ||
+      normalized.contains('incorrect username') ||
+      normalized.contains('incorrect password') ||
+      normalized.contains('invalid credentials') ||
+      normalized.contains('bad credentials')) {
+    return '账号或密码不正确，请重新输入。';
+  }
+  if (normalized.contains('quota') ||
+      normalized.contains('insufficient credits') ||
+      normalized.contains('not enough credits')) {
+    return '当前额度不足，请检查剩余额度或联系管理员。';
+  }
+  if (normalized.contains('timed out') || normalized.contains('timeout')) {
+    return '请求超时，请稍后重试。';
+  }
+  if (normalized.contains('rate limit') || normalized.contains('too many requests')) {
+    return '请求过于频繁，请稍后再试。';
+  }
+  if (normalized.contains('prompt') && normalized.contains('invalid')) {
+    return '提示词格式不正确，请调整后再试。';
+  }
+  if (normalized.contains('image') &&
+      (normalized.contains('failed') || normalized.contains('error'))) {
+    return '图片处理失败，请更换图片或稍后重试。';
+  }
+
+  return text;
 }
 
 String? _extractDetail(dynamic data) {

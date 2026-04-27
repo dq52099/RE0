@@ -10,7 +10,9 @@ import '../admin/admin_screen.dart';
 import '../auth/login_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({super.key, this.refreshToken = 0});
+
+  final int refreshToken;
 
   @override
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
@@ -22,13 +24,32 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _isCheckingUpdate = false;
   bool _isDownloadingUpdate = false;
   double? _updateProgress;
+  Future<int>? _cacheSizeFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshCacheSize();
+  }
+
+  @override
+  void didUpdateWidget(covariant ProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshToken != widget.refreshToken) {
+      setState(_refreshCacheSize);
+    }
+  }
+
+  void _refreshCacheSize() {
+    _cacheSizeFuture = ref.read(imageCacheProvider).cacheSizeBytes();
+  }
 
   Future<void> _clearCache() async {
     setState(() => _isClearingCache = true);
     try {
       await ref.read(imageCacheProvider).clearCache();
       if (!mounted) return;
-      setState(() {});
+      setState(_refreshCacheSize);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('图片缓存已清理')),
       );
@@ -163,6 +184,165 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
+  Future<void> _editProfile(Map<String, dynamic>? user) async {
+    final username = TextEditingController(text: user?['username']?.toString() ?? '');
+    final displayName = TextEditingController(text: user?['display_name']?.toString() ?? '');
+    final canEditUsername = user?['can_edit_username'] != false;
+    final payload = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('编辑个人资料'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: username,
+                  enabled: canEditUsername,
+                  decoration: InputDecoration(
+                    labelText: '账号',
+                    helperText: canEditUsername ? '可使用小写字母、数字、下划线或短横线' : '当前账号不允许修改账号名',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: displayName,
+                  decoration: const InputDecoration(labelText: '显示名称'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final nextUsername = username.text.trim();
+                final nextDisplayName = displayName.text.trim();
+                if (nextUsername.isEmpty || nextDisplayName.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('账号和显示名称不能为空。')),
+                  );
+                  return;
+                }
+                Navigator.pop(context, {
+                  'username': nextUsername,
+                  'display_name': nextDisplayName,
+                });
+              },
+              child: const Text('保存'),
+            ),
+          ],
+        );
+      },
+    );
+    if (payload == null) return;
+    try {
+      final updated = await ref.read(gatewayClientProvider).updateMyProfile(
+            payload['username']!,
+            payload['display_name']!,
+          );
+      ref.read(authStateProvider.notifier).state = updated;
+      ref.read(energyProvider.notifier).state = updated['quota_summary'];
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('个人资料已保存')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(error, fallback: '个人资料保存失败。'))),
+      );
+    }
+  }
+
+  Future<void> _changePassword() async {
+    final current = TextEditingController();
+    final next = TextEditingController();
+    final confirm = TextEditingController();
+    final payload = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('修改密码'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: current,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: '当前密码'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: next,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: '新密码',
+                    helperText: '至少 10 位，包含大小写字母、数字和特殊字符',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: confirm,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: '确认新密码'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (current.text.isEmpty || next.text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('请填写当前密码和新密码。')),
+                  );
+                  return;
+                }
+                if (next.text != confirm.text) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('两次输入的新密码不一致。')),
+                  );
+                  return;
+                }
+                Navigator.pop(context, {
+                  'current_password': current.text,
+                  'new_password': next.text,
+                });
+              },
+              child: const Text('保存'),
+            ),
+          ],
+        );
+      },
+    );
+    if (payload == null) return;
+    try {
+      await ref.read(gatewayClientProvider).changeMyPassword(
+            payload['current_password']!,
+            payload['new_password']!,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('密码已修改')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(error, fallback: '密码修改失败。'))),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final brand = ref.watch(brandProvider);
@@ -184,7 +364,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ListTile(
                     leading: Icon(Icons.person_outline, color: brand.primaryColor),
                     title: const Text('个人资料'),
-                    subtitle: const Text('查看当前账号、角色与额度'),
+                    subtitle: const Text('查看并修改账号资料、密码与额度'),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => _showProfileDetails(brand, user),
                   ),
@@ -235,7 +415,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ),
                   const Divider(height: 1),
                   FutureBuilder<int>(
-                    future: ref.read(imageCacheProvider).cacheSizeBytes(),
+                    future: _cacheSizeFuture,
                     builder: (context, snapshot) {
                       return ListTile(
                         leading: Icon(Icons.cached, color: brand.successColor),
@@ -374,10 +554,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               _profileLine('角色', role['name']?.toString() ?? '-'),
               _profileLine('用户组', group['name']?.toString() ?? '-'),
               _profileLine('登录网关', 'image.6688667.xyz'),
-              const SizedBox(height: 12),
-              Text(
-                '账号资料修改请联系管理员在系统管理中调整。',
-                style: TextStyle(color: brand.primaryColor),
+              const SizedBox(height: 18),
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _editProfile(user);
+                },
+                icon: const Icon(Icons.edit),
+                label: const Text('编辑资料'),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _changePassword();
+                },
+                icon: const Icon(Icons.lock_reset),
+                label: const Text('修改密码'),
               ),
             ],
           ),

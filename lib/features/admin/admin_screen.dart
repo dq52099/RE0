@@ -34,6 +34,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 
     final initialIndex = sections.indexWhere((item) => item.key == widget.initialView);
     return DefaultTabController(
+      key: ValueKey(sections.map((item) => item.key).join('|')),
       length: sections.length,
       initialIndex: initialIndex < 0 ? 0 : initialIndex,
       child: Scaffold(
@@ -47,7 +48,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         body: BrandBackground(
           child: TabBarView(
             children: sections
-                .map((item) => _sectionBody(context, brand, item, user))
+                .map(
+                  (item) => KeyedSubtree(
+                    key: ValueKey('${item.key}-$_revision'),
+                    child: _sectionBody(context, brand, item, user),
+                  ),
+                )
                 .toList(),
           ),
         ),
@@ -417,9 +423,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     required Future<T> future,
     required Widget Function(T data) builder,
   }) {
-    final key = _revision;
     return FutureBuilder<T>(
-      key: ValueKey(key),
       future: future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
@@ -552,6 +556,66 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     );
   }
 
+  Widget _adminDialog({
+    required String title,
+    required IconData icon,
+    required Widget content,
+    required List<Widget> actions,
+  }) {
+    final brand = ref.read(brandProvider);
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: brand.primaryColor.withOpacity(0.14),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(icon, color: brand.primaryColor),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: content,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 8,
+                children: actions,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _editUser(Map<String, dynamic>? user, _UsersData data) async {
     final username = TextEditingController(text: _text(user?['username'], fallback: ''));
     final displayName = TextEditingController(text: _text(user?['display_name'], fallback: ''));
@@ -577,53 +641,59 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
-          return AlertDialog(
-            title: Text(user == null ? '新增用户' : '编辑用户'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(controller: username, decoration: const InputDecoration(labelText: '用户名')),
-                  TextField(controller: displayName, decoration: const InputDecoration(labelText: '显示名称')),
-                  TextField(
-                    controller: password,
-                    obscureText: true,
-                    decoration: InputDecoration(labelText: user == null ? '初始密码' : '密码留空不修改'),
-                  ),
-                  _dropdown(
-                    label: '角色',
-                    value: roleId,
-                    items: data.roles,
-                    onChanged: (value) => setDialogState(() => roleId = value),
-                  ),
-                  _dropdown(
-                    label: '用户组',
-                    value: groupId,
-                    items: data.groups,
-                    onChanged: (value) => setDialogState(() => groupId = value),
-                  ),
-                  TextField(
-                    controller: generateQuota,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: '生图额度覆盖'),
-                  ),
-                  TextField(
-                    controller: editQuota,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: '改图额度覆盖'),
-                  ),
-                  CheckboxListTile(
-                    value: active,
-                    onChanged: (value) => setDialogState(() => active = value ?? true),
-                    title: const Text('启用账号'),
-                  ),
-                  CheckboxListTile(
-                    value: canEditUsername,
-                    onChanged: (value) => setDialogState(() => canEditUsername = value ?? true),
-                    title: const Text('允许修改用户名'),
-                  ),
-                ],
-              ),
+          return _adminDialog(
+            title: user == null ? '新增用户' : '编辑用户',
+            icon: user == null ? Icons.person_add : Icons.manage_accounts,
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: username, decoration: const InputDecoration(labelText: '用户名')),
+                const SizedBox(height: 12),
+                TextField(controller: displayName, decoration: const InputDecoration(labelText: '显示名称')),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: password,
+                  obscureText: true,
+                  decoration: InputDecoration(labelText: user == null ? '初始密码' : '密码留空不修改'),
+                ),
+                const SizedBox(height: 12),
+                _dropdown(
+                  label: '角色',
+                  value: roleId,
+                  items: data.roles,
+                  onChanged: (value) => setDialogState(() => roleId = value),
+                ),
+                const SizedBox(height: 12),
+                _dropdown(
+                  label: '用户组',
+                  value: groupId,
+                  items: data.groups,
+                  onChanged: (value) => setDialogState(() => groupId = value),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: generateQuota,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: '生图额度覆盖'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: editQuota,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: '改图额度覆盖'),
+                ),
+                const SizedBox(height: 8),
+                CheckboxListTile(
+                  value: active,
+                  onChanged: (value) => setDialogState(() => active = value ?? true),
+                  title: const Text('启用账号'),
+                ),
+                CheckboxListTile(
+                  value: canEditUsername,
+                  onChanged: (value) => setDialogState(() => canEditUsername = value ?? true),
+                  title: const Text('允许修改用户名'),
+                ),
+              ],
             ),
             actions: [
               TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
@@ -701,42 +771,43 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
-          return AlertDialog(
-            title: Text(role == null ? '新增角色' : '编辑角色'),
+          return _adminDialog(
+            title: role == null ? '新增角色' : '编辑角色',
+            icon: Icons.admin_panel_settings,
             content: SizedBox(
               width: double.maxFinite,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(controller: name, decoration: const InputDecoration(labelText: '名称')),
-                    TextField(controller: description, decoration: const InputDecoration(labelText: '描述')),
-                    CheckboxListTile(
-                      value: active,
-                      onChanged: (value) => setDialogState(() => active = value ?? true),
-                      title: const Text('启用角色'),
-                    ),
-                    const Divider(),
-                    ...data.permissions.map((permission) {
-                      final code = _text(permission['code']);
-                      return CheckboxListTile(
-                        dense: true,
-                        value: selected.contains(code),
-                        onChanged: (value) {
-                          setDialogState(() {
-                            if (value == true) {
-                              selected.add(code);
-                            } else {
-                              selected.remove(code);
-                            }
-                          });
-                        },
-                        title: Text(_text(permission['name'])),
-                        subtitle: Text(code),
-                      );
-                    }),
-                  ],
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(controller: name, decoration: const InputDecoration(labelText: '名称')),
+                  const SizedBox(height: 12),
+                  TextField(controller: description, decoration: const InputDecoration(labelText: '描述')),
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    value: active,
+                    onChanged: (value) => setDialogState(() => active = value ?? true),
+                    title: const Text('启用角色'),
+                  ),
+                  const Divider(),
+                  ...data.permissions.map((permission) {
+                    final code = _text(permission['code']);
+                    return CheckboxListTile(
+                      dense: true,
+                      value: selected.contains(code),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          if (value == true) {
+                            selected.add(code);
+                          } else {
+                            selected.remove(code);
+                          }
+                        });
+                      },
+                      title: Text(_text(permission['name'])),
+                      subtitle: Text(code),
+                    );
+                  }),
+                ],
               ),
             ),
             actions: [
@@ -817,31 +888,42 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
-          return AlertDialog(
-            title: const Text('系统设置'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(controller: uiTitle, decoration: const InputDecoration(labelText: '界面标题')),
-                  TextField(controller: externalBase, decoration: const InputDecoration(labelText: '外部访问地址')),
-                  TextField(controller: providerBase, decoration: const InputDecoration(labelText: '上游地址')),
-                  TextField(controller: providerKey, decoration: const InputDecoration(labelText: '上游 Key，留空不修改')),
-                  TextField(controller: providerModel, decoration: const InputDecoration(labelText: '模型')),
-                  _stringDropdown('图片档位', profile, const ['gpt-image-2', 'gpt-image-1'], (value) => setDialogState(() => profile = value)),
-                  TextField(controller: providerTimeout, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '超时时间秒')),
-                  _stringDropdown('响应格式', responseFormat, const ['url', 'b64_json'], (value) => setDialogState(() => responseFormat = value)),
-                  _stringDropdown('默认质量', quality, const ['auto', 'low', 'medium', 'high'], (value) => setDialogState(() => quality = value)),
-                  _stringDropdown('默认背景', background, const ['auto', 'opaque', 'transparent'], (value) => setDialogState(() => background = value)),
-                  _stringDropdown('输出格式', outputFormat, const ['png', 'jpeg', 'webp'], (value) => setDialogState(() => outputFormat = value)),
-                  TextField(controller: instructions, maxLines: 3, decoration: const InputDecoration(labelText: '上游指令')),
-                  CheckboxListTile(
-                    value: allowRegistration,
-                    onChanged: (value) => setDialogState(() => allowRegistration = value ?? true),
-                    title: const Text('允许公开注册'),
-                  ),
-                ],
-              ),
+          return _adminDialog(
+            title: '系统设置',
+            icon: Icons.tune,
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: uiTitle, decoration: const InputDecoration(labelText: '界面标题')),
+                const SizedBox(height: 12),
+                TextField(controller: externalBase, decoration: const InputDecoration(labelText: '外部访问地址')),
+                const SizedBox(height: 12),
+                TextField(controller: providerBase, decoration: const InputDecoration(labelText: '上游地址')),
+                const SizedBox(height: 12),
+                TextField(controller: providerKey, decoration: const InputDecoration(labelText: '上游 Key，留空不修改')),
+                const SizedBox(height: 12),
+                TextField(controller: providerModel, decoration: const InputDecoration(labelText: '模型')),
+                const SizedBox(height: 12),
+                _stringDropdown('图片档位', profile, const ['gpt-image-2', 'gpt-image-1'], (value) => setDialogState(() => profile = value)),
+                const SizedBox(height: 12),
+                TextField(controller: providerTimeout, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '超时时间秒')),
+                const SizedBox(height: 12),
+                _stringDropdown('响应格式', responseFormat, const ['url', 'b64_json'], (value) => setDialogState(() => responseFormat = value)),
+                const SizedBox(height: 12),
+                _stringDropdown('默认质量', quality, const ['auto', 'low', 'medium', 'high'], (value) => setDialogState(() => quality = value)),
+                const SizedBox(height: 12),
+                _stringDropdown('默认背景', background, const ['auto', 'opaque', 'transparent'], (value) => setDialogState(() => background = value)),
+                const SizedBox(height: 12),
+                _stringDropdown('输出格式', outputFormat, const ['png', 'jpeg', 'webp'], (value) => setDialogState(() => outputFormat = value)),
+                const SizedBox(height: 12),
+                TextField(controller: instructions, maxLines: 3, decoration: const InputDecoration(labelText: '上游指令')),
+                const SizedBox(height: 8),
+                CheckboxListTile(
+                  value: allowRegistration,
+                  onChanged: (value) => setDialogState(() => allowRegistration = value ?? true),
+                  title: const Text('允许公开注册'),
+                ),
+              ],
             ),
             actions: [
               TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
@@ -886,25 +968,26 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
-          return AlertDialog(
-            title: Text(title),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(controller: name, decoration: const InputDecoration(labelText: '名称')),
-                  TextField(controller: description, decoration: const InputDecoration(labelText: '描述')),
-                  ...extraFields,
-                  CheckboxListTile(
-                    value: isActive,
-                    onChanged: (value) {
-                      setDialogState(() => isActive = value ?? true);
-                      onActiveChanged(isActive);
-                    },
-                    title: const Text('启用'),
-                  ),
-                ],
-              ),
+          return _adminDialog(
+            title: title,
+            icon: Icons.edit_note,
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: name, decoration: const InputDecoration(labelText: '名称')),
+                const SizedBox(height: 12),
+                TextField(controller: description, decoration: const InputDecoration(labelText: '描述')),
+                const SizedBox(height: 12),
+                ...extraFields.expand((field) => [field, const SizedBox(height: 12)]),
+                CheckboxListTile(
+                  value: isActive,
+                  onChanged: (value) {
+                    setDialogState(() => isActive = value ?? true);
+                    onActiveChanged(isActive);
+                  },
+                  title: const Text('启用'),
+                ),
+              ],
             ),
             actions: [
               TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),

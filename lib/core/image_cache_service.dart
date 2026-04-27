@@ -102,6 +102,18 @@ class ImageCacheService {
     return total;
   }
 
+  Future<void> removeCachedFileFor(String url) async {
+    final directory = await _cacheDirectory();
+    final file = File('${directory.path}/${_cacheFileName(url)}');
+    final tempFile = File('${file.path}.download');
+    if (await file.exists()) {
+      await file.delete();
+    }
+    if (await tempFile.exists()) {
+      await tempFile.delete();
+    }
+  }
+
   Future<void> clearCache() async {
     final directory = await _cacheDirectory();
     if (await directory.exists()) {

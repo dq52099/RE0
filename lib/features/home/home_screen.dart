@@ -15,26 +15,33 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 0;
-
-  final List<Widget> _screens = [
-    const MaterializerScreen(),
-    const ChronogearScreen(),
-    const CompendiumScreen(),
-    const ProfileScreen(),
-  ];
+  int _profileRefreshToken = 0;
 
   @override
   Widget build(BuildContext context) {
     final brand = ref.watch(brandProvider);
+    final screens = [
+      const MaterializerScreen(),
+      const ChronogearScreen(),
+      const CompendiumScreen(),
+      ProfileScreen(refreshToken: _profileRefreshToken),
+    ];
 
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
-        children: _screens,
+        children: screens,
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
+        onTap: (index) {
+          setState(() {
+            _currentIndex = index;
+            if (index == 3) {
+              _profileRefreshToken += 1;
+            }
+          });
+        },
         type: BottomNavigationBarType.fixed,
         selectedItemColor: brand.primaryColor,
         unselectedItemColor: Colors.grey,

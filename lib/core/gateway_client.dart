@@ -150,14 +150,58 @@ class GatewayClient {
     }, fallback: '图片修改失败。');
   }
 
-  Future<Map<String, dynamic>> getHistory(int page, {int pageSize = 30}) async {
+  Future<Map<String, dynamic>> getHistory(
+    int page, {
+    int pageSize = 30,
+    String? query,
+  }) async {
     return _guard(() async {
-      final res = await _dio.get('/api/images/history', queryParameters: {
+      final queryParameters = <String, dynamic>{
         'page': page,
         'page_size': pageSize,
-      });
+      };
+      final search = query?.trim();
+      if (search != null && search.isNotEmpty) {
+        queryParameters['q'] = search;
+        queryParameters['query'] = search;
+      }
+      final res = await _dio.get(
+        '/api/images/history',
+        queryParameters: queryParameters,
+      );
       return Map<String, dynamic>.from(res.data as Map);
     }, fallback: '读取历史失败。');
+  }
+
+  Future<void> deleteHistoryItem(String id) async {
+    await _guard(() async {
+      await _dio.delete('/api/images/history/$id');
+    }, fallback: '删除图片记录失败。');
+  }
+
+  Future<Map<String, dynamic>> updateMyProfile(
+    String username,
+    String displayName,
+  ) async {
+    return _guard(() async {
+      final res = await _dio.post('/api/me/profile', data: {
+        'username': username,
+        'display_name': displayName,
+      });
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '保存个人资料失败。');
+  }
+
+  Future<void> changeMyPassword(
+    String currentPassword,
+    String newPassword,
+  ) async {
+    await _guard(() async {
+      await _dio.post('/api/me/password', data: {
+        'current_password': currentPassword,
+        'new_password': newPassword,
+      });
+    }, fallback: '修改密码失败。');
   }
 
   Future<Map<String, dynamic>> adminOverview() async {

@@ -35,9 +35,13 @@ class CachedGatewayImage extends ConsumerStatefulWidget {
   ConsumerState<CachedGatewayImage> createState() => _CachedGatewayImageState();
 }
 
-class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage> {
+class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage>
+    with AutomaticKeepAliveClientMixin {
   late Future<File> _imageFuture;
   bool _isSaving = false;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -81,6 +85,7 @@ class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final image = FutureBuilder<File>(
       future: _imageFuture,
       builder: (context, snapshot) {

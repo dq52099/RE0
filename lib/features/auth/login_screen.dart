@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api_error.dart';
+import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
 import '../../core/providers.dart';
 import '../home/home_screen.dart';
@@ -82,17 +83,49 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.auto_awesome, size: 80, color: brand.primaryColor),
+                Container(
+                  width: 104,
+                  height: 104,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: brand.primaryColor.withOpacity(0.7), width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: brand.primaryColor.withOpacity(0.22),
+                        blurRadius: 28,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Image.asset('assets/icon.png', fit: BoxFit.cover),
+                ),
                 const SizedBox(height: 20),
                 Text(
                   brand.loginTitle,
+                  textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'image.6688667.xyz',
+                  brand.style == BrandStyle.re0
+                      ? '从零开始的异世界生图'
+                      : 'image.6688667.xyz',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
+                if (brand.style == BrandStyle.re0) ...[
+                  const SizedBox(height: 14),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _loginChip(brand, '死亡回归'),
+                      _loginChip(brand, '魔女气息'),
+                      _loginChip(brand, '王都契约'),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 40),
                 TextField(
                   controller: _usernameController,
@@ -116,6 +149,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _loginChip(AppBrand brand, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: brand.panelColor.withOpacity(0.36),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: brand.primaryColor.withOpacity(0.32)),
+      ),
+      child: Text(text, style: Theme.of(context).textTheme.bodySmall),
     );
   }
 }
