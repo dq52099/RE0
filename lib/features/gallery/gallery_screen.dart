@@ -5,6 +5,7 @@ import '../../core/api_error.dart';
 import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
 import '../../core/cached_gateway_image.dart';
+import '../../core/compact_dropdown_field.dart';
 import '../../core/providers.dart';
 import '../compendium/image_preview_screen.dart';
 import 'gallery_detail_screen.dart';
@@ -318,7 +319,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
             _smallDropdown(
               label: '排序',
               value: _sort,
-              width: 132,
+              width: 120,
               items: const {
                 'time': '时间',
                 'popular': '最受欢迎',
@@ -333,7 +334,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
             _smallDropdown(
               label: '每页',
               value: _pageSize,
-              width: 112,
+              width: 92,
               items: const {
                 12: '12张',
                 24: '24张',
@@ -347,7 +348,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
             _smallDropdown(
               label: '列数',
               value: _columns,
-              width: 96,
+              width: 88,
               items: const {
                 2: '两列',
                 3: '三列',
@@ -378,53 +379,21 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
     required Map<T, String> items,
     required ValueChanged<T?> onChanged,
   }) {
-    return SizedBox(
+    return CompactDropdownField<T>(
+      label: label,
+      value: value,
       width: width,
-      child: DropdownButtonFormField<T>(
-        value: value,
-        isExpanded: true,
-        icon: const Icon(Icons.expand_more, size: 18),
-        menuMaxHeight: 280,
-        borderRadius: BorderRadius.circular(16),
-        alignment: Alignment.center,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w400,
+      items: items.entries
+          .map(
+            (entry) => CompactDropdownField.centeredItem<T>(
+              entry.key,
+              entry.value,
+              context,
             ),
-        decoration: InputDecoration(
-          labelText: label,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        ),
-        items: items.entries
-            .map(
-              (entry) => DropdownMenuItem<T>(
-                value: entry.key,
-                child: Center(
-                  child: Text(
-                    entry.value,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w400,
-                        ),
-                  ),
-                ),
-              ),
-            )
-            .toList(),
-        selectedItemBuilder: (context) => items.values
-            .map(
-              (label) => Center(
-                child: Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w400,
-                      ),
-                ),
-              ),
-            )
-            .toList(),
-        onChanged: onChanged,
-      ),
+          )
+          .toList(),
+      selectedLabels: items.values.toList(),
+      onChanged: onChanged,
     );
   }
 

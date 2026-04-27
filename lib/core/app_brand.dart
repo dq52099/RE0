@@ -9,14 +9,8 @@ const List<String> _cnFontFallback = [
   'Microsoft YaHei',
   'WenQuanYi Micro Hei',
 ];
-const String _cnHeadingFontFamily = 'serif';
-const List<String> _cnHeadingFallback = [
-  'Songti SC',
-  'STSong',
-  'Source Han Serif SC',
-  'Noto Serif CJK SC',
-  'SimSun',
-];
+const String _cnHeadingFontFamily = 'sans-serif';
+const List<String> _cnHeadingFallback = _cnFontFallback;
 
 enum BrandStyle {
   botw,
@@ -491,7 +485,7 @@ TextTheme _refinedTextTheme({
       fontFamilyFallback: _cnHeadingFallback,
       fontSize: isDark ? 26 : 25,
       height: 1.2,
-      fontWeight: FontWeight.w700,
+      fontWeight: FontWeight.w600,
       letterSpacing: 0,
       color: headingColor,
     ),
@@ -500,7 +494,7 @@ TextTheme _refinedTextTheme({
       fontFamilyFallback: _cnHeadingFallback,
       fontSize: 22,
       height: 1.24,
-      fontWeight: FontWeight.w700,
+      fontWeight: FontWeight.w600,
       letterSpacing: 0,
       color: headingColor,
     ),
@@ -509,7 +503,7 @@ TextTheme _refinedTextTheme({
       fontFamilyFallback: _cnHeadingFallback,
       fontSize: 18,
       height: 1.28,
-      fontWeight: FontWeight.w600,
+      fontWeight: FontWeight.w500,
       letterSpacing: 0,
       color: headingColor,
     ),
@@ -545,7 +539,7 @@ TextTheme _refinedTextTheme({
       fontFamilyFallback: _cnFontFallback,
       fontSize: 14,
       height: 1.2,
-      fontWeight: FontWeight.w600,
+      fontWeight: FontWeight.w500,
       letterSpacing: 0,
       color: bodyColor,
     ),
@@ -689,7 +683,7 @@ ThemeData _lightTheme({
         fontFamilyFallback: _cnFontFallback,
         color: primary,
         fontSize: 20,
-        fontWeight: FontWeight.bold,
+        fontWeight: FontWeight.w600,
         letterSpacing: 0,
       ),
     ),
@@ -775,7 +769,7 @@ ThemeData _darkTheme({
         fontFamilyFallback: _cnFontFallback,
         color: primary,
         fontSize: 20,
-        fontWeight: FontWeight.bold,
+        fontWeight: FontWeight.w600,
         letterSpacing: 0,
       ),
     ),
@@ -874,7 +868,7 @@ final ThemeData _re0Theme = ThemeData(
       fontFamilyFallback: _cnFontFallback,
       color: Color(0xFF2C3E50),
       fontSize: 13,
-      fontWeight: FontWeight.w500,
+      fontWeight: FontWeight.w400,
       letterSpacing: 0,
     ),
   ),
@@ -898,7 +892,7 @@ final ThemeData _re0Theme = ThemeData(
       fontFamilyFallback: _cnFontFallback,
       color: Color(0xFF2C3E50),
       fontSize: 22,
-      fontWeight: FontWeight.bold,
+      fontWeight: FontWeight.w600,
       letterSpacing: 0,
     ),
   ),

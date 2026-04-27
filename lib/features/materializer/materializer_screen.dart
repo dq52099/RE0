@@ -4,6 +4,7 @@ import '../../core/api_error.dart';
 import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
 import '../../core/cached_gateway_image.dart';
+import '../../core/compact_dropdown_field.dart';
 import '../../core/image_capabilities.dart';
 import '../../core/providers.dart';
 import '../compendium/image_preview_screen.dart';
@@ -65,7 +66,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
               const SizedBox(height: 24),
               Text(
                 brand.promptLabel,
-                style: Theme.of(context).textTheme.titleMedium,
+                style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 12),
               TextField(
@@ -86,9 +87,9 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                   _dropdownField<int>(
                     label: '数量',
                     value: _count,
-                    width: 132,
+                    width: 104,
                     items: List<int>.generate(options.maxImages, (index) => index + 1)
-                        .map((e) => DropdownMenuItem<int>(value: e, child: _dropdownItem('$e张')))
+                        .map((e) => CompactDropdownField.centeredItem<int>(e, '$e张', context))
                         .toList(),
                     selectedLabels:
                         List<int>.generate(options.maxImages, (index) => index + 1)
@@ -99,7 +100,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                   _dropdownField<String>(
                     label: '尺寸',
                     value: size,
-                    width: 168,
+                    width: 148,
                     items: _items(options.sizes),
                     selectedLabels: options.sizes.map((item) => item.label).toList(),
                     onChanged: (value) => setState(() => _size = value!),
@@ -114,7 +115,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                   _dropdownField<String>(
                     label: '质量',
                     value: quality,
-                    width: 132,
+                    width: 112,
                     items: _items(options.qualities),
                     selectedLabels: options.qualities.map((item) => item.label).toList(),
                     onChanged: (value) => setState(() => _quality = value!),
@@ -122,7 +123,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                   _dropdownField<String>(
                     label: '背景',
                     value: background,
-                    width: 168,
+                    width: 126,
                     items: _items(options.backgrounds),
                     selectedLabels: options.backgrounds.map((item) => item.label).toList(),
                     onChanged: (value) => setState(() => _background = value!),
@@ -133,7 +134,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
               _dropdownField<String>(
                 label: '输出格式',
                 value: outputFormat,
-                width: 168,
+                width: 126,
                 items: _items(capabilities.outputFormats),
                 selectedLabels:
                     capabilities.outputFormats.map((item) => item.label).toList(),
@@ -270,38 +271,13 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     );
   }
 
-  Widget _dropdownItem(String label) {
-    return Center(
-      child: Text(
-        label,
-        overflow: TextOverflow.ellipsis,
-        textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w400,
-            ),
-      ),
-    );
-  }
-
-  Widget _selectedDropdownText(String label) {
-    return Center(
-      child: Text(
-        label,
-        overflow: TextOverflow.ellipsis,
-        textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w400,
-            ),
-      ),
-    );
-  }
-
   List<DropdownMenuItem<String>> _items(List<ImageOption> options) {
     return options
         .map(
-          (item) => DropdownMenuItem<String>(
-            value: item.value,
-            child: _dropdownItem(item.label),
+          (item) => CompactDropdownField.centeredItem<String>(
+            item.value,
+            item.label,
+            context,
           ),
         )
         .toList();
@@ -315,27 +291,13 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     required List<String> selectedLabels,
     required ValueChanged<T?> onChanged,
   }) {
-    return SizedBox(
+    return CompactDropdownField<T>(
+      label: label,
+      value: value,
       width: width,
-      child: DropdownButtonFormField<T>(
-        value: value,
-        isExpanded: true,
-        icon: const Icon(Icons.expand_more, size: 18),
-        menuMaxHeight: 280,
-        borderRadius: BorderRadius.circular(16),
-        alignment: Alignment.center,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w400,
-            ),
-        decoration: InputDecoration(
-          labelText: label,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        ),
-        items: items,
-        selectedItemBuilder: (context) =>
-            selectedLabels.map(_selectedDropdownText).toList(),
-        onChanged: onChanged,
-      ),
+      items: items,
+      selectedLabels: selectedLabels,
+      onChanged: onChanged,
     );
   }
 

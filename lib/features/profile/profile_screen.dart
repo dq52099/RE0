@@ -7,6 +7,7 @@ import '../../core/api_error.dart';
 import '../../core/app_brand.dart';
 import '../../core/app_update_service.dart';
 import '../../core/brand_background.dart';
+import '../../core/compact_dropdown_field.dart';
 import '../../core/providers.dart';
 import '../admin/admin_screen.dart';
 import '../auth/login_screen.dart';
@@ -136,6 +137,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       uiSettings: [
         AndroidUiSettings(
           toolbarTitle: '裁剪头像',
+          toolbarColor: ref.read(brandProvider).primaryColor,
           lockAspectRatio: true,
           hideBottomControls: false,
           toolbarWidgetColor: Colors.white,
@@ -542,61 +544,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 title: const Text('主题风格'),
                 subtitle: Text(brand.appTitle),
                 trailing: SizedBox(
-                  width: 124,
-                  child: DropdownButtonFormField<String>(
+                  width: 126,
+                  child: CompactDropdownField<String>(
+                    label: '主题',
                     value: brand.id,
-                    isDense: true,
-                    alignment: Alignment.center,
-                    icon: const Icon(Icons.expand_more),
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w400,
-                        ),
-                    decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(
-                          color: brand.primaryColor.withOpacity(0.24),
-                        ),
-                      ),
-                    ),
+                    width: 126,
+                    showLabel: false,
                     items: AppBrands.all
                         .map(
-                          (item) => DropdownMenuItem<String>(
-                            value: item.id,
-                            child: Center(
-                              child: Text(
-                                item.appTitle,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.center,
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                      fontWeight: FontWeight.w400,
-                                    ),
-                              ),
-                            ),
+                          (item) => CompactDropdownField.centeredItem<String>(
+                            item.id,
+                            item.appTitle,
+                            context,
                           ),
                         )
                         .toList(),
-                    selectedItemBuilder: (context) => AppBrands.all
-                        .map(
-                          (item) => Center(
-                            child: Text(
-                              item.appTitle,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    fontWeight: FontWeight.w400,
-                                  ),
-                            ),
-                          ),
-                        )
-                        .toList(),
+                    selectedLabels: AppBrands.all.map((item) => item.appTitle).toList(),
                     onChanged: (value) {
                       if (value != null) {
                         ref.read(brandProvider.notifier).setBrand(value);

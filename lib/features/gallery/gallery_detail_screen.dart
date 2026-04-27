@@ -361,40 +361,63 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                     ..._comments.map(
                       (comment) => Padding(
                         padding: const EdgeInsets.only(bottom: 14),
-                        child: Column(
+                        child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Wrap(
-                                    spacing: 6,
-                                    runSpacing: 4,
-                                    crossAxisAlignment: WrapCrossAlignment.center,
+                            CircleAvatar(
+                              radius: 18,
+                              backgroundColor: brand.primaryColor.withOpacity(0.14),
+                              backgroundImage:
+                                  (comment['author_avatar_url']?.toString() ?? '').isNotEmpty
+                                      ? NetworkImage(comment['author_avatar_url'].toString())
+                                      : null,
+                              child: (comment['author_avatar_url']?.toString() ?? '').isEmpty
+                                  ? Text(
+                                      (comment['display_name']?.toString() ?? '评').substring(0, 1),
+                                      style: Theme.of(context).textTheme.bodySmall,
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        comment['display_name']?.toString() ?? '-',
-                                        style: const TextStyle(fontWeight: FontWeight.w600),
+                                      Expanded(
+                                        child: Wrap(
+                                          spacing: 6,
+                                          runSpacing: 4,
+                                          crossAxisAlignment: WrapCrossAlignment.center,
+                                          children: [
+                                            Text(
+                                              comment['display_name']?.toString() ?? '-',
+                                              style: const TextStyle(fontWeight: FontWeight.w600),
+                                            ),
+                                            _levelBadge(comment['level_info'] as Map?),
+                                          ],
+                                        ),
                                       ),
-                                      _levelBadge(comment['level_info'] as Map?),
+                                      Text(
+                                        _formatTime(comment['created_at']?.toString()),
+                                        style: Theme.of(context).textTheme.bodySmall,
+                                      ),
+                                      if (comment['can_delete'] == true)
+                                        IconButton(
+                                          visualDensity: VisualDensity.compact,
+                                          tooltip: '删除评论',
+                                          icon: const Icon(Icons.delete_outline, size: 18),
+                                          onPressed: () => _deleteComment(comment['id'].toString()),
+                                        ),
                                     ],
                                   ),
-                                ),
-                                Text(
-                                  _formatTime(comment['created_at']?.toString()),
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                                if (comment['can_delete'] == true)
-                                  IconButton(
-                                    visualDensity: VisualDensity.compact,
-                                    tooltip: '删除评论',
-                                    icon: const Icon(Icons.delete_outline, size: 18),
-                                    onPressed: () => _deleteComment(comment['id'].toString()),
-                                  ),
-                              ],
+                                  const SizedBox(height: 6),
+                                  Text(comment['content']?.toString() ?? ''),
+                                ],
+                              ),
                             ),
-                            const SizedBox(height: 6),
-                            Text(comment['content']?.toString() ?? ''),
                           ],
                         ),
                       ),
