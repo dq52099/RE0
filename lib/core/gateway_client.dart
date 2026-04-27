@@ -247,6 +247,66 @@ class GatewayClient {
     }, fallback: '签到失败，请稍后重试。');
   }
 
+  Future<Map<String, dynamic>> getGalleryPosts({
+    required String view,
+    int page = 1,
+    int pageSize = 30,
+  }) async {
+    return _guard(() async {
+      final res = await _dio.get(
+        '/api/gallery/posts',
+        queryParameters: {
+          'view': view,
+          'page': page,
+          'page_size': pageSize,
+        },
+      );
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '读取画廊失败。');
+  }
+
+  Future<Map<String, dynamic>> publishGalleryPost(String historyId) async {
+    return _guard(() async {
+      final res = await _dio.post('/api/gallery/posts/history/$historyId');
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '发布到画廊失败。');
+  }
+
+  Future<Map<String, dynamic>> toggleGalleryLike(String postId) async {
+    return _guard(() async {
+      final res = await _dio.post('/api/gallery/posts/$postId/like');
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '点赞失败。');
+  }
+
+  Future<Map<String, dynamic>> toggleGalleryFavorite(String postId) async {
+    return _guard(() async {
+      final res = await _dio.post('/api/gallery/posts/$postId/favorite');
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '收藏失败。');
+  }
+
+  Future<List<Map<String, dynamic>>> getGalleryComments(String postId) async {
+    return _guard(() async {
+      final res = await _dio.get('/api/gallery/posts/$postId/comments');
+      return (res.data as List? ?? [])
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    }, fallback: '读取评论失败。');
+  }
+
+  Future<Map<String, dynamic>> addGalleryComment(
+    String postId,
+    String content,
+  ) async {
+    return _guard(() async {
+      final formData = FormData.fromMap({'content': content});
+      final res = await _dio.post('/api/gallery/posts/$postId/comments', data: formData);
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '发表评论失败。');
+  }
+
   Future<void> changeMyPassword(
     String currentPassword,
     String newPassword,

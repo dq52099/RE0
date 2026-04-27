@@ -34,6 +34,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   final List<Map<String, dynamic>> _items = [];
   final Set<String> _hiddenKeys = {};
   final Set<String> _deletingKeys = {};
+  final Set<String> _publishingKeys = {};
   final Set<String> _retryingKeys = {};
   Timer? _searchDebounce;
   int _page = 1;
@@ -397,6 +398,30 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     );
   }
 
+  Future<void> _publishToGallery(Map<String, dynamic> item) async {
+    final key = _historyKey(item);
+    if (_publishingKeys.contains(key)) return;
+    final historyId = item['id']?.toString();
+    if (historyId == null || historyId.isEmpty) return;
+    setState(() => _publishingKeys.add(key));
+    try {
+      await ref.read(gatewayClientProvider).publishGalleryPost(historyId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已发布到画廊。')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(error))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _publishingKeys.remove(key));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -619,6 +644,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     final imageUrl = item['url']?.toString();
     final key = _historyKey(item);
     final isDeleting = _deletingKeys.contains(key);
+    final isPublishing = _publishingKeys.contains(key);
     final isRetrying = _retryingKeys.contains(key);
     final isSuccess = _isSuccessful(item);
     final previewItems = _previewItems(_visibleItems, brand);
@@ -686,6 +712,19 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                       item['size']?.toString() ?? '',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
+                    if (isSuccess)
+                      IconButton(
+                        tooltip: '发布到画廊',
+                        icon: isPublishing
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.publish_outlined),
+                        color: brand.primaryColor,
+                        onPressed: isPublishing ? null : () => _publishToGallery(item),
+                      ),
                     IconButton(
                       tooltip: '删除',
                       icon: isDeleting

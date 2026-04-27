@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../gallery/gallery_screen.dart';
 import '../materializer/materializer_screen.dart';
 import '../chronogear/chronogear_screen.dart';
 import '../compendium/compendium_screen.dart';
@@ -15,6 +16,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 0;
+  int _galleryRefreshToken = 0;
   int _historyRefreshToken = 0;
   int _profileRefreshToken = 0;
 
@@ -22,6 +24,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final brand = ref.watch(brandProvider);
     final screens = [
+      GalleryScreen(refreshToken: _galleryRefreshToken),
       const MaterializerScreen(),
       const ChronogearScreen(),
       CompendiumScreen(refreshToken: _historyRefreshToken),
@@ -38,10 +41,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         onTap: (index) {
           setState(() {
             _currentIndex = index;
-            if (index == 2) {
-              _historyRefreshToken += 1;
+            if (index == 0) {
+              _galleryRefreshToken += 1;
             }
             if (index == 3) {
+              _historyRefreshToken += 1;
+            }
+            if (index == 4) {
               _profileRefreshToken += 1;
             }
           });
@@ -50,6 +56,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         selectedItemColor: brand.primaryColor,
         unselectedItemColor: Colors.grey,
         items: [
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.photo_library_outlined),
+            label: brand.galleryTabLabel,
+          ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.auto_fix_high),
             label: brand.generateTabLabel,

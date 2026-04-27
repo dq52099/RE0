@@ -924,6 +924,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final providerModel = TextEditingController(text: _settingValue(byKey, 'provider_model'));
     final providerTimeout = TextEditingController(text: _settingValue(byKey, 'provider_timeout_seconds'));
     final instructions = TextEditingController(text: _settingValue(byKey, 'provider_instructions'));
+    final generateCheckinMultiplier = TextEditingController(
+      text: _settingValue(byKey, 'daily_checkin_generate_multiplier', fallback: '1'),
+    );
+    final editCheckinMultiplier = TextEditingController(
+      text: _settingValue(byKey, 'daily_checkin_edit_multiplier', fallback: '1'),
+    );
     var profile = _settingValue(byKey, 'provider_image_profile', fallback: 'gpt-image-2');
     var responseFormat = _settingValue(byKey, 'default_response_format', fallback: 'url');
     var quality = _settingValue(byKey, 'default_image_quality', fallback: 'high');
@@ -963,6 +969,18 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 const SizedBox(height: 12),
                 _stringDropdown('输出格式', outputFormat, const ['png', 'jpeg', 'webp'], (value) => setDialogState(() => outputFormat = value)),
                 const SizedBox(height: 12),
+                TextField(
+                  controller: generateCheckinMultiplier,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: '签到生图倍率'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: editCheckinMultiplier,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: '签到改图倍率'),
+                ),
+                const SizedBox(height: 12),
                 TextField(controller: instructions, maxLines: 3, decoration: const InputDecoration(labelText: '上游指令')),
                 const SizedBox(height: 8),
                 CheckboxListTile(
@@ -987,6 +1005,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   'default_image_quality': quality,
                   'default_image_background': background,
                   'default_image_output_format': outputFormat,
+                  'daily_checkin_generate_multiplier':
+                      double.tryParse(generateCheckinMultiplier.text),
+                  'daily_checkin_edit_multiplier':
+                      double.tryParse(editCheckinMultiplier.text),
                   'provider_instructions': instructions.text.trim(),
                   'allow_public_registration': allowRegistration,
                 }),

@@ -123,6 +123,12 @@ String _polishMessage(String message, String fallback) {
       normalized.contains('已被占用')) {
     return '这个账号名已经被占用，请换一个。';
   }
+  if (normalized.contains('已经发布到画廊')) {
+    return '这张图片已经发布到画廊了。';
+  }
+  if (normalized.contains('今日已签到')) {
+    return '今天已经签到过了，明天再来。';
+  }
   if (normalized.contains('timed out') || normalized.contains('timeout')) {
     return '请求超时，请稍后重试。';
   }
