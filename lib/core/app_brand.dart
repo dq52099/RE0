@@ -9,6 +9,14 @@ const List<String> _cnFontFallback = [
   'Microsoft YaHei',
   'WenQuanYi Micro Hei',
 ];
+const String _cnHeadingFontFamily = 'serif';
+const List<String> _cnHeadingFallback = [
+  'Songti SC',
+  'STSong',
+  'Source Han Serif SC',
+  'Noto Serif CJK SC',
+  'SimSun',
+];
 
 enum BrandStyle {
   botw,
@@ -437,6 +445,80 @@ class AppBrands {
   }
 }
 
+TextTheme _refinedTextTheme({
+  required Brightness brightness,
+  required Color bodyColor,
+  required Color mutedColor,
+  required Color headingColor,
+}) {
+  final isDark = brightness == Brightness.dark;
+  return TextTheme(
+    headlineSmall: TextStyle(
+      fontFamily: _cnHeadingFontFamily,
+      fontFamilyFallback: _cnHeadingFallback,
+      fontSize: isDark ? 26 : 25,
+      height: 1.2,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 0,
+      color: headingColor,
+    ),
+    titleLarge: TextStyle(
+      fontFamily: _cnHeadingFontFamily,
+      fontFamilyFallback: _cnHeadingFallback,
+      fontSize: 22,
+      height: 1.24,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 0,
+      color: headingColor,
+    ),
+    titleMedium: TextStyle(
+      fontFamily: _cnHeadingFontFamily,
+      fontFamilyFallback: _cnHeadingFallback,
+      fontSize: 18,
+      height: 1.28,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0,
+      color: headingColor,
+    ),
+    bodyLarge: TextStyle(
+      fontFamily: _cnFontFamily,
+      fontFamilyFallback: _cnFontFallback,
+      fontSize: 16,
+      height: 1.56,
+      fontWeight: FontWeight.w500,
+      letterSpacing: 0,
+      color: bodyColor,
+    ),
+    bodyMedium: TextStyle(
+      fontFamily: _cnFontFamily,
+      fontFamilyFallback: _cnFontFallback,
+      fontSize: 14,
+      height: 1.58,
+      fontWeight: FontWeight.w500,
+      letterSpacing: 0,
+      color: bodyColor,
+    ),
+    bodySmall: TextStyle(
+      fontFamily: _cnFontFamily,
+      fontFamilyFallback: _cnFontFallback,
+      fontSize: 12,
+      height: 1.5,
+      fontWeight: FontWeight.w500,
+      letterSpacing: 0,
+      color: mutedColor,
+    ),
+    labelLarge: TextStyle(
+      fontFamily: _cnFontFamily,
+      fontFamilyFallback: _cnFontFallback,
+      fontSize: 14,
+      height: 1.2,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0,
+      color: bodyColor,
+    ),
+  );
+}
+
 final ThemeData _botwTheme = ThemeData(
   useMaterial3: true,
   brightness: Brightness.dark,
@@ -447,6 +529,12 @@ final ThemeData _botwTheme = ThemeData(
     primary: Color(0xFF00D2FF),
     secondary: Color(0xFFFF9600),
     surface: Color(0xFF2A2A2A),
+  ),
+  textTheme: _refinedTextTheme(
+    brightness: Brightness.dark,
+    bodyColor: Colors.white70,
+    mutedColor: Colors.white54,
+    headingColor: const Color(0xFF7DEBFF),
   ),
   cardTheme: CardTheme(
     color: const Color(0xFF2A2A2A).withOpacity(0.8),
@@ -487,21 +575,6 @@ final ThemeData _botwTheme = ThemeData(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
     ),
   ),
-  textTheme: const TextTheme(
-    displayLarge: TextStyle(
-      fontFamily: _cnFontFamily,
-      fontFamilyFallback: _cnFontFallback,
-      color: Color(0xFF00D2FF),
-      fontWeight: FontWeight.bold,
-      letterSpacing: 0,
-    ),
-    bodyLarge: TextStyle(
-      fontFamily: _cnFontFamily,
-      fontFamilyFallback: _cnFontFallback,
-      color: Colors.white70,
-      letterSpacing: 0,
-    ),
-  ),
 );
 
 ThemeData _lightTheme({
@@ -515,6 +588,12 @@ ThemeData _lightTheme({
     useMaterial3: true,
     fontFamily: _cnFontFamily,
     fontFamilyFallback: _cnFontFallback,
+    textTheme: _refinedTextTheme(
+      brightness: Brightness.light,
+      bodyColor: const Color(0xFF20242E),
+      mutedColor: const Color(0xFF67707F),
+      headingColor: const Color(0xFF1A2230),
+    ),
     colorScheme: ColorScheme.light(
       primary: primary,
       secondary: secondary,
@@ -581,6 +660,12 @@ ThemeData _darkTheme({
     brightness: Brightness.dark,
     fontFamily: _cnFontFamily,
     fontFamilyFallback: _cnFontFallback,
+    textTheme: _refinedTextTheme(
+      brightness: Brightness.dark,
+      bodyColor: const Color(0xFFF3F6FA),
+      mutedColor: const Color(0xFF9CA8BC),
+      headingColor: const Color(0xFFFFFFFF),
+    ),
     colorScheme: ColorScheme.dark(
       primary: primary,
       secondary: secondary,
@@ -673,6 +758,12 @@ final ThemeData _re0Theme = ThemeData(
   useMaterial3: true,
   fontFamily: _cnFontFamily,
   fontFamilyFallback: _cnFontFallback,
+  textTheme: _refinedTextTheme(
+    brightness: Brightness.light,
+    bodyColor: const Color(0xFF243244),
+    mutedColor: const Color(0xFF6F7C8F),
+    headingColor: const Color(0xFF1C2D46),
+  ),
   colorScheme: const ColorScheme.light(
     primary: Color(0xFF4682B4),
     secondary: Color(0xFFE6E6FA),
