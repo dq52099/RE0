@@ -22,41 +22,23 @@ class GalleryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final brand = ref.watch(brandProvider);
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(brand.galleryTitle),
-          bottom: TabBar(
-            tabs: [
-              Tab(text: brand.galleryTabLabel),
-              Tab(text: brand.favoriteTabLabel),
-            ],
-          ),
-        ),
-        body: BrandBackground(
-          child: TabBarView(
-            children: [
-              _GalleryTabList(
-                key: ValueKey('gallery-$refreshToken'),
-                view: 'all',
-                emptyText: '画廊还没有公开作品',
-              ),
-              _GalleryTabList(
-                key: ValueKey('favorites-$refreshToken'),
-                view: 'favorites',
-                emptyText: '还没有收藏的作品',
-              ),
-            ],
-          ),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(brand.galleryTitle),
+      ),
+      body: BrandBackground(
+        child: GalleryFeedView(
+          key: ValueKey('gallery-$refreshToken'),
+          view: 'all',
+          emptyText: '画廊还没有公开作品',
         ),
       ),
     );
   }
 }
 
-class _GalleryTabList extends ConsumerStatefulWidget {
-  const _GalleryTabList({
+class GalleryFeedView extends ConsumerStatefulWidget {
+  const GalleryFeedView({
     super.key,
     required this.view,
     required this.emptyText,
@@ -66,10 +48,10 @@ class _GalleryTabList extends ConsumerStatefulWidget {
   final String emptyText;
 
   @override
-  ConsumerState<_GalleryTabList> createState() => _GalleryTabListState();
+  ConsumerState<GalleryFeedView> createState() => _GalleryFeedViewState();
 }
 
-class _GalleryTabListState extends ConsumerState<_GalleryTabList>
+class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
     with AutomaticKeepAliveClientMixin {
   static const _pageSize = 30;
 

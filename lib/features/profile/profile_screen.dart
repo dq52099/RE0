@@ -10,6 +10,7 @@ import '../../core/brand_background.dart';
 import '../../core/providers.dart';
 import '../admin/admin_screen.dart';
 import '../auth/login_screen.dart';
+import '../gallery/gallery_collections_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key, this.refreshToken = 0});
@@ -499,6 +500,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ),
                 );
               },
+            ),
+            _menuCard(
+              child: ListTile(
+                leading: Icon(Icons.collections_bookmark_outlined, color: brand.primaryColor),
+                title: const Text('我的画廊'),
+                subtitle: const Text('查看收藏、点赞和自己发布到画廊的作品'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const GalleryCollectionsScreen(),
+                  ),
+                ),
+              ),
             ),
             _menuCard(
               child: ListTile(
