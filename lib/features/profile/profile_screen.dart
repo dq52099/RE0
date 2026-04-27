@@ -542,12 +542,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 title: const Text('主题风格'),
                 subtitle: Text(brand.appTitle),
                 trailing: SizedBox(
-                  width: 148,
+                  width: 124,
                   child: DropdownButtonFormField<String>(
                     value: brand.id,
                     isDense: true,
                     alignment: Alignment.center,
                     icon: const Icon(Icons.expand_more),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w400,
+                        ),
                     decoration: InputDecoration(
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 12,
@@ -567,9 +570,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         .map(
                           (item) => DropdownMenuItem<String>(
                             value: item.id,
+                            child: Center(
+                              child: Text(
+                                item.appTitle,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    selectedItemBuilder: (context) => AppBrands.all
+                        .map(
+                          (item) => Center(
                             child: Text(
                               item.appTitle,
                               overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w400,
+                                  ),
                             ),
                           ),
                         )

@@ -5,7 +5,6 @@ import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
 import '../../core/cached_gateway_image.dart';
 import '../../core/image_capabilities.dart';
-import '../../core/option_picker_field.dart';
 import '../../core/providers.dart';
 import '../compendium/image_preview_screen.dart';
 
@@ -66,7 +65,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
               const SizedBox(height: 24),
               Text(
                 brand.promptLabel,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 12),
               TextField(
@@ -80,57 +79,65 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                 _buildTaskNotice('改图任务正在进行，请等待完成后再开始生图。'),
               ],
               const SizedBox(height: 16),
-              Row(
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
-                  Expanded(
-                    child: OptionPickerField<int>(
-                      label: '数量',
-                      value: _count,
-                      options: List<int>.generate(options.maxImages, (index) => index + 1)
-                          .map((e) => PickerOption(value: e, label: '$e张'))
-                          .toList(),
-                      onChanged: (value) => setState(() => _count = value),
-                    ),
+                  _dropdownField<int>(
+                    label: '数量',
+                    value: _count,
+                    width: 132,
+                    items: List<int>.generate(options.maxImages, (index) => index + 1)
+                        .map((e) => DropdownMenuItem<int>(value: e, child: _dropdownItem('$e张')))
+                        .toList(),
+                    selectedLabels:
+                        List<int>.generate(options.maxImages, (index) => index + 1)
+                            .map((e) => '$e张')
+                            .toList(),
+                    onChanged: (value) => setState(() => _count = value!),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: OptionPickerField<String>(
-                      label: '尺寸',
-                      value: size,
-                      options: _pickerOptions(options.sizes),
-                      onChanged: (value) => setState(() => _size = value),
-                    ),
+                  _dropdownField<String>(
+                    label: '尺寸',
+                    value: size,
+                    width: 168,
+                    items: _items(options.sizes),
+                    selectedLabels: options.sizes.map((item) => item.label).toList(),
+                    onChanged: (value) => setState(() => _size = value!),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
-              Row(
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
-                  Expanded(
-                    child: OptionPickerField<String>(
-                      label: '质量',
-                      value: quality,
-                      options: _pickerOptions(options.qualities),
-                      onChanged: (value) => setState(() => _quality = value),
-                    ),
+                  _dropdownField<String>(
+                    label: '质量',
+                    value: quality,
+                    width: 132,
+                    items: _items(options.qualities),
+                    selectedLabels: options.qualities.map((item) => item.label).toList(),
+                    onChanged: (value) => setState(() => _quality = value!),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: OptionPickerField<String>(
-                      label: '背景',
-                      value: background,
-                      options: _pickerOptions(options.backgrounds),
-                      onChanged: (value) => setState(() => _background = value),
-                    ),
+                  _dropdownField<String>(
+                    label: '背景',
+                    value: background,
+                    width: 168,
+                    items: _items(options.backgrounds),
+                    selectedLabels: options.backgrounds.map((item) => item.label).toList(),
+                    onChanged: (value) => setState(() => _background = value!),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
-              OptionPickerField<String>(
+              _dropdownField<String>(
                 label: '输出格式',
                 value: outputFormat,
-                options: _pickerOptions(capabilities.outputFormats),
-                onChanged: (value) => setState(() => _outputFormat = value),
+                width: 168,
+                items: _items(capabilities.outputFormats),
+                selectedLabels:
+                    capabilities.outputFormats.map((item) => item.label).toList(),
+                onChanged: (value) => setState(() => _outputFormat = value!),
               ),
               const SizedBox(height: 16),
               SizedBox(
@@ -263,15 +270,62 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     );
   }
 
-  List<PickerOption<String>> _pickerOptions(List<ImageOption> options) {
-    return options
-        .map(
-          (item) => PickerOption<String>(
-            value: item.value,
-            label: item.label,
-          ),
-        )
-        .toList();
+  Widget _dropdownItem(String label) {
+    return Center(
+      child: Text(
+        label,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w400,
+            ),
+      ),
+    );
+  }
+
+  Widget _selectedDropdownText(String label) {
+    return Center(
+      child: Text(
+        label,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w400,
+            ),
+      ),
+    );
+  }
+
+  Widget _dropdownField<T>({
+    required String label,
+    required T value,
+    required double width,
+    required List<DropdownMenuItem<T>> items,
+    required List<String> selectedLabels,
+    required ValueChanged<T?> onChanged,
+  }) {
+    return SizedBox(
+      width: width,
+      child: DropdownButtonFormField<T>(
+        value: value,
+        isExpanded: true,
+        icon: const Icon(Icons.expand_more, size: 18),
+        menuMaxHeight: 280,
+        borderRadius: BorderRadius.circular(16),
+        alignment: Alignment.center,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w400,
+            ),
+        decoration: InputDecoration(
+          labelText: label,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        ),
+        items: items,
+        selectedItemBuilder: (context) =>
+            selectedLabels.map(_selectedDropdownText).toList(),
+        onChanged: onChanged,
+      ),
+    );
   }
 
   String _safeValue(String current, List<ImageOption> options, String fallback) {
