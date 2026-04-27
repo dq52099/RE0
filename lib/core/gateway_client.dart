@@ -249,6 +249,9 @@ class GatewayClient {
 
   Future<Map<String, dynamic>> getGalleryPosts({
     required String view,
+    String? keyword,
+    String? action,
+    String sort = 'time',
     int page = 1,
     int pageSize = 30,
   }) async {
@@ -257,6 +260,9 @@ class GatewayClient {
         '/api/gallery/posts',
         queryParameters: {
           'view': view,
+          if (keyword != null && keyword.trim().isNotEmpty) 'keyword': keyword.trim(),
+          if (action != null && action.isNotEmpty) 'action': action,
+          'sort': sort,
           'page': page,
           'page_size': pageSize,
         },
@@ -296,6 +302,18 @@ class GatewayClient {
     }, fallback: '读取评论失败。');
   }
 
+  Future<void> deleteGalleryComment(String commentId) async {
+    await _guard(() async {
+      await _dio.delete('/api/gallery/comments/$commentId');
+    }, fallback: '删除评论失败。');
+  }
+
+  Future<void> deleteGalleryPost(String postId) async {
+    await _guard(() async {
+      await _dio.delete('/api/gallery/posts/$postId');
+    }, fallback: '取消发布失败。');
+  }
+
   Future<Map<String, dynamic>> addGalleryComment(
     String postId,
     String content,
@@ -305,6 +323,13 @@ class GatewayClient {
       final res = await _dio.post('/api/gallery/posts/$postId/comments', data: formData);
       return Map<String, dynamic>.from(res.data as Map);
     }, fallback: '发表评论失败。');
+  }
+
+  Future<Map<String, dynamic>> recordGalleryDownload(String postId) async {
+    return _guard(() async {
+      final res = await _dio.post('/api/gallery/posts/$postId/download');
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '下载图片失败。');
   }
 
   Future<void> changeMyPassword(

@@ -21,10 +21,12 @@ class ImagePreviewScreen extends ConsumerStatefulWidget {
     super.key,
     required this.items,
     this.initialIndex = 0,
+    this.showDownload = true,
   });
 
   final List<PreviewImageEntry> items;
   final int initialIndex;
+  final bool showDownload;
 
   @override
   ConsumerState<ImagePreviewScreen> createState() => _ImagePreviewScreenState();
@@ -104,7 +106,7 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
                           width: constraints.maxWidth,
                           height: constraints.maxHeight,
                           fit: BoxFit.contain,
-                          showDownload: true,
+                          showDownload: widget.showDownload,
                           accentColor: brand.primaryColor,
                         ),
                       ),

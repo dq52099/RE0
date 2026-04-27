@@ -663,6 +663,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final role = user?['role'] as Map? ?? {};
     final group = user?['group'] as Map? ?? {};
     final quota = user?['quota_summary'] as Map? ?? {};
+    final levelInfo = user?['level_info'] as Map? ?? {};
     final generateQuota = quota['generate'] as Map? ?? {};
     final editQuota = quota['edit'] as Map? ?? {};
 
@@ -739,6 +740,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               children: [
                 _chip(brand, '角色', role['name']?.toString() ?? '-'),
                 _chip(brand, '用户组', group['name']?.toString() ?? '-'),
+                _chip(brand, '等级', levelInfo['label']?.toString() ?? 'LV0'),
+                _chip(brand, '积分', '${user?['points'] ?? 0}'),
                 _chip(brand, '生图', _quotaText(generateQuota)),
                 _chip(brand, '改图', _quotaText(editQuota)),
               ],

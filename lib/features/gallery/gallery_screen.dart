@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -53,14 +51,16 @@ class GalleryFeedView extends ConsumerStatefulWidget {
 
 class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
     with AutomaticKeepAliveClientMixin {
-  static const _pageSize = 30;
-
-  final ScrollController _scrollController = ScrollController();
+  final TextEditingController _searchController = TextEditingController();
   final List<Map<String, dynamic>> _items = [];
   int _page = 1;
-  bool _hasMore = true;
+  int _totalPages = 1;
+  int _pageSize = 12;
+  int _columns = 2;
   bool _isLoading = false;
   String? _error;
+  String _sort = 'time';
+  String? _actionFilter;
 
   @override
   bool get wantKeepAlive => true;
@@ -68,31 +68,30 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_maybeLoadMore);
     _load(reset: true);
   }
 
   @override
   void dispose() {
-    _scrollController.removeListener(_maybeLoadMore);
-    _scrollController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
   Future<void> _load({bool reset = false}) async {
     if (_isLoading) return;
-    if (!reset && !_hasMore) return;
     setState(() {
       _isLoading = true;
       if (reset) {
         _page = 1;
-        _hasMore = true;
         _error = null;
       }
     });
     try {
       final response = await ref.read(gatewayClientProvider).getGalleryPosts(
             view: widget.view,
+            keyword: _searchController.text.trim(),
+            action: _actionFilter,
+            sort: _sort,
             page: _page,
             pageSize: _pageSize,
           );
@@ -104,10 +103,10 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
           int.tryParse(response['total_pages']?.toString() ?? '') ?? _page;
       if (!mounted) return;
       setState(() {
-        if (reset) _items.clear();
-        _items.addAll(nextItems);
-        _hasMore = _page < totalPages && nextItems.isNotEmpty;
-        _page += 1;
+        _items
+          ..clear()
+          ..addAll(nextItems);
+        _totalPages = totalPages;
       });
     } catch (error) {
       if (!mounted) return;
@@ -116,12 +115,6 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
       if (mounted) {
         setState(() => _isLoading = false);
       }
-    }
-  }
-
-  void _maybeLoadMore() {
-    if (_scrollController.position.extentAfter < 600) {
-      _load();
     }
   }
 
@@ -251,40 +244,214 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
 
     return RefreshIndicator(
       onRefresh: _refresh,
-      child: ListView.builder(
-        controller: _scrollController,
+      child: ListView(
         padding: const EdgeInsets.all(16),
-        itemCount: _items.isEmpty ? 1 : _items.length + 1,
-        itemBuilder: (context, index) {
-          if (_items.isEmpty) {
-            return Padding(
+        children: [
+          _toolbar(brand),
+          const SizedBox(height: 16),
+          if (_items.isEmpty)
+            Padding(
               padding: const EdgeInsets.only(top: 120),
               child: Center(child: Text(widget.emptyText)),
-            );
-          }
-          if (index == _items.length) {
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Center(
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : _hasMore
-                        ? TextButton(
-                            onPressed: _load,
-                            child: const Text('加载更多'),
-                          )
-                        : const Text('没有更多作品'),
+            )
+          else
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _items.length,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: _columns,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 0.76,
               ),
-            );
-          }
-          final item = _items[index];
-          return _galleryCard(brand, item, index);
-        },
+              itemBuilder: (context, index) {
+                final item = _items[index];
+                return _galleryCard(brand, item, index);
+              },
+            ),
+          const SizedBox(height: 16),
+          _paginationBar(),
+        ],
       ),
+    );
+  }
+
+  Widget _toolbar(AppBrand brand) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: _searchController,
+          textInputAction: TextInputAction.search,
+          onSubmitted: (_) => _load(reset: true),
+          decoration: const InputDecoration(
+            labelText: '搜索画廊',
+            hintText: '按提示词或作者搜索',
+            prefixIcon: Icon(Icons.search),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _chip('全部', _actionFilter == null, () {
+              setState(() => _actionFilter = null);
+              _load(reset: true);
+            }),
+            _chip(brand.generateActionLabel, _actionFilter == 'generate', () {
+              setState(() => _actionFilter = 'generate');
+              _load(reset: true);
+            }),
+            _chip(brand.editActionLabel, _actionFilter == 'edit', () {
+              setState(() => _actionFilter = 'edit');
+              _load(reset: true);
+            }),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _smallDropdown(
+              label: '排序',
+              value: _sort,
+              width: 132,
+              items: const {
+                'time': '时间',
+                'popular': '最受欢迎',
+                'comments': '评论最多',
+                'downloads': '下载最多',
+              },
+              onChanged: (value) {
+                setState(() => _sort = value!);
+                _load(reset: true);
+              },
+            ),
+            _smallDropdown(
+              label: '每页',
+              value: _pageSize,
+              width: 112,
+              items: const {
+                12: '12张',
+                24: '24张',
+                36: '36张',
+              },
+              onChanged: (value) {
+                setState(() => _pageSize = value!);
+                _load(reset: true);
+              },
+            ),
+            _smallDropdown(
+              label: '列数',
+              value: _columns,
+              width: 96,
+              items: const {
+                2: '两列',
+                3: '三列',
+              },
+              onChanged: (value) {
+                setState(() => _columns = value!);
+              },
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _chip(String label, bool selected, VoidCallback onTap) {
+    return ChoiceChip(
+      showCheckmark: false,
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onTap(),
+    );
+  }
+
+  Widget _smallDropdown<T>({
+    required String label,
+    required T value,
+    required double width,
+    required Map<T, String> items,
+    required ValueChanged<T?> onChanged,
+  }) {
+    return SizedBox(
+      width: width,
+      child: DropdownButtonFormField<T>(
+        value: value,
+        isExpanded: true,
+        icon: const Icon(Icons.expand_more, size: 18),
+        menuMaxHeight: 280,
+        borderRadius: BorderRadius.circular(16),
+        alignment: Alignment.center,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w400,
+            ),
+        decoration: InputDecoration(
+          labelText: label,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        ),
+        items: items.entries
+            .map(
+              (entry) => DropdownMenuItem<T>(
+                value: entry.key,
+                child: Center(
+                  child: Text(
+                    entry.value,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w400,
+                        ),
+                  ),
+                ),
+              ),
+            )
+            .toList(),
+        selectedItemBuilder: (context) => items.values
+            .map(
+              (label) => Center(
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w400,
+                      ),
+                ),
+              ),
+            )
+            .toList(),
+        onChanged: onChanged,
+      ),
+    );
+  }
+
+  Widget _paginationBar() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        IconButton(
+          onPressed: _page <= 1 || _isLoading
+              ? null
+              : () {
+                  setState(() => _page -= 1);
+                  _load();
+                },
+          icon: const Icon(Icons.chevron_left),
+        ),
+        Text('第 $_page / $_totalPages 页'),
+        IconButton(
+          onPressed: _page >= _totalPages || _isLoading
+              ? null
+              : () {
+                  setState(() => _page += 1);
+                  _load();
+                },
+          icon: const Icon(Icons.chevron_right),
+        ),
+      ],
     );
   }
 
@@ -301,26 +468,29 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
         .where((entry) => entry.url.isNotEmpty)
         .toList();
     return Card(
-      margin: const EdgeInsets.only(bottom: 16),
       clipBehavior: Clip.antiAlias,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           if (imageUrl.isNotEmpty)
             GestureDetector(
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => ImagePreviewScreen(
                     items: previewItems,
-                    initialIndex: index,
+                    initialIndex: previewItems
+                        .indexWhere((entry) => entry.url == imageUrl)
+                        .clamp(0, previewItems.length - 1),
+                    showDownload: false,
                   ),
                 ),
               ),
               child: CachedGatewayImage(
                 url: imageUrl,
                 width: double.infinity,
-                height: 240,
+                height: 180,
                 fit: BoxFit.cover,
+                showDownload: false,
                 accentColor: brand.primaryColor,
               ),
             ),
@@ -348,9 +518,17 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            item['display_name']?.toString() ?? '-',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(
+                                item['display_name']?.toString() ?? '-',
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              _levelBadge(item['level_info'] as Map?),
+                            ],
                           ),
                           Text(
                             _formatGalleryTime(item['created_at']?.toString()),
@@ -371,12 +549,16 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                 Text(
                   _promptSummary(item),
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w400,
                         height: 1.5,
                       ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 12),
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     _actionButton(
                       icon: item['liked'] == true
@@ -394,6 +576,12 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                       label: '${item['favorite_count'] ?? 0}',
                       color: item['favorited'] == true ? brand.primaryColor : null,
                       onTap: () => _toggleFavorite(item),
+                    ),
+                    const SizedBox(width: 8),
+                    _actionButton(
+                      icon: Icons.download_outlined,
+                      label: '${item['download_count'] ?? 0}',
+                      onTap: () => _openDetails(item),
                     ),
                     const SizedBox(width: 8),
                     _actionButton(
@@ -453,6 +641,37 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
     );
   }
 
+  Widget _levelBadge(Map? levelInfo) {
+    final label = levelInfo?['label']?.toString();
+    if (label == null || label.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: _badgeColor(levelInfo?['badge_color']?.toString()).withOpacity(0.14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          color: _badgeColor(levelInfo?['badge_color']?.toString()),
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Color _badgeColor(String? value) {
+    if (value == null || value.isEmpty) {
+      return Theme.of(context).colorScheme.primary;
+    }
+    final hex = value.replaceFirst('#', '');
+    final normalized = hex.length == 6 ? 'FF$hex' : hex;
+    return Color(int.parse(normalized, radix: 16));
+  }
+
   String _formatGalleryTime(String? raw) {
     final parsed = raw == null ? null : DateTime.tryParse(raw);
     if (parsed == null) return '';
@@ -465,7 +684,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
   }
 
   String _promptSummary(Map<String, dynamic> item) {
-    if (item['viewer_has_commented'] == true) {
+    if (item['can_view_prompt'] == true) {
       return item['prompt']?.toString() ?? '';
     }
     return '评论后可解锁提示词';

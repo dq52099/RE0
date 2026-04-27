@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../../core/api_error.dart';
 import '../../core/app_brand.dart';
 import '../../core/cached_gateway_image.dart';
+import '../../core/image_cache_service.dart';
 import '../../core/providers.dart';
 
 class GalleryDetailScreen extends ConsumerStatefulWidget {
@@ -86,6 +87,72 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
     }
   }
 
+  Future<void> _downloadImage() async {
+    if (_post['can_download'] != true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('评论后才可以下载这张图片。')),
+      );
+      return;
+    }
+    try {
+      final updated = await ref
+          .read(gatewayClientProvider)
+          .recordGalleryDownload(_post['id'].toString());
+      final brand = ref.read(brandProvider);
+      final saved = await ref.read(imageCacheProvider).saveImageToDevice(
+            updated['image_url']?.toString() ?? '',
+            albumName: brand.galleryAlbumName,
+          );
+      if (!mounted) return;
+      setState(() => _post = updated);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            saved.savedToGallery ? '已保存到系统相册。' : '已保存到本地。',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(error))),
+      );
+    }
+  }
+
+  Future<void> _deleteComment(String commentId) async {
+    try {
+      await ref.read(gatewayClientProvider).deleteGalleryComment(commentId);
+      if (!mounted) return;
+      await _loadComments();
+      setState(() {
+        final next = (int.tryParse(_post['comment_count']?.toString() ?? '1') ?? 1) - 1;
+        _post['comment_count'] = next < 0 ? 0 : next;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(error))),
+      );
+    }
+  }
+
+  Future<void> _unpublish() async {
+    try {
+      await ref.read(gatewayClientProvider).deleteGalleryPost(_post['id'].toString());
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('作品已取消发布。')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(error))),
+      );
+    }
+  }
+
   Future<void> _submitComment() async {
     final text = _commentController.text.trim();
     if (text.isEmpty) return;
@@ -127,9 +194,19 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
   Widget build(BuildContext context) {
     final brand = ref.watch(brandProvider);
     final canViewPrompt = _canViewPrompt(_post);
+    final currentUser = ref.read(authStateProvider);
+    final isOwner = currentUser?['id']?.toString() == _post['user_id']?.toString();
     return Scaffold(
       appBar: AppBar(
         title: Text(brand.galleryTitle),
+        actions: [
+          if (isOwner)
+            IconButton(
+              tooltip: '取消发布',
+              icon: const Icon(Icons.delete_outline),
+              onPressed: _unpublish,
+            ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -144,6 +221,7 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                   width: double.infinity,
                   height: 280,
                   fit: BoxFit.cover,
+                  showDownload: false,
                   accentColor: brand.primaryColor,
                 ),
                 Padding(
@@ -154,9 +232,17 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                       Row(
                         children: [
                           Expanded(
-                            child: Text(
-                              _post['display_name']?.toString() ?? '-',
-                              style: Theme.of(context).textTheme.titleMedium,
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 4,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Text(
+                                  _post['display_name']?.toString() ?? '-',
+                                  style: Theme.of(context).textTheme.titleMedium,
+                                ),
+                                _levelBadge(_post['level_info'] as Map?),
+                              ],
                             ),
                           ),
                           Text(
@@ -202,6 +288,12 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                             icon: Icons.content_copy_outlined,
                             label: '复制提示词',
                             onTap: canViewPrompt ? _copyPrompt : null,
+                          ),
+                          const SizedBox(width: 8),
+                          _actionButton(
+                            icon: Icons.download_outlined,
+                            label: '下载 ${_post['download_count'] ?? 0}',
+                            onTap: _downloadImage,
                           ),
                         ],
                       ),
@@ -275,15 +367,30 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                             Row(
                               children: [
                                 Expanded(
-                                  child: Text(
-                                    comment['display_name']?.toString() ?? '-',
-                                    style: const TextStyle(fontWeight: FontWeight.w600),
+                                  child: Wrap(
+                                    spacing: 6,
+                                    runSpacing: 4,
+                                    crossAxisAlignment: WrapCrossAlignment.center,
+                                    children: [
+                                      Text(
+                                        comment['display_name']?.toString() ?? '-',
+                                        style: const TextStyle(fontWeight: FontWeight.w600),
+                                      ),
+                                      _levelBadge(comment['level_info'] as Map?),
+                                    ],
                                   ),
                                 ),
                                 Text(
                                   _formatTime(comment['created_at']?.toString()),
                                   style: Theme.of(context).textTheme.bodySmall,
                                 ),
+                                if (comment['can_delete'] == true)
+                                  IconButton(
+                                    visualDensity: VisualDensity.compact,
+                                    tooltip: '删除评论',
+                                    icon: const Icon(Icons.delete_outline, size: 18),
+                                    onPressed: () => _deleteComment(comment['id'].toString()),
+                                  ),
                               ],
                             ),
                             const SizedBox(height: 6),
@@ -365,6 +472,37 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
         ),
       ),
     );
+  }
+
+  Widget _levelBadge(Map? levelInfo) {
+    final label = levelInfo?['label']?.toString();
+    if (label == null || label.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: _badgeColor(levelInfo?['badge_color']?.toString()).withOpacity(0.14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          color: _badgeColor(levelInfo?['badge_color']?.toString()),
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Color _badgeColor(String? value) {
+    if (value == null || value.isEmpty) {
+      return Theme.of(context).colorScheme.primary;
+    }
+    final hex = value.replaceFirst('#', '');
+    final normalized = hex.length == 6 ? 'FF$hex' : hex;
+    return Color(int.parse(normalized, radix: 16));
   }
 
   String _formatTime(String? raw) {
