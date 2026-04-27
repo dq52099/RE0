@@ -14,6 +14,11 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      RE0_KEYSTORE_PATH: ${{ github.workspace }}/android/app/re0-release.jks
+      RE0_KEYSTORE_PASSWORD: ${{ secrets.RE0_KEYSTORE_PASSWORD }}
+      RE0_KEY_ALIAS: ${{ secrets.RE0_KEY_ALIAS }}
+      RE0_KEY_PASSWORD: ${{ secrets.RE0_KEY_PASSWORD }}
 
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +40,18 @@ jobs:
 
       - name: Generate App Icons
         run: dart run flutter_launcher_icons:main
+
+      - name: Configure release signing
+        env:
+          RE0_KEYSTORE_BASE64: ${{ secrets.RE0_KEYSTORE_BASE64 }}
+        shell: bash
+        run: |
+          if [[ -z "${RE0_KEYSTORE_BASE64}" || -z "${RE0_KEYSTORE_PASSWORD}" || -z "${RE0_KEY_ALIAS}" || -z "${RE0_KEY_PASSWORD}" ]]; then
+            echo "::error::Missing RE0 release signing secrets."
+            exit 1
+          fi
+          echo "${RE0_KEYSTORE_BASE64}" | base64 --decode > "${RE0_KEYSTORE_PATH}"
+          chmod 600 "${RE0_KEYSTORE_PATH}"
 
       - name: Build APK
         run: flutter build apk --release

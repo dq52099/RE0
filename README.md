@@ -21,6 +21,7 @@ GitHub Actions 位于 `.github/workflows/build-apk.yml`。
 - 普通 `main` 分支构建会上传 `RE0-apk` artifact。
 - 推送 `v*` tag 时会生成 `RE0-<tag>.apk` 并同步到 GitHub Release。
 - App 内更新源配置在 `lib/core/providers.dart`，默认读取 `dq52099/RE0` 的 latest release。
+- Release APK 使用 GitHub Secrets 中的固定 release keystore 签名。需要配置 `RE0_KEYSTORE_BASE64`、`RE0_KEYSTORE_PASSWORD`、`RE0_KEY_ALIAS`、`RE0_KEY_PASSWORD`。
 
 ## 构建
 
