@@ -7,6 +7,7 @@ import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
 import '../../core/cached_gateway_image.dart';
 import '../../core/image_capabilities.dart';
+import '../../core/option_picker_field.dart';
 import '../../core/providers.dart';
 import '../compendium/image_preview_screen.dart';
 
@@ -120,57 +121,55 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
               const SizedBox(height: 16),
               Row(
                 children: [
-                  Expanded(child: DropdownButtonFormField<int>(
-                    value: _count,
-                    isExpanded: true,
-                    alignment: Alignment.center,
-                    decoration: const InputDecoration(labelText: '数量'),
-                    items: List<int>.generate(options.maxImages, (index) => index + 1)
-                        .map((e) => DropdownMenuItem(value: e, child: Text('$e张')))
-                        .toList(),
-                    onChanged: (v) => setState(() => _count = v!),
-                  )),
+                  Expanded(
+                    child: OptionPickerField<int>(
+                      label: '数量',
+                      value: _count,
+                      options: List<int>.generate(options.maxImages, (index) => index + 1)
+                          .map((e) => PickerOption(value: e, label: '$e张'))
+                          .toList(),
+                      onChanged: (value) => setState(() => _count = value),
+                    ),
+                  ),
                   const SizedBox(width: 16),
-                  Expanded(child: DropdownButtonFormField<String>(
-                    value: size,
-                    isExpanded: true,
-                    alignment: Alignment.center,
-                    decoration: const InputDecoration(labelText: '尺寸'),
-                    items: _items(options.sizes),
-                    onChanged: (v) => setState(() => _size = v!),
-                  )),
+                  Expanded(
+                    child: OptionPickerField<String>(
+                      label: '尺寸',
+                      value: size,
+                      options: _pickerOptions(options.sizes),
+                      onChanged: (value) => setState(() => _size = value),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
               Row(
                 children: [
-                  Expanded(child: DropdownButtonFormField<String>(
-                    value: quality,
-                    isExpanded: true,
-                    alignment: Alignment.center,
-                    decoration: const InputDecoration(labelText: '质量'),
-                    items: _items(options.qualities),
-                    onChanged: (v) => setState(() => _quality = v!),
-                  )),
+                  Expanded(
+                    child: OptionPickerField<String>(
+                      label: '质量',
+                      value: quality,
+                      options: _pickerOptions(options.qualities),
+                      onChanged: (value) => setState(() => _quality = value),
+                    ),
+                  ),
                   const SizedBox(width: 16),
-                  Expanded(child: DropdownButtonFormField<String>(
-                    value: background,
-                    isExpanded: true,
-                    alignment: Alignment.center,
-                    decoration: const InputDecoration(labelText: '背景'),
-                    items: _items(options.backgrounds),
-                    onChanged: (v) => setState(() => _background = v!),
-                  )),
+                  Expanded(
+                    child: OptionPickerField<String>(
+                      label: '背景',
+                      value: background,
+                      options: _pickerOptions(options.backgrounds),
+                      onChanged: (value) => setState(() => _background = value),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
+              OptionPickerField<String>(
+                label: '输出格式',
                 value: outputFormat,
-                isExpanded: true,
-                alignment: Alignment.center,
-                decoration: const InputDecoration(labelText: '输出格式'),
-                items: _items(capabilities.outputFormats),
-                onChanged: (v) => setState(() => _outputFormat = v!),
+                options: _pickerOptions(capabilities.outputFormats),
+                onChanged: (value) => setState(() => _outputFormat = value),
               ),
               const SizedBox(height: 16),
               SizedBox(
@@ -302,19 +301,12 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     );
   }
 
-  List<DropdownMenuItem<String>> _items(List<ImageOption> options) {
+  List<PickerOption<String>> _pickerOptions(List<ImageOption> options) {
     return options
         .map(
-          (item) => DropdownMenuItem<String>(
+          (item) => PickerOption<String>(
             value: item.value,
-            child: Center(
-              child: Text(
-                item.label,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ),
+            label: item.label,
           ),
         )
         .toList();

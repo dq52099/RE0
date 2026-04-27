@@ -27,8 +27,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _isCheckingUpdate = false;
   bool _isDownloadingUpdate = false;
   bool _isUpdatingAvatar = false;
+  bool _isCheckingIn = false;
   double? _updateProgress;
   Future<int>? _cacheSizeFuture;
+  Future<Map<String, dynamic>>? _checkInStatusFuture;
 
   @override
   void initState() {
@@ -46,6 +48,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   void _refreshCacheSize() {
     _cacheSizeFuture = ref.read(imageCacheProvider).cacheSizeBytes();
+    _checkInStatusFuture = ref.read(gatewayClientProvider).getDailyCheckInStatus();
   }
 
   Future<void> _clearCache() async {
@@ -83,6 +86,35 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     } finally {
       if (mounted) {
         setState(() => _isLoggingOut = false);
+      }
+    }
+  }
+
+  Future<void> _dailyCheckIn() async {
+    if (_isCheckingIn) return;
+    setState(() => _isCheckingIn = true);
+    try {
+      final result = await ref.read(gatewayClientProvider).performDailyCheckIn();
+      ref.read(authStateProvider.notifier).state = result['user'];
+      ref.read(energyProvider.notifier).state = result['user']['quota_summary'];
+      if (!mounted) return;
+      setState(_refreshCacheSize);
+      final reward = result['checkin']['today_reward'] as Map? ?? {};
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '签到成功，获得 ${reward['generate'] ?? 0} 次生图和 ${reward['edit'] ?? 0} 次改图奖励。',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(error, fallback: '签到失败。'))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isCheckingIn = false);
       }
     }
   }
@@ -436,6 +468,38 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           children: [
             _buildProfileCard(brand, user, hasSystemManagement),
             const SizedBox(height: 16),
+            FutureBuilder<Map<String, dynamic>>(
+              future: _checkInStatusFuture,
+              builder: (context, snapshot) {
+                final status = snapshot.data ?? const <String, dynamic>{};
+                final signedToday = status['signed_today'] == true;
+                final reward = (status['today_reward'] as Map?) ?? const <String, dynamic>{};
+                final subtitle = signedToday
+                    ? '今日已签到，奖励生图 ${reward['generate'] ?? 0} 次，改图 ${reward['edit'] ?? 0} 次'
+                    : '每日可随机获得 5-10 次生图和 2-5 次改图奖励';
+                return _menuCard(
+                  child: ListTile(
+                    leading: Icon(Icons.calendar_month_outlined, color: brand.successColor),
+                    title: const Text('每日签到'),
+                    subtitle: Text(subtitle),
+                    trailing: _isCheckingIn
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            signedToday ? '已签到' : '去签到',
+                            style: TextStyle(
+                              color: signedToday ? brand.successColor : brand.primaryColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                    onTap: (_isCheckingIn || signedToday) ? null : _dailyCheckIn,
+                  ),
+                );
+              },
+            ),
             _menuCard(
               child: ListTile(
                 leading: Icon(Icons.person_outline, color: brand.primaryColor),

@@ -233,6 +233,20 @@ class GatewayClient {
     }, fallback: '头像上传失败。');
   }
 
+  Future<Map<String, dynamic>> getDailyCheckInStatus() async {
+    return _guard(() async {
+      final res = await _dio.get('/api/me/check-in');
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '读取签到状态失败。');
+  }
+
+  Future<Map<String, dynamic>> performDailyCheckIn() async {
+    return _guard(() async {
+      final res = await _dio.post('/api/me/check-in');
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '签到失败，请稍后重试。');
+  }
+
   Future<void> changeMyPassword(
     String currentPassword,
     String newPassword,

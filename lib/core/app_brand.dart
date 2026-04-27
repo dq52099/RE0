@@ -613,6 +613,21 @@ ThemeData _lightTheme({
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: surface.withOpacity(0.96),
+      hintStyle: TextStyle(
+        fontFamily: _cnFontFamily,
+        fontFamilyFallback: _cnFontFallback,
+        fontSize: 13,
+        fontWeight: FontWeight.w400,
+        height: 1.4,
+        color: primary.withOpacity(0.55),
+      ),
+      labelStyle: TextStyle(
+        fontFamily: _cnFontFamily,
+        fontFamilyFallback: _cnFontFallback,
+        fontSize: 13,
+        fontWeight: FontWeight.w400,
+        color: primary.withOpacity(0.82),
+      ),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
@@ -684,6 +699,21 @@ ThemeData _darkTheme({
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: Colors.black.withOpacity(0.64),
+      hintStyle: TextStyle(
+        fontFamily: _cnFontFamily,
+        fontFamilyFallback: _cnFontFallback,
+        fontSize: 13,
+        fontWeight: FontWeight.w400,
+        height: 1.4,
+        color: Colors.white.withOpacity(0.58),
+      ),
+      labelStyle: TextStyle(
+        fontFamily: _cnFontFamily,
+        fontFamilyFallback: _cnFontFallback,
+        fontSize: 13,
+        fontWeight: FontWeight.w400,
+        color: Colors.white.withOpacity(0.86),
+      ),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
@@ -798,10 +828,19 @@ final ThemeData _re0Theme = ThemeData(
       borderRadius: BorderRadius.circular(16),
       borderSide: const BorderSide(color: Color(0xFF4682B4), width: 2),
     ),
+    hintStyle: TextStyle(
+      fontFamily: _cnFontFamily,
+      fontFamilyFallback: _cnFontFallback,
+      color: const Color(0xFF52657B).withOpacity(0.78),
+      fontSize: 13,
+      fontWeight: FontWeight.w400,
+      height: 1.4,
+    ),
     labelStyle: const TextStyle(
       fontFamily: _cnFontFamily,
       fontFamilyFallback: _cnFontFallback,
       color: Color(0xFF2C3E50),
+      fontSize: 13,
       fontWeight: FontWeight.w500,
       letterSpacing: 0,
     ),
