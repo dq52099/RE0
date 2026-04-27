@@ -1,3 +1,4 @@
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,10 +20,12 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  final _picker = ImagePicker();
   bool _isClearingCache = false;
   bool _isLoggingOut = false;
   bool _isCheckingUpdate = false;
   bool _isDownloadingUpdate = false;
+  bool _isUpdatingAvatar = false;
   double? _updateProgress;
   Future<int>? _cacheSizeFuture;
 
@@ -79,6 +82,37 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     } finally {
       if (mounted) {
         setState(() => _isLoggingOut = false);
+      }
+    }
+  }
+
+  Future<void> _pickAndUploadAvatar() async {
+    final picked = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 90,
+      maxWidth: 1200,
+    );
+    if (picked == null) return;
+
+    setState(() => _isUpdatingAvatar = true);
+    try {
+      final updated = await ref.read(gatewayClientProvider).updateMyAvatar(
+            picked.path,
+          );
+      ref.read(authStateProvider.notifier).state = updated;
+      ref.read(energyProvider.notifier).state = updated['quota_summary'];
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('头像已更新')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(error, fallback: '头像上传失败。'))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isUpdatingAvatar = false);
       }
     }
   }
@@ -191,27 +225,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final payload = await showDialog<Map<String, String>>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('编辑个人资料'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: username,
-                  enabled: canEditUsername,
-                  decoration: InputDecoration(
-                    labelText: '账号',
-                    helperText: canEditUsername ? '可使用小写字母、数字、下划线或短横线' : '当前账号不允许修改账号名',
-                  ),
+        return _wideDialog(
+          title: '编辑个人资料',
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: username,
+                enabled: canEditUsername,
+                decoration: InputDecoration(
+                  labelText: '账号',
+                  helperText:
+                      canEditUsername ? '可使用小写字母、数字、下划线或短横线' : '当前账号不允许修改账号名',
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: displayName,
-                  decoration: const InputDecoration(labelText: '显示名称'),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: displayName,
+                decoration: const InputDecoration(labelText: '显示名称'),
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -225,6 +258,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 if (nextUsername.isEmpty || nextDisplayName.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('账号和显示名称不能为空。')),
+                  );
+                  return;
+                }
+                if (nextUsername.length < 4 || nextUsername.length > 24) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('账号长度需为 4 到 24 位。')),
+                  );
+                  return;
+                }
+                if (!RegExp(r'^[a-z][a-z0-9_-]{3,23}$').hasMatch(nextUsername)) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('账号需以小写字母开头，只允许小写字母、数字、下划线和短横线。'),
+                    ),
+                  );
+                  return;
+                }
+                if (nextDisplayName.length < 2 || nextDisplayName.length > 32) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('显示名称长度需为 2 到 32 个字符。')),
                   );
                   return;
                 }
@@ -266,34 +319,32 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final payload = await showDialog<Map<String, String>>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('修改密码'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: current,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: '当前密码'),
+        return _wideDialog(
+          title: '修改密码',
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: current,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: '当前密码'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: next,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: '新密码',
+                  helperText: '至少 10 位，包含大小写字母、数字和特殊字符',
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: next,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: '新密码',
-                    helperText: '至少 10 位，包含大小写字母、数字和特殊字符',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: confirm,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: '确认新密码'),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: confirm,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: '确认新密码'),
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -305,6 +356,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 if (current.text.isEmpty || next.text.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('请填写当前密码和新密码。')),
+                  );
+                  return;
+                }
+                if (next.text.length < 10) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('新密码至少需要 10 位。')),
                   );
                   return;
                 }
@@ -385,14 +442,35 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 leading: Icon(Icons.palette_outlined, color: brand.primaryColor),
                 title: const Text('主题风格'),
                 subtitle: Text(brand.appTitle),
-                trailing: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
+                trailing: SizedBox(
+                  width: 148,
+                  child: DropdownButtonFormField<String>(
                     value: brand.id,
+                    isDense: true,
+                    icon: const Icon(Icons.expand_more),
+                    decoration: InputDecoration(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(
+                          color: brand.primaryColor.withOpacity(0.24),
+                        ),
+                      ),
+                    ),
                     items: AppBrands.all
                         .map(
                           (item) => DropdownMenuItem<String>(
                             value: item.id,
-                            child: Text(item.appTitle),
+                            child: Text(
+                              item.appTitle,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         )
                         .toList(),
@@ -466,6 +544,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final editQuota = quota['edit'] as Map? ?? {};
 
     return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(
@@ -473,15 +554,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           children: [
             Row(
               children: [
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    color: brand.panelColor.withOpacity(0.15),
-                    border: Border.all(color: brand.primaryColor),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.person, color: brand.primaryColor),
+                Stack(
+                  children: [
+                    _avatar(user, brand),
+                    Positioned(
+                      right: -4,
+                      bottom: -4,
+                      child: Material(
+                        color: Theme.of(context).colorScheme.surface,
+                        shape: const CircleBorder(),
+                        child: IconButton(
+                          tooltip: '更换头像',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: _isUpdatingAvatar ? null : _pickAndUploadAvatar,
+                          icon: _isUpdatingAvatar
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.edit, size: 16),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -505,6 +601,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ],
             ),
             const SizedBox(height: 18),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _isUpdatingAvatar ? null : _pickAndUploadAvatar,
+                icon: const Icon(Icons.photo_library_outlined),
+                label: const Text('上传或更换头像'),
+              ),
+            ),
+            const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -526,7 +631,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         border: Border.all(color: brand.primaryColor.withOpacity(0.6)),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Text('$label: $value'),
     );
@@ -535,7 +640,84 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget _menuCard({required Widget child}) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: child,
+    );
+  }
+
+  Widget _avatar(Map<String, dynamic>? user, AppBrand brand) {
+    final avatarUrl = user?['avatar_url']?.toString().trim() ?? '';
+    final displayName = user?['display_name']?.toString().trim() ?? '';
+    final initial = displayName.isNotEmpty ? displayName.substring(0, 1) : '图';
+    return Container(
+      width: 64,
+      height: 64,
+      decoration: BoxDecoration(
+        color: brand.panelColor.withOpacity(0.18),
+        border: Border.all(color: brand.primaryColor),
+        shape: BoxShape.circle,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: avatarUrl.isEmpty
+          ? Center(
+              child: Text(
+                initial,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            )
+          : Image.network(
+              avatarUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Icon(
+                Icons.person,
+                color: brand.primaryColor,
+              ),
+            ),
+    );
+  }
+
+  Widget _wideDialog({
+    required String title,
+    required Widget content,
+    required List<Widget> actions,
+  }) {
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 640),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 16),
+              Flexible(
+                child: SingleChildScrollView(child: content),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 8,
+                children: actions,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

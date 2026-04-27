@@ -1,5 +1,14 @@
 import 'package:dio/dio.dart';
 
+final RegExp _minLengthPattern = RegExp(
+  r'string should have at least (\d+) characters',
+  caseSensitive: false,
+);
+final RegExp _maxLengthPattern = RegExp(
+  r'string should have at most (\d+) characters',
+  caseSensitive: false,
+);
+
 class GatewayException implements Exception {
   const GatewayException(this.message);
 
@@ -88,6 +97,20 @@ String _polishMessage(String message, String fallback) {
       normalized.contains('insufficient credits') ||
       normalized.contains('not enough credits')) {
     return '当前额度不足，请检查剩余额度或联系管理员。';
+  }
+  final minLengthMatch = _minLengthPattern.firstMatch(normalized);
+  if (minLengthMatch != null) {
+    return '输入内容至少需要 ${minLengthMatch.group(1)} 个字符。';
+  }
+  final maxLengthMatch = _maxLengthPattern.firstMatch(normalized);
+  if (maxLengthMatch != null) {
+    return '输入内容不能超过 ${maxLengthMatch.group(1)} 个字符。';
+  }
+  if (normalized.contains('string should match pattern')) {
+    return '输入格式不正确，请按要求重新填写。';
+  }
+  if (normalized.contains('field required')) {
+    return '请完整填写必填信息。';
   }
   if (normalized.contains('开放自助注册')) {
     return '当前网关暂未开放自助注册。';

@@ -223,6 +223,16 @@ class GatewayClient {
     }, fallback: '保存个人资料失败。');
   }
 
+  Future<Map<String, dynamic>> updateMyAvatar(String imagePath) async {
+    return _guard(() async {
+      final formData = FormData.fromMap({
+        'avatar': await MultipartFile.fromFile(imagePath),
+      });
+      final res = await _dio.post('/api/me/avatar', data: formData);
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '头像上传失败。');
+  }
+
   Future<void> changeMyPassword(
     String currentPassword,
     String newPassword,

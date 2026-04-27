@@ -356,31 +356,25 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
       ref.read(energyProvider.notifier).state =
           _quotaSummaryFromResponse(response['quota_summary']);
       if (!mounted) return;
+      await _hideHistoryItems([item], deletingKeys: {key});
       await _refresh();
-      final previewItems = (response['data'] as List? ?? [])
-          .whereType<Map>()
-          .map(
-            (result) => PreviewImageEntry(
-              url: result['url']?.toString() ?? '',
-              title: ref.read(brandProvider).generateActionLabel,
-              caption: prompt,
-            ),
-          )
-          .where((entry) => entry.url.isNotEmpty)
-          .toList();
-      if (previewItems.isNotEmpty) {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ImagePreviewScreen(items: previewItems),
-          ),
+      if (_scrollController.hasClients) {
+        await _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOut,
         );
       }
       final errors = (response['errors'] as List? ?? []).length;
-      if (errors > 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('已重新生成 1 张图片，另有 $errors 次尝试未完成。')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            errors > 0
+                ? '已重新生成，新结果已替换旧失败记录，另有 $errors 次尝试未完成。'
+                : '已重新生成，新结果已替换旧失败记录。',
+          ),
+        ),
+      );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -707,7 +701,23 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                   ],
                 ),
                 const SizedBox(height: 8),
-                Text(item['prompt']?.toString() ?? ''),
+                _promptPanel(brand, item['prompt']?.toString() ?? ''),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _metaPill(
+                      Icons.schedule_outlined,
+                      _formatCreatedAt(item['created_at']?.toString()),
+                    ),
+                    if (_formatDuration(item['duration_ms']) != null)
+                      _metaPill(
+                        Icons.timelapse_outlined,
+                        _formatDuration(item['duration_ms'])!,
+                      ),
+                  ],
+                ),
                 if (!isSuccess) ...[
                   const SizedBox(height: 8),
                   Container(
@@ -803,6 +813,99 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
       return true;
     }
     return item['status']?.toString() == 'success';
+  }
+
+  Widget _promptPanel(AppBrand brand, String prompt) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: brand.primaryColor.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: brand.primaryColor.withOpacity(0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.notes_outlined,
+                size: 16,
+                color: brand.primaryColor,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '提示词',
+                style: TextStyle(
+                  color: brand.primaryColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            prompt.isEmpty ? '未记录提示词' : prompt,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              height: 1.45,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _metaPill(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface.withOpacity(0.55),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14),
+          const SizedBox(width: 6),
+          Text(text, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ),
+    );
+  }
+
+  String _formatCreatedAt(String? raw) {
+    final parsed = raw == null ? null : DateTime.tryParse(raw);
+    if (parsed == null) {
+      return '时间未记录';
+    }
+    final local = parsed.toLocal();
+    final year = local.year.toString().padLeft(4, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    return '$year-$month-$day $hour:$minute';
+  }
+
+  String? _formatDuration(dynamic raw) {
+    final value = int.tryParse(raw?.toString() ?? '');
+    if (value == null || value <= 0) {
+      return null;
+    }
+    if (value < 1000) {
+      return '${value}ms';
+    }
+    final seconds = value / 1000;
+    if (seconds < 60) {
+      return '${seconds.toStringAsFixed(1)} 秒';
+    }
+    final minutes = seconds ~/ 60;
+    final remain = (seconds % 60).toStringAsFixed(1);
+    return '$minutes 分 $remain 秒';
   }
 
   bool _canRetryFailedGenerate(Map<String, dynamic> item) {
