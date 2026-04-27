@@ -296,6 +296,17 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     );
   }
 
+  List<DropdownMenuItem<String>> _items(List<ImageOption> options) {
+    return options
+        .map(
+          (item) => DropdownMenuItem<String>(
+            value: item.value,
+            child: _dropdownItem(item.label),
+          ),
+        )
+        .toList();
+  }
+
   Widget _dropdownField<T>({
     required String label,
     required T value,
