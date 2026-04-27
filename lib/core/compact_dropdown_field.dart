@@ -26,40 +26,45 @@ class CompactDropdownField<T> extends StatelessWidget {
           fontWeight: FontWeight.w400,
           height: 1.3,
         );
+    final decoration = InputDecoration(
+      labelText: label,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      labelStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
+            fontWeight: FontWeight.w400,
+          ),
+    );
 
     return SizedBox(
       width: width,
-      child: DropdownButtonFormField<T>(
-        value: value,
-        isDense: true,
-        isExpanded: true,
-        menuMaxHeight: 280,
-        menuWidth: menuWidth,
-        borderRadius: BorderRadius.circular(16),
-        alignment: Alignment.center,
-        icon: const Icon(Icons.expand_more, size: 18),
-        style: bodyStyle,
-        decoration: InputDecoration(
-          labelText: label,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          labelStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.w400,
-              ),
+      child: InputDecorator(
+        decoration: decoration,
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<T>(
+            value: value,
+            isDense: true,
+            isExpanded: true,
+            menuMaxHeight: 280,
+            menuWidth: menuWidth,
+            alignment: Alignment.center,
+            borderRadius: BorderRadius.circular(16),
+            icon: const Icon(Icons.expand_more, size: 18),
+            style: bodyStyle,
+            items: items,
+            selectedItemBuilder: (context) => selectedLabels
+                .map(
+                  (item) => Center(
+                    child: Text(
+                      item,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: bodyStyle,
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: onChanged,
+          ),
         ),
-        items: items,
-        selectedItemBuilder: (context) => selectedLabels
-            .map(
-              (item) => Center(
-                child: Text(
-                  item,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: bodyStyle,
-                ),
-              ),
-            )
-            .toList(),
-        onChanged: onChanged,
       ),
     );
   }
