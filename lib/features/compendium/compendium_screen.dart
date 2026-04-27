@@ -548,43 +548,47 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   }
 
   Widget _filterBar(AppBrand brand) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          _filterChip(
-            label: '全部状态',
-            selected: _statusFilter == null,
-            onSelected: () => _setStatusFilter(null),
-          ),
-          _filterChip(
-            label: '成功',
-            selected: _statusFilter == 'success',
-            onSelected: () => _setStatusFilter('success'),
-          ),
-          _filterChip(
-            label: '失败',
-            selected: _statusFilter == 'failed',
-            onSelected: () => _setStatusFilter('failed'),
-          ),
-          _filterChip(
-            label: '全部操作',
-            selected: _actionFilter == null,
-            onSelected: () => _setActionFilter(null),
-          ),
-          _filterChip(
-            label: brand.generateActionLabel,
-            selected: _actionFilter == 'generate',
-            onSelected: () => _setActionFilter('generate'),
-          ),
-          _filterChip(
-            label: brand.editActionLabel,
-            selected: _actionFilter == 'edit',
-            onSelected: () => _setActionFilter('edit'),
-          ),
-        ],
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        child: Wrap(
+          alignment: WrapAlignment.start,
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _filterChip(
+              label: '全部状态',
+              selected: _statusFilter == null,
+              onSelected: () => _setStatusFilter(null),
+            ),
+            _filterChip(
+              label: '成功',
+              selected: _statusFilter == 'success',
+              onSelected: () => _setStatusFilter('success'),
+            ),
+            _filterChip(
+              label: '失败',
+              selected: _statusFilter == 'failed',
+              onSelected: () => _setStatusFilter('failed'),
+            ),
+            _filterChip(
+              label: '全部操作',
+              selected: _actionFilter == null,
+              onSelected: () => _setActionFilter(null),
+            ),
+            _filterChip(
+              label: brand.generateActionLabel,
+              selected: _actionFilter == 'generate',
+              onSelected: () => _setActionFilter('generate'),
+            ),
+            _filterChip(
+              label: brand.editActionLabel,
+              selected: _actionFilter == 'edit',
+              onSelected: () => _setActionFilter('edit'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -602,12 +606,13 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         visualDensity: VisualDensity.compact,
         labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-        label: Center(
+        label: Align(
+          alignment: Alignment.centerLeft,
           child: Text(
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
+            textAlign: TextAlign.left,
           ),
         ),
         selected: selected,

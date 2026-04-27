@@ -5,6 +5,7 @@ import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
 import '../../core/providers.dart';
 import '../home/home_screen.dart';
+import 'register_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -18,6 +19,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  String? _usernameError;
+  String? _passwordError;
   bool _isLoading = false;
   bool _allowRegistration = true;
 
@@ -69,11 +72,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _login() async {
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text;
+    String? usernameError;
+    String? passwordError;
+    if (username.isEmpty) {
+      usernameError = '请输入账号。';
+    }
+    if (password.isEmpty) {
+      passwordError = '请输入密码。';
+    }
+    if (usernameError != null || passwordError != null) {
+      setState(() {
+        _usernameError = usernameError;
+        _passwordError = passwordError;
+      });
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
       final client = ref.read(gatewayClientProvider);
       await client.init(_defaultServerUrl);
-      final res = await client.login(_usernameController.text.trim(), _passwordController.text);
+      final res = await client.login(username, password);
 
       final prefs = ref.read(sharedPrefsProvider);
       await prefs.setString('server_url', _defaultServerUrl);
@@ -95,119 +116,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  Future<void> _openRegisterDialog() async {
-    final username = TextEditingController();
-    final displayName = TextEditingController();
-    final password = TextEditingController();
-    final confirmPassword = TextEditingController();
-    final payload = await showDialog<Map<String, String>>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('注册新账号'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: username,
-                  decoration: const InputDecoration(
-                    labelText: '账号',
-                    helperText: '4-24 位，小写字母开头，可用数字、下划线和短横线',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: displayName,
-                  decoration: const InputDecoration(
-                    labelText: '显示名称',
-                    helperText: '2-32 个字符',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: password,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: '密码',
-                    helperText: '至少 10 位，需包含大小写字母、数字和特殊字符',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: confirmPassword,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: '确认密码'),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final nextUsername = username.text.trim();
-                final nextDisplayName = displayName.text.trim();
-                if (nextUsername.isEmpty ||
-                    nextDisplayName.isEmpty ||
-                    password.text.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('请完整填写注册信息。')),
-                  );
-                  return;
-                }
-                if (password.text != confirmPassword.text) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('两次输入的密码不一致。')),
-                  );
-                  return;
-                }
-                Navigator.pop(context, {
-                  'username': nextUsername,
-                  'display_name': nextDisplayName,
-                  'password': password.text,
-                });
-              },
-              child: const Text('注册并登录'),
-            ),
-          ],
-        );
-      },
+  void _openRegisterScreen() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const RegisterScreen()),
     );
-    username.dispose();
-    displayName.dispose();
-    password.dispose();
-    confirmPassword.dispose();
-    if (payload == null) return;
-
-    setState(() => _isLoading = true);
-    try {
-      final client = ref.read(gatewayClientProvider);
-      await client.init(_defaultServerUrl);
-      final res = await client.register(
-        payload['username']!,
-        payload['display_name']!,
-        payload['password']!,
-      );
-      final prefs = ref.read(sharedPrefsProvider);
-      await prefs.setString('server_url', _defaultServerUrl);
-      ref.read(authStateProvider.notifier).state = res['user'];
-      ref.read(energyProvider.notifier).state = res['user']['quota_summary'];
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyError(e, fallback: '注册失败，请稍后重试。'))),
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
   }
 
   @override
@@ -268,13 +180,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: 40),
                 TextField(
                   controller: _usernameController,
-                  decoration: const InputDecoration(labelText: '账号'),
+                  onChanged: (_) {
+                    if (_usernameError != null) {
+                      setState(() => _usernameError = null);
+                    }
+                  },
+                  decoration: InputDecoration(
+                    labelText: '账号',
+                    hintText: '输入你的账号',
+                    errorText: _usernameError,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _passwordController,
                   obscureText: true,
-                  decoration: const InputDecoration(labelText: '密码'),
+                  onChanged: (_) {
+                    if (_passwordError != null) {
+                      setState(() => _passwordError = null);
+                    }
+                  },
+                  decoration: InputDecoration(
+                    labelText: '密码',
+                    hintText: '输入你的密码',
+                    errorText: _passwordError,
+                  ),
                 ),
                 const SizedBox(height: 32),
                 _isLoading
@@ -286,7 +216,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 if (_allowRegistration) ...[
                   const SizedBox(height: 14),
                   TextButton(
-                    onPressed: _isLoading ? null : _openRegisterDialog,
+                    onPressed: _isLoading ? null : _openRegisterScreen,
                     child: const Text('注册新账号'),
                   ),
                 ],

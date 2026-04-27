@@ -358,94 +358,94 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           children: [
             _buildProfileCard(brand, user, hasSystemManagement),
             const SizedBox(height: 16),
-            Card(
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: Icon(Icons.person_outline, color: brand.primaryColor),
-                    title: const Text('个人资料'),
-                    subtitle: const Text('查看并修改账号资料、密码与额度'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => _showProfileDetails(brand, user),
+            _menuCard(
+              child: ListTile(
+                leading: Icon(Icons.person_outline, color: brand.primaryColor),
+                title: const Text('个人资料'),
+                subtitle: const Text('查看并修改账号资料、密码与额度'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _showProfileDetails(brand, user),
+              ),
+            ),
+            if (hasSystemManagement)
+              _menuCard(
+                child: ListTile(
+                  leading: Icon(
+                    Icons.admin_panel_settings,
+                    color: brand.warningColor,
                   ),
-                  if (hasSystemManagement) ...[
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: Icon(
-                        Icons.admin_panel_settings,
-                        color: brand.warningColor,
-                      ),
-                      title: const Text('系统管理'),
-                      subtitle: const Text('原生管理页：用户、密钥、系统设置与审计'),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => _openAdmin(targetView: systemTargetView),
-                    ),
-                  ],
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: Icon(Icons.palette_outlined, color: brand.primaryColor),
-                    title: const Text('主题风格'),
-                    subtitle: Text(brand.appTitle),
-                    trailing: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: brand.id,
-                        items: AppBrands.all
-                            .map(
-                              (item) => DropdownMenuItem<String>(
-                                value: item.id,
-                                child: Text(item.appTitle),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            ref.read(brandProvider.notifier).setBrand(value);
-                          }
-                        },
-                      ),
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: Icon(Icons.system_update, color: brand.primaryColor),
-                    title: const Text('检查更新'),
-                    subtitle: Text('当前版本 ${ref.read(appUpdateProvider).currentVersionName}'),
-                    trailing: _updateTrailing(),
-                    onTap: (_isCheckingUpdate || _isDownloadingUpdate) ? null : _checkUpdate,
-                  ),
-                  const Divider(height: 1),
-                  FutureBuilder<int>(
-                    future: _cacheSizeFuture,
-                    builder: (context, snapshot) {
-                      return ListTile(
-                        leading: Icon(Icons.cached, color: brand.successColor),
-                        title: const Text('图片缓存'),
-                        subtitle: Text('当前缓存 ${_formatBytes(snapshot.data ?? 0)}'),
-                        trailing: _isClearingCache
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.delete_outline),
-                        onTap: _isClearingCache ? null : _clearCache,
-                      );
+                  title: const Text('系统管理'),
+                  subtitle: const Text('原生管理页：用户、密钥、系统设置与审计'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _openAdmin(targetView: systemTargetView),
+                ),
+              ),
+            _menuCard(
+              child: ListTile(
+                leading: Icon(Icons.palette_outlined, color: brand.primaryColor),
+                title: const Text('主题风格'),
+                subtitle: Text(brand.appTitle),
+                trailing: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: brand.id,
+                    items: AppBrands.all
+                        .map(
+                          (item) => DropdownMenuItem<String>(
+                            value: item.id,
+                            child: Text(item.appTitle),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        ref.read(brandProvider.notifier).setBrand(value);
+                      }
                     },
                   ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: Icon(Icons.logout, color: brand.warningColor),
-                    title: const Text('退出登录'),
-                    trailing: _isLoggingOut
+                ),
+              ),
+            ),
+            _menuCard(
+              child: ListTile(
+                leading: Icon(Icons.system_update, color: brand.primaryColor),
+                title: const Text('检查更新'),
+                subtitle: Text('当前版本 ${ref.read(appUpdateProvider).currentVersionName}'),
+                trailing: _updateTrailing(),
+                onTap: (_isCheckingUpdate || _isDownloadingUpdate) ? null : _checkUpdate,
+              ),
+            ),
+            FutureBuilder<int>(
+              future: _cacheSizeFuture,
+              builder: (context, snapshot) {
+                return _menuCard(
+                  child: ListTile(
+                    leading: Icon(Icons.cached, color: brand.successColor),
+                    title: const Text('图片缓存'),
+                    subtitle: Text('当前缓存 ${_formatBytes(snapshot.data ?? 0)}'),
+                    trailing: _isClearingCache
                         ? const SizedBox(
                             width: 22,
                             height: 22,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : null,
-                    onTap: _isLoggingOut ? null : _logout,
+                        : const Icon(Icons.delete_outline),
+                    onTap: _isClearingCache ? null : _clearCache,
                   ),
-                ],
+                );
+              },
+            ),
+            _menuCard(
+              child: ListTile(
+                leading: Icon(Icons.logout, color: brand.warningColor),
+                title: const Text('退出登录'),
+                trailing: _isLoggingOut
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : null,
+                onTap: _isLoggingOut ? null : _logout,
               ),
             ),
           ],
@@ -529,6 +529,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text('$label: $value'),
+    );
+  }
+
+  Widget _menuCard({required Widget child}) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: child,
     );
   }
 
