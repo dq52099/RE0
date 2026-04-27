@@ -1,5 +1,15 @@
 import 'package:flutter/material.dart';
 
+const String _cnFontFamily = 'sans-serif';
+const List<String> _cnFontFallback = [
+  'PingFang SC',
+  'Hiragino Sans GB',
+  'Noto Sans CJK SC',
+  'Source Han Sans SC',
+  'Microsoft YaHei',
+  'WenQuanYi Micro Hei',
+];
+
 enum BrandStyle {
   botw,
   re0,
@@ -430,6 +440,8 @@ class AppBrands {
 final ThemeData _botwTheme = ThemeData(
   useMaterial3: true,
   brightness: Brightness.dark,
+  fontFamily: _cnFontFamily,
+  fontFamilyFallback: _cnFontFallback,
   scaffoldBackgroundColor: const Color(0xFF121212),
   colorScheme: const ColorScheme.dark(
     primary: Color(0xFF00D2FF),
@@ -477,11 +489,18 @@ final ThemeData _botwTheme = ThemeData(
   ),
   textTheme: const TextTheme(
     displayLarge: TextStyle(
+      fontFamily: _cnFontFamily,
+      fontFamilyFallback: _cnFontFallback,
       color: Color(0xFF00D2FF),
       fontWeight: FontWeight.bold,
-      letterSpacing: 2,
+      letterSpacing: 0,
     ),
-    bodyLarge: TextStyle(color: Colors.white70),
+    bodyLarge: TextStyle(
+      fontFamily: _cnFontFamily,
+      fontFamilyFallback: _cnFontFallback,
+      color: Colors.white70,
+      letterSpacing: 0,
+    ),
   ),
 );
 
@@ -494,6 +513,8 @@ ThemeData _lightTheme({
 }) {
   return ThemeData(
     useMaterial3: true,
+    fontFamily: _cnFontFamily,
+    fontFamilyFallback: _cnFontFallback,
     colorScheme: ColorScheme.light(
       primary: primary,
       secondary: secondary,
@@ -537,9 +558,12 @@ ThemeData _lightTheme({
       centerTitle: true,
       foregroundColor: primary,
       titleTextStyle: TextStyle(
+        fontFamily: _cnFontFamily,
+        fontFamilyFallback: _cnFontFallback,
         color: primary,
         fontSize: 20,
         fontWeight: FontWeight.bold,
+        letterSpacing: 0,
       ),
     ),
   );
@@ -555,6 +579,8 @@ ThemeData _darkTheme({
   return ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
+    fontFamily: _cnFontFamily,
+    fontFamilyFallback: _cnFontFallback,
     colorScheme: ColorScheme.dark(
       primary: primary,
       secondary: secondary,
@@ -597,9 +623,12 @@ ThemeData _darkTheme({
       centerTitle: true,
       foregroundColor: primary,
       titleTextStyle: TextStyle(
+        fontFamily: _cnFontFamily,
+        fontFamilyFallback: _cnFontFallback,
         color: primary,
         fontSize: 20,
         fontWeight: FontWeight.bold,
+        letterSpacing: 0,
       ),
     ),
   );
@@ -642,6 +671,8 @@ final ThemeData _yanyunTheme = _lightTheme(
 
 final ThemeData _re0Theme = ThemeData(
   useMaterial3: true,
+  fontFamily: _cnFontFamily,
+  fontFamilyFallback: _cnFontFallback,
   colorScheme: const ColorScheme.light(
     primary: Color(0xFF4682B4),
     secondary: Color(0xFFE6E6FA),
@@ -677,8 +708,11 @@ final ThemeData _re0Theme = ThemeData(
       borderSide: const BorderSide(color: Color(0xFF4682B4), width: 2),
     ),
     labelStyle: const TextStyle(
+      fontFamily: _cnFontFamily,
+      fontFamilyFallback: _cnFontFallback,
       color: Color(0xFF2C3E50),
       fontWeight: FontWeight.bold,
+      letterSpacing: 0,
     ),
   ),
   elevatedButtonTheme: ElevatedButtonThemeData(
@@ -697,10 +731,12 @@ final ThemeData _re0Theme = ThemeData(
     elevation: 0,
     centerTitle: true,
     titleTextStyle: TextStyle(
+      fontFamily: _cnFontFamily,
+      fontFamilyFallback: _cnFontFallback,
       color: Color(0xFF2C3E50),
       fontSize: 22,
       fontWeight: FontWeight.bold,
-      letterSpacing: 1.2,
+      letterSpacing: 0,
     ),
   ),
 );

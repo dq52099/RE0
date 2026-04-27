@@ -11,7 +11,12 @@ import '../../core/providers.dart';
 import 'image_preview_screen.dart';
 
 class CompendiumScreen extends ConsumerStatefulWidget {
-  const CompendiumScreen({super.key});
+  const CompendiumScreen({
+    super.key,
+    this.refreshToken = 0,
+  });
+
+  final int refreshToken;
 
   @override
   ConsumerState<CompendiumScreen> createState() => _CompendiumScreenState();
@@ -24,6 +29,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
 
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   final List<Map<String, dynamic>> _items = [];
   final Set<String> _hiddenKeys = {};
   final Set<String> _deletingKeys = {};
@@ -31,8 +37,11 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   int _page = 1;
   bool _hasMore = true;
   bool _isLoading = false;
+  bool _pendingReset = false;
   String? _error;
   String _query = '';
+  String? _statusFilter;
+  String? _actionFilter;
 
   @override
   bool get wantKeepAlive => true;
@@ -52,10 +61,19 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   void dispose() {
     _searchDebounce?.cancel();
     _searchController.removeListener(_onSearchChanged);
+    _searchFocusNode.dispose();
     _scrollController.removeListener(_maybeLoadMore);
     _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant CompendiumScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshToken != widget.refreshToken) {
+      _refresh();
+    }
   }
 
   void _onSearchChanged() {
@@ -70,7 +88,12 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   }
 
   Future<void> _load({bool reset = false}) async {
-    if (_isLoading) return;
+    if (_isLoading) {
+      if (reset) {
+        _pendingReset = true;
+      }
+      return;
+    }
     if (!reset && !_hasMore) return;
     setState(() {
       _isLoading = true;
@@ -84,7 +107,13 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     try {
       final response = await ref
           .read(gatewayClientProvider)
-          .getHistory(_page, pageSize: _pageSize, query: _query);
+          .getHistory(
+            _page,
+            pageSize: _pageSize,
+            keyword: _query,
+            action: _actionFilter,
+            status: _statusFilter,
+          );
       final nextItems = (response['items'] as List? ?? [])
           .whereType<Map>()
           .map((item) => Map<String, dynamic>.from(item))
@@ -105,6 +134,10 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
       if (mounted) {
         setState(() => _isLoading = false);
       }
+      if (_pendingReset) {
+        _pendingReset = false;
+        unawaited(_load(reset: true));
+      }
     }
   }
 
@@ -119,14 +152,10 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   }
 
   List<Map<String, dynamic>> get _visibleItems {
-    final visible = _items
+    return _items
         .where((item) => !_hiddenKeys.contains(_historyKey(item)))
+        .where(_matchesFilters)
         .toList();
-    final query = _query.toLowerCase();
-    if (query.isEmpty) {
-      return visible;
-    }
-    return visible.where((item) => _matchesQuery(item, query)).toList();
   }
 
   bool _matchesQuery(Map<String, dynamic> item, String query) {
@@ -144,6 +173,39 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     return haystack.contains(query);
   }
 
+  bool _matchesFilters(Map<String, dynamic> item) {
+    final query = _query.toLowerCase();
+    if (query.isNotEmpty && !_matchesQuery(item, query)) {
+      return false;
+    }
+    if (_statusFilter != null && item['status']?.toString() != _statusFilter) {
+      return false;
+    }
+    if (_actionFilter != null && item['action']?.toString() != _actionFilter) {
+      return false;
+    }
+    return true;
+  }
+
+  void _dismissKeyboard() {
+    _searchFocusNode.unfocus();
+    FocusScope.of(context).unfocus();
+  }
+
+  Future<void> _setStatusFilter(String? value) async {
+    if (_statusFilter == value) return;
+    _dismissKeyboard();
+    setState(() => _statusFilter = value);
+    await _load(reset: true);
+  }
+
+  Future<void> _setActionFilter(String? value) async {
+    if (_actionFilter == value) return;
+    _dismissKeyboard();
+    setState(() => _actionFilter = value);
+    await _load(reset: true);
+  }
+
   String _historyKey(Map<String, dynamic> item) {
     final id = item['id']?.toString();
     if (id != null && id.isNotEmpty) return id;
@@ -154,6 +216,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
 
   Future<void> _deleteHistoryItem(Map<String, dynamic> item) async {
     final key = _historyKey(item);
+    _dismissKeyboard();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -190,7 +253,10 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
       if (url != null && url.isNotEmpty) {
         await ref.read(imageCacheProvider).removeCachedFileFor(url);
       }
-      _hiddenKeys.add(key);
+      setState(() {
+        _hiddenKeys.add(key);
+        _items.removeWhere((entry) => _historyKey(entry) == key);
+      });
       await ref
           .read(sharedPrefsProvider)
           .setStringList(_hiddenStorageKey, _hiddenKeys.toList());
@@ -233,8 +299,16 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
           child: CustomScrollView(
             controller: _scrollController,
             cacheExtent: 1200,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             slivers: [
-              SliverToBoxAdapter(child: _searchBar(brand)),
+              SliverToBoxAdapter(
+                child: Column(
+                  children: [
+                    _searchBar(brand),
+                    _filterBar(brand),
+                  ],
+                ),
+              ),
               if (_error != null && _items.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
@@ -304,6 +378,10 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       child: TextField(
         controller: _searchController,
+        focusNode: _searchFocusNode,
+        textInputAction: TextInputAction.search,
+        onTapOutside: (_) => _dismissKeyboard(),
+        onSubmitted: (_) => _refresh(),
         decoration: InputDecoration(
           labelText: '搜索图片',
           hintText: '提示词、尺寸、状态、时间',
@@ -313,10 +391,67 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
               : IconButton(
                   tooltip: '清空',
                   icon: const Icon(Icons.close),
-                  onPressed: _searchController.clear,
+                  onPressed: () {
+                    _searchController.clear();
+                    _refresh();
+                  },
                 ),
         ),
       ),
+    );
+  }
+
+  Widget _filterBar(AppBrand brand) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          _filterChip(
+            label: '全部状态',
+            selected: _statusFilter == null,
+            onSelected: () => _setStatusFilter(null),
+          ),
+          _filterChip(
+            label: '成功',
+            selected: _statusFilter == 'success',
+            onSelected: () => _setStatusFilter('success'),
+          ),
+          _filterChip(
+            label: '失败',
+            selected: _statusFilter == 'failed',
+            onSelected: () => _setStatusFilter('failed'),
+          ),
+          _filterChip(
+            label: '全部操作',
+            selected: _actionFilter == null,
+            onSelected: () => _setActionFilter(null),
+          ),
+          _filterChip(
+            label: brand.generateActionLabel,
+            selected: _actionFilter == 'generate',
+            onSelected: () => _setActionFilter('generate'),
+          ),
+          _filterChip(
+            label: brand.editActionLabel,
+            selected: _actionFilter == 'edit',
+            onSelected: () => _setActionFilter('edit'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onSelected,
+  }) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onSelected(),
     );
   }
 
@@ -324,6 +459,9 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     final imageUrl = item['url']?.toString();
     final key = _historyKey(item);
     final isDeleting = _deletingKeys.contains(key);
+    final isSuccess = _isSuccessful(item);
+    final previewItems = _previewItems(_visibleItems, brand);
+    final previewIndex = previewItems.indexWhere((entry) => entry.url == imageUrl);
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       clipBehavior: Clip.antiAlias,
@@ -332,16 +470,18 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
         children: [
           if (imageUrl != null && imageUrl.isNotEmpty)
             GestureDetector(
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => ImagePreviewScreen(
-                    url: imageUrl,
-                    title: item['action'] == 'generate'
-                        ? brand.generateActionLabel
-                        : brand.editActionLabel,
+              onLongPress: _dismissKeyboard,
+              onTap: () {
+                _dismissKeyboard();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ImagePreviewScreen(
+                      items: previewItems,
+                      initialIndex: previewIndex,
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
               child: CachedGatewayImage(
                 url: imageUrl,
                 width: double.infinity,
@@ -362,13 +502,11 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: item['status'] == 'success'
-                            ? brand.successColor
-                            : brand.warningColor,
+                        color: isSuccess ? brand.successColor : brand.warningColor,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        item['status'] == 'success' ? '成功' : '失败',
+                        isSuccess ? '成功' : '失败',
                         style: const TextStyle(fontSize: 12, color: Colors.white),
                       ),
                     ),
@@ -403,7 +541,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                 ),
                 const SizedBox(height: 8),
                 Text(item['prompt']?.toString() ?? ''),
-                if (item['error_message'] != null) ...[
+                if (!isSuccess && item['error_message'] != null) ...[
                   const SizedBox(height: 8),
                   Text(
                     item['error_message'].toString(),
@@ -438,5 +576,31 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
         ),
       ),
     );
+  }
+
+  bool _isSuccessful(Map<String, dynamic> item) {
+    final imageUrl = item['url']?.toString().trim() ?? '';
+    if (imageUrl.isNotEmpty) {
+      return true;
+    }
+    return item['status']?.toString() == 'success';
+  }
+
+  List<PreviewImageEntry> _previewItems(
+    List<Map<String, dynamic>> items,
+    AppBrand brand,
+  ) {
+    return items
+        .map(
+          (item) => PreviewImageEntry(
+            url: item['url']?.toString() ?? '',
+            title: item['action'] == 'generate'
+                ? brand.generateActionLabel
+                : brand.editActionLabel,
+            caption: item['prompt']?.toString(),
+          ),
+        )
+        .where((entry) => entry.url.isNotEmpty)
+        .toList();
   }
 }

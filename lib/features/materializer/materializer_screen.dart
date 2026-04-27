@@ -6,6 +6,7 @@ import '../../core/brand_background.dart';
 import '../../core/cached_gateway_image.dart';
 import '../../core/image_capabilities.dart';
 import '../../core/providers.dart';
+import '../compendium/image_preview_screen.dart';
 
 class MaterializerScreen extends ConsumerStatefulWidget {
   const MaterializerScreen({super.key});
@@ -17,10 +18,17 @@ class MaterializerScreen extends ConsumerStatefulWidget {
 class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
   final TextEditingController _spellController = TextEditingController();
   int _count = 1;
-  String _size = '1024x1024';
+  String _size = 'auto';
   String _quality = 'high';
   String _background = 'auto';
   String _outputFormat = 'png';
+  String _lastSubmittedPrompt = '';
+
+  @override
+  void dispose() {
+    _spellController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +48,8 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     final generateQuota = mana['generate'];
     final remain = generateQuota['is_unlimited'] == true ? '无限' : '${generateQuota['remaining']} / ${generateQuota['total']}';
 
-    final materializerState = ref.watch(materializerProvider);
+    final materializerState = ref.watch(generateImagesProvider);
+    final activeTask = ref.watch(activeImageTaskProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -62,8 +71,13 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
               TextField(
                 controller: _spellController,
                 maxLines: 4,
+                textInputAction: TextInputAction.newline,
                 decoration: InputDecoration(hintText: brand.generatePromptHint),
               ),
+              if (activeTask == ImageTaskKind.edit) ...[
+                const SizedBox(height: 12),
+                _buildTaskNotice('改图任务正在进行，请等待完成后再开始生图。'),
+              ],
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -118,7 +132,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: materializerState.isLoading ? null : () {
+                  onPressed: materializerState.isLoading ? null : () async {
                     final prompt = _spellController.text.trim();
                     if (prompt.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -126,9 +140,36 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                       );
                       return;
                     }
-                    ref.read(materializerProvider.notifier).materialize(
-                      prompt, _count, size, quality, background, outputFormat
-                    );
+                    final currentTask = ref.read(activeImageTaskProvider);
+                    if (currentTask == ImageTaskKind.edit) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('改图任务进行中，请稍后再试。')),
+                      );
+                      return;
+                    }
+                    FocusScope.of(context).unfocus();
+                    setState(() => _lastSubmittedPrompt = prompt);
+                    try {
+                      final notice = await ref
+                          .read(generateImagesProvider.notifier)
+                          .materialize(
+                            prompt,
+                            _count,
+                            size,
+                            quality,
+                            background,
+                            outputFormat,
+                          );
+                      if (!mounted || notice == null) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(notice)),
+                      );
+                    } catch (error) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(friendlyError(error))),
+                      );
+                    }
                   },
                   child: materializerState.isLoading
                     ? const CircularProgressIndicator(color: Colors.white)
@@ -140,15 +181,37 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                 data: (items) {
                   if (items.isEmpty) return const SizedBox();
                   return Column(
-                    children: items.map((item) => Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: CachedGatewayImage(
-                        url: item['url'],
-                        borderRadius: BorderRadius.circular(12),
-                        fit: BoxFit.cover,
-                        accentColor: brand.primaryColor,
-                      ),
-                    )).toList(),
+                    children: List.generate(items.length, (index) {
+                      final item = items[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: GestureDetector(
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => ImagePreviewScreen(
+                                items: items
+                                    .map(
+                                      (result) => PreviewImageEntry(
+                                        url: result['url']?.toString() ?? '',
+                                        title: brand.generateActionLabel,
+                                        caption: _lastSubmittedPrompt,
+                                      ),
+                                    )
+                                    .where((entry) => entry.url.isNotEmpty)
+                                    .toList(),
+                                initialIndex: index,
+                              ),
+                            ),
+                          ),
+                          child: CachedGatewayImage(
+                            url: item['url']?.toString() ?? '',
+                            borderRadius: BorderRadius.circular(12),
+                            fit: BoxFit.cover,
+                            accentColor: brand.primaryColor,
+                          ),
+                        ),
+                      );
+                    }),
                   );
                 },
                 error: (err, _) => Text(
@@ -181,6 +244,18 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildTaskNotice(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface.withOpacity(0.6),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(message),
     );
   }
 

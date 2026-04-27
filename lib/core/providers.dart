@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'api_error.dart';
 import 'app_brand.dart';
 import 'app_update_service.dart';
 import 'gateway_client.dart';
@@ -25,8 +26,8 @@ final appUpdateProvider = Provider<AppUpdateService>((ref) {
     appId: 're0',
     appName: 'RE0',
     packageName: 'com.dq52099.re0',
-    currentVersionName: '1.1.2',
-    currentVersionCode: 10102,
+    currentVersionName: '1.1.3',
+    currentVersionCode: 10103,
   );
 });
 
@@ -56,21 +57,34 @@ final energyProvider = StateProvider<Map<String, dynamic>>((ref) => {
   'edit': {'remaining': 0, 'total': 0, 'used': 0},
 });
 
+enum ImageTaskKind {
+  generate,
+  edit,
+}
+
+final activeImageTaskProvider = StateProvider<ImageTaskKind?>((ref) => null);
+
 final imageCapabilitiesProvider = FutureProvider<ImageCapabilities>((ref) async {
   final client = ref.read(gatewayClientProvider);
   final data = await client.imageCapabilities();
   return ImageCapabilities.fromJson(data);
 });
 
-final materializerProvider = AsyncNotifierProvider<MaterializerNotifier, List<dynamic>>(() {
-  return MaterializerNotifier();
+final generateImagesProvider =
+    AsyncNotifierProvider<GenerateImagesNotifier, List<Map<String, dynamic>>>(() {
+  return GenerateImagesNotifier();
 });
 
-class MaterializerNotifier extends AsyncNotifier<List<dynamic>> {
-  @override
-  Future<List<dynamic>> build() async => [];
+final editImagesProvider =
+    AsyncNotifierProvider<EditImagesNotifier, List<Map<String, dynamic>>>(() {
+  return EditImagesNotifier();
+});
 
-  Future<void> materialize(
+class GenerateImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
+  @override
+  Future<List<Map<String, dynamic>>> build() async => [];
+
+  Future<String?> materialize(
     String runes,
     int count,
     String size,
@@ -78,6 +92,8 @@ class MaterializerNotifier extends AsyncNotifier<List<dynamic>> {
     String background,
     String outputFormat,
   ) async {
+    _ensureTaskAvailable(ref, ImageTaskKind.generate);
+    ref.read(activeImageTaskProvider.notifier).state = ImageTaskKind.generate;
     state = const AsyncValue.loading();
     try {
       final client = ref.read(gatewayClientProvider);
@@ -89,14 +105,35 @@ class MaterializerNotifier extends AsyncNotifier<List<dynamic>> {
         background,
         outputFormat,
       );
-      ref.read(energyProvider.notifier).state = res['quota_summary'];
-      state = AsyncValue.data(res['data']);
+      ref.read(energyProvider.notifier).state =
+          _quotaSummary(res['quota_summary']);
+      final items = _resultItems(res['data']);
+      state = AsyncValue.data(items);
+      return _partialSuccessMessage(
+        actionLabel: '生图',
+        items: items,
+        errors: res['errors'],
+      );
     } catch (e, st) {
       state = AsyncValue.error(e, st);
+      return null;
+    } finally {
+      if (ref.read(activeImageTaskProvider) == ImageTaskKind.generate) {
+        ref.read(activeImageTaskProvider.notifier).state = null;
+      }
     }
   }
 
-  Future<void> recall(
+  void clear() {
+    state = const AsyncValue.data([]);
+  }
+}
+
+class EditImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
+  @override
+  Future<List<Map<String, dynamic>>> build() async => [];
+
+  Future<String?> recall(
     String runes,
     String imagePath,
     int count,
@@ -105,6 +142,8 @@ class MaterializerNotifier extends AsyncNotifier<List<dynamic>> {
     String background,
     String outputFormat,
   ) async {
+    _ensureTaskAvailable(ref, ImageTaskKind.edit);
+    ref.read(activeImageTaskProvider.notifier).state = ImageTaskKind.edit;
     state = const AsyncValue.loading();
     try {
       final client = ref.read(gatewayClientProvider);
@@ -117,14 +156,67 @@ class MaterializerNotifier extends AsyncNotifier<List<dynamic>> {
         background,
         outputFormat,
       );
-      ref.read(energyProvider.notifier).state = res['quota_summary'];
-      state = AsyncValue.data(res['data']);
+      ref.read(energyProvider.notifier).state =
+          _quotaSummary(res['quota_summary']);
+      final items = _resultItems(res['data']);
+      state = AsyncValue.data(items);
+      return _partialSuccessMessage(
+        actionLabel: '改图',
+        items: items,
+        errors: res['errors'],
+      );
     } catch (e, st) {
       state = AsyncValue.error(e, st);
+      return null;
+    } finally {
+      if (ref.read(activeImageTaskProvider) == ImageTaskKind.edit) {
+        ref.read(activeImageTaskProvider.notifier).state = null;
+      }
     }
   }
 
   void clear() {
     state = const AsyncValue.data([]);
   }
+}
+
+void _ensureTaskAvailable(Ref ref, ImageTaskKind nextTask) {
+  final activeTask = ref.read(activeImageTaskProvider);
+  if (activeTask == null || activeTask == nextTask) {
+    return;
+  }
+  throw GatewayException(
+    activeTask == ImageTaskKind.generate
+        ? '生图任务进行中，请等待完成后再开始改图。'
+        : '改图任务进行中，请等待完成后再开始生图。',
+  );
+}
+
+Map<String, dynamic> _quotaSummary(dynamic value) {
+  if (value is Map) {
+    return Map<String, dynamic>.from(value);
+  }
+  return {
+    'generate': {'remaining': 0, 'total': 0, 'used': 0},
+    'edit': {'remaining': 0, 'total': 0, 'used': 0},
+  };
+}
+
+List<Map<String, dynamic>> _resultItems(dynamic value) {
+  return (value as List? ?? [])
+      .whereType<Map>()
+      .map((item) => Map<String, dynamic>.from(item))
+      .toList();
+}
+
+String? _partialSuccessMessage({
+  required String actionLabel,
+  required List<Map<String, dynamic>> items,
+  required dynamic errors,
+}) {
+  final errorCount = (errors as List? ?? []).length;
+  if (items.isEmpty || errorCount == 0) {
+    return null;
+  }
+  return '$actionLabel已返回 ${items.length} 张图片，另有 $errorCount 张未完成。';
 }

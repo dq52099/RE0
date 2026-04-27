@@ -15,6 +15,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 0;
+  int _historyRefreshToken = 0;
   int _profileRefreshToken = 0;
 
   @override
@@ -23,7 +24,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final screens = [
       const MaterializerScreen(),
       const ChronogearScreen(),
-      const CompendiumScreen(),
+      CompendiumScreen(refreshToken: _historyRefreshToken),
       ProfileScreen(refreshToken: _profileRefreshToken),
     ];
 
@@ -37,6 +38,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         onTap: (index) {
           setState(() {
             _currentIndex = index;
+            if (index == 2) {
+              _historyRefreshToken += 1;
+            }
             if (index == 3) {
               _profileRefreshToken += 1;
             }

@@ -153,17 +153,26 @@ class GatewayClient {
   Future<Map<String, dynamic>> getHistory(
     int page, {
     int pageSize = 30,
-    String? query,
+    String? keyword,
+    String? action,
+    String? status,
   }) async {
     return _guard(() async {
       final queryParameters = <String, dynamic>{
         'page': page,
         'page_size': pageSize,
       };
-      final search = query?.trim();
+      final search = keyword?.trim();
       if (search != null && search.isNotEmpty) {
+        queryParameters['keyword'] = search;
         queryParameters['q'] = search;
         queryParameters['query'] = search;
+      }
+      if (action != null && action.isNotEmpty) {
+        queryParameters['action'] = action;
+      }
+      if (status != null && status.isNotEmpty) {
+        queryParameters['status'] = status;
       }
       final res = await _dio.get(
         '/api/images/history',
