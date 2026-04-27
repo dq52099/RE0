@@ -549,7 +549,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     label: '主题',
                     value: brand.id,
                     width: 126,
-                    showLabel: false,
+                    menuWidth: 104,
                     items: AppBrands.all
                         .map(
                           (item) => CompactDropdownField.centeredItem<String>(

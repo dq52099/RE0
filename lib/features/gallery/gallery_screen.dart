@@ -264,7 +264,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                 crossAxisCount: _columns,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
-                childAspectRatio: 0.76,
+                mainAxisExtent: _cardExtent(),
               ),
               itemBuilder: (context, index) {
                 final item = _items[index];
@@ -320,6 +320,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
               label: '排序',
               value: _sort,
               width: 120,
+              menuWidth: 98,
               items: const {
                 'time': '时间',
                 'popular': '最受欢迎',
@@ -335,6 +336,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
               label: '每页',
               value: _pageSize,
               width: 92,
+              menuWidth: 70,
               items: const {
                 12: '12张',
                 24: '24张',
@@ -349,9 +351,12 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
               label: '列数',
               value: _columns,
               width: 88,
+              menuWidth: 74,
               items: const {
+                1: '单列',
                 2: '两列',
                 3: '三列',
+                4: '四列',
               },
               onChanged: (value) {
                 setState(() => _columns = value!);
@@ -376,6 +381,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
     required String label,
     required T value,
     required double width,
+    double? menuWidth,
     required Map<T, String> items,
     required ValueChanged<T?> onChanged,
   }) {
@@ -383,6 +389,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
       label: label,
       value: value,
       width: width,
+      menuWidth: menuWidth,
       items: items.entries
           .map(
             (entry) => CompactDropdownField.centeredItem<T>(
@@ -425,6 +432,17 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
   }
 
   Widget _galleryCard(AppBrand brand, Map<String, dynamic> item, int index) {
+    final compact = _columns >= 3;
+    final imageHeight = compact ? (_columns >= 4 ? 90.0 : 108.0) : 180.0;
+    final cardPadding = compact ? 10.0 : 14.0;
+    final avatarRadius = compact ? 13.0 : 16.0;
+    final nameFontSize = compact ? 12.0 : 14.0;
+    final actionFontSize = compact ? 10.0 : 12.0;
+    final actionIconSize = compact ? 14.0 : 16.0;
+    final actionSpacing = compact ? 6.0 : 8.0;
+    final buttonPadding = compact
+        ? const EdgeInsets.symmetric(horizontal: 8, vertical: 6)
+        : const EdgeInsets.symmetric(horizontal: 10, vertical: 8);
     final imageUrl = item['image_url']?.toString() ?? '';
     final previewItems = _items
         .map(
@@ -457,21 +475,21 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
               child: CachedGatewayImage(
                 url: imageUrl,
                 width: double.infinity,
-                height: 180,
+                height: imageHeight,
                 fit: BoxFit.cover,
                 showDownload: false,
                 accentColor: brand.primaryColor,
               ),
             ),
           Padding(
-            padding: const EdgeInsets.all(14),
+            padding: EdgeInsets.all(cardPadding),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
                     CircleAvatar(
-                      radius: 16,
+                      radius: avatarRadius,
                       backgroundColor: brand.primaryColor.withOpacity(0.14),
                       backgroundImage: (item['author_avatar_url']?.toString() ?? '').isNotEmpty
                           ? NetworkImage(item['author_avatar_url'].toString())
@@ -479,22 +497,26 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                       child: (item['author_avatar_url']?.toString() ?? '').isEmpty
                           ? Text(
                               (item['display_name']?.toString() ?? '画').substring(0, 1),
+                              style: TextStyle(fontSize: nameFontSize),
                             )
                           : null,
                     ),
-                    const SizedBox(width: 10),
+                    SizedBox(width: compact ? 8 : 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Wrap(
-                            spacing: 6,
-                            runSpacing: 4,
+                            spacing: 4,
+                            runSpacing: 2,
                             crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               Text(
                                 item['display_name']?.toString() ?? '-',
-                                style: const TextStyle(fontWeight: FontWeight.w600),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: nameFontSize,
+                                ),
                               ),
                               _levelBadge(item['level_info'] as Map?),
                             ],
@@ -519,15 +541,16 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                   _promptSummary(item),
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w400,
+                        fontSize: compact ? 12 : 14,
                         height: 1.5,
                       ),
-                  maxLines: 2,
+                  maxLines: compact ? 1 : 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: compact ? 8 : 12),
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: actionSpacing,
+                  runSpacing: actionSpacing,
                   children: [
                     _actionButton(
                       icon: item['liked'] == true
@@ -536,8 +559,10 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                       label: '${item['like_count'] ?? 0}',
                       color: item['liked'] == true ? brand.warningColor : null,
                       onTap: () => _toggleLike(item),
+                      iconSize: actionIconSize,
+                      fontSize: actionFontSize,
+                      padding: buttonPadding,
                     ),
-                    const SizedBox(width: 8),
                     _actionButton(
                       icon: item['favorited'] == true
                           ? Icons.bookmark
@@ -545,24 +570,33 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                       label: '${item['favorite_count'] ?? 0}',
                       color: item['favorited'] == true ? brand.primaryColor : null,
                       onTap: () => _toggleFavorite(item),
+                      iconSize: actionIconSize,
+                      fontSize: actionFontSize,
+                      padding: buttonPadding,
                     ),
-                    const SizedBox(width: 8),
                     _actionButton(
                       icon: Icons.download_outlined,
                       label: '${item['download_count'] ?? 0}',
                       onTap: () => _openDetails(item),
+                      iconSize: actionIconSize,
+                      fontSize: actionFontSize,
+                      padding: buttonPadding,
                     ),
-                    const SizedBox(width: 8),
                     _actionButton(
                       icon: Icons.chat_bubble_outline,
                       label: '${item['comment_count'] ?? 0}',
                       onTap: () => _openDetails(item),
+                      iconSize: actionIconSize,
+                      fontSize: actionFontSize,
+                      padding: buttonPadding,
                     ),
-                    const SizedBox(width: 8),
                     _actionButton(
                       icon: Icons.open_in_full,
                       label: '详情',
                       onTap: () => _openDetails(item),
+                      iconSize: actionIconSize,
+                      fontSize: actionFontSize,
+                      padding: buttonPadding,
                     ),
                   ],
                 ),
@@ -588,12 +622,16 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
     required String label,
     Color? color,
     required VoidCallback onTap,
+    required double iconSize,
+    required double fontSize,
+    required EdgeInsets padding,
   }) {
+    final gap = fontSize <= 10 ? 4.0 : 6.0;
     return InkWell(
       borderRadius: BorderRadius.circular(999),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: padding,
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface.withOpacity(0.5),
           borderRadius: BorderRadius.circular(999),
@@ -601,9 +639,12 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: 6),
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
+            Icon(icon, size: iconSize, color: color),
+            SizedBox(width: gap),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: fontSize),
+            ),
           ],
         ),
       ),
@@ -657,5 +698,18 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
       return item['prompt']?.toString() ?? '';
     }
     return '评论后可解锁提示词';
+  }
+
+  double _cardExtent() {
+    if (_columns <= 1) {
+      return 372;
+    }
+    if (_columns >= 4) {
+      return 250;
+    }
+    if (_columns == 3) {
+      return 290;
+    }
+    return 360;
   }
 }
