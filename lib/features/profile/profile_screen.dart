@@ -1,3 +1,4 @@
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -94,10 +95,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
     if (picked == null) return;
 
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: picked.path,
+      cropStyle: CropStyle.circle,
+      compressFormat: ImageCompressFormat.png,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      uiSettings: [
+        AndroidUiSettings(
+          toolbarTitle: '裁剪头像',
+          lockAspectRatio: true,
+          hideBottomControls: false,
+          toolbarWidgetColor: Colors.white,
+          activeControlsWidgetColor: ref.read(brandProvider).primaryColor,
+          initAspectRatio: CropAspectRatioPreset.square,
+        ),
+      ],
+    );
+    if (cropped == null) return;
+
     setState(() => _isUpdatingAvatar = true);
     try {
       final updated = await ref.read(gatewayClientProvider).updateMyAvatar(
-            picked.path,
+            cropped.path,
           );
       ref.read(authStateProvider.notifier).state = updated;
       ref.read(energyProvider.notifier).state = updated['quota_summary'];
@@ -447,6 +467,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   child: DropdownButtonFormField<String>(
                     value: brand.id,
                     isDense: true,
+                    alignment: Alignment.center,
                     icon: const Icon(Icons.expand_more),
                     decoration: InputDecoration(
                       contentPadding: const EdgeInsets.symmetric(

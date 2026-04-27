@@ -50,8 +50,8 @@ class ImageCapabilities {
       ImageOption(value: '1536x1024', label: '1536 × 1024'),
       ImageOption(value: '1024x1536', label: '1024 × 1536'),
       ImageOption(value: '2048x2048', label: '2048 × 2048'),
-      ImageOption(value: '3840x2160', label: '4K 横版 3840 × 2160'),
-      ImageOption(value: '2160x3840', label: '4K 竖版 2160 × 3840'),
+      ImageOption(value: '3840x2160', label: '3840 × 2160'),
+      ImageOption(value: '2160x3840', label: '2160 × 3840'),
     ];
     const qualities = [
       ImageOption(value: 'auto', label: '自动'),
@@ -125,12 +125,12 @@ class ImageCapabilities {
             if (value.isEmpty) return null;
             return ImageOption(
               value: value,
-              label: item['label']?.toString() ?? value,
+              label: _displayLabel(value, item['label']?.toString()),
             );
           }
           final value = item?.toString() ?? '';
           if (value.isEmpty) return null;
-          return ImageOption(value: value, label: value);
+          return ImageOption(value: value, label: _displayLabel(value, null));
         })
         .whereType<ImageOption>()
         .toList();
@@ -150,5 +150,14 @@ class ImageCapabilities {
       return Map<String, dynamic>.from(value);
     }
     return <String, dynamic>{};
+  }
+
+  static String _displayLabel(String value, String? label) {
+    final normalized = value.trim();
+    final sizeMatch = RegExp(r'^(\d+)x(\d+)$').firstMatch(normalized);
+    if (sizeMatch != null) {
+      return '${sizeMatch.group(1)} × ${sizeMatch.group(2)}';
+    }
+    return (label == null || label.trim().isEmpty) ? value : label;
   }
 }

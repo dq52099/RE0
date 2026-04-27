@@ -186,6 +186,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               : null,
           children: data.users.map((user) {
             final quota = _map(user['quota_summary']);
+            final retention = _map(user['history_retention_summary']);
             return _infoCard(
               title: '${_text(user['display_name'])} (${_text(user['username'])})',
               subtitle: '角色: ${_text(user['role_name'])}  用户组: ${_text(user['group_name'])}',
@@ -199,6 +200,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               lines: [
                 _quotaLine('生图', _map(quota['generate'])),
                 _quotaLine('改图', _map(quota['edit'])),
+                '生图保留: ${_text(retention['generate'])}',
+                '改图保留: ${_text(retention['edit'])}',
               ],
             );
           }).toList(),
@@ -233,6 +236,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               lines: [
                 '默认生图额度: ${_text(group['default_generate_quota'])}',
                 '默认改图额度: ${_text(group['default_edit_quota'])}',
+                '默认生图保留: ${_text(group['default_generate_history_retention'])}',
+                '默认改图保留: ${_text(group['default_edit_history_retention'])}',
                 '成员数: ${_text(group['user_count'])}',
               ],
             );
@@ -626,6 +631,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final editQuota = TextEditingController(
       text: user?['edit_quota_total_override']?.toString() ?? '',
     );
+    final generateHistoryRetention = TextEditingController(
+      text: user?['generate_history_retention_override']?.toString() ?? '',
+    );
+    final editHistoryRetention = TextEditingController(
+      text: user?['edit_history_retention_override']?.toString() ?? '',
+    );
     var roleId = _text(
       user?['role_id'],
       fallback: data.roles.isEmpty ? '' : _text(data.roles.first['id']),
@@ -682,6 +693,18 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(labelText: '改图额度覆盖'),
                 ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: generateHistoryRetention,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: '生图历史保留覆盖'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: editHistoryRetention,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: '改图历史保留覆盖'),
+                ),
                 const SizedBox(height: 8),
                 CheckboxListTile(
                   value: active,
@@ -708,6 +731,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     'can_edit_username': canEditUsername,
                     'generate_quota_total_override': _nullableInt(generateQuota.text),
                     'edit_quota_total_override': _nullableInt(editQuota.text),
+                    'generate_history_retention_override':
+                        _nullableInt(generateHistoryRetention.text),
+                    'edit_history_retention_override':
+                        _nullableInt(editHistoryRetention.text),
                   };
                   if (user == null) {
                     body['password'] = password.text;
@@ -730,6 +757,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final description = TextEditingController(text: _text(group?['description'], fallback: ''));
     final generateQuota = TextEditingController(text: _text(group?['default_generate_quota'], fallback: '10'));
     final editQuota = TextEditingController(text: _text(group?['default_edit_quota'], fallback: '5'));
+    final generateHistoryRetention = TextEditingController(
+      text: _text(group?['default_generate_history_retention'], fallback: '5'),
+    );
+    final editHistoryRetention = TextEditingController(
+      text: _text(group?['default_edit_history_retention'], fallback: '3'),
+    );
     var active = group?['is_active'] != false;
     final payload = await _basicEntityDialog(
       title: group == null ? '新增用户组' : '编辑用户组',
@@ -746,6 +779,16 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           keyboardType: TextInputType.number,
           decoration: const InputDecoration(labelText: '默认改图额度'),
         ),
+        TextField(
+          controller: generateHistoryRetention,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: '默认生图历史保留'),
+        ),
+        TextField(
+          controller: editHistoryRetention,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: '默认改图历史保留'),
+        ),
       ],
       active: active,
       onActiveChanged: (value) => active = value,
@@ -754,6 +797,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         'description': description.text.trim(),
         'default_generate_quota': int.tryParse(generateQuota.text) ?? 0,
         'default_edit_quota': int.tryParse(editQuota.text) ?? 0,
+        'default_generate_history_retention':
+            int.tryParse(generateHistoryRetention.text) ?? 0,
+        'default_edit_history_retention':
+            int.tryParse(editHistoryRetention.text) ?? 0,
         'is_active': active,
       },
     );

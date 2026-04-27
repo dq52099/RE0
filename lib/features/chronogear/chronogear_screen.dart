@@ -123,6 +123,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                   Expanded(child: DropdownButtonFormField<int>(
                     value: _count,
                     isExpanded: true,
+                    alignment: Alignment.center,
                     decoration: const InputDecoration(labelText: '数量'),
                     items: List<int>.generate(options.maxImages, (index) => index + 1)
                         .map((e) => DropdownMenuItem(value: e, child: Text('$e张')))
@@ -133,6 +134,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                   Expanded(child: DropdownButtonFormField<String>(
                     value: size,
                     isExpanded: true,
+                    alignment: Alignment.center,
                     decoration: const InputDecoration(labelText: '尺寸'),
                     items: _items(options.sizes),
                     onChanged: (v) => setState(() => _size = v!),
@@ -145,6 +147,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                   Expanded(child: DropdownButtonFormField<String>(
                     value: quality,
                     isExpanded: true,
+                    alignment: Alignment.center,
                     decoration: const InputDecoration(labelText: '质量'),
                     items: _items(options.qualities),
                     onChanged: (v) => setState(() => _quality = v!),
@@ -153,6 +156,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                   Expanded(child: DropdownButtonFormField<String>(
                     value: background,
                     isExpanded: true,
+                    alignment: Alignment.center,
                     decoration: const InputDecoration(labelText: '背景'),
                     items: _items(options.backgrounds),
                     onChanged: (v) => setState(() => _background = v!),
@@ -163,6 +167,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
               DropdownButtonFormField<String>(
                 value: outputFormat,
                 isExpanded: true,
+                alignment: Alignment.center,
                 decoration: const InputDecoration(labelText: '输出格式'),
                 items: _items(capabilities.outputFormats),
                 onChanged: (v) => setState(() => _outputFormat = v!),
@@ -302,7 +307,14 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
         .map(
           (item) => DropdownMenuItem<String>(
             value: item.value,
-            child: Text(item.label, overflow: TextOverflow.ellipsis),
+            child: Center(
+              child: Text(
+                item.label,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
           ),
         )
         .toList();
