@@ -38,32 +38,49 @@ class CompactDropdownField<T> extends StatelessWidget {
       width: width,
       child: InputDecorator(
         decoration: decoration,
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<T>(
-            value: value,
-            isDense: true,
-            isExpanded: true,
-            menuMaxHeight: 280,
-            menuWidth: menuWidth,
-            alignment: Alignment.center,
-            borderRadius: BorderRadius.circular(16),
-            icon: const Icon(Icons.expand_more, size: 18),
-            style: bodyStyle,
-            items: items,
-            selectedItemBuilder: (context) => selectedLabels
-                .map(
-                  (item) => Center(
-                    child: Text(
-                      item,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: bodyStyle,
-                    ),
-                  ),
-                )
-                .toList(),
-            onChanged: onChanged,
-          ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Directionality(
+              textDirection: TextDirection.rtl,
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<T>(
+                  value: value,
+                  isDense: true,
+                  isExpanded: true,
+                  menuMaxHeight: 280,
+                  menuWidth: menuWidth,
+                  alignment: Alignment.center,
+                  borderRadius: BorderRadius.circular(16),
+                  icon: const SizedBox.shrink(),
+                  style: bodyStyle,
+                  items: items,
+                  selectedItemBuilder: (context) => selectedLabels
+                      .map(
+                        (item) => Directionality(
+                          textDirection: TextDirection.ltr,
+                          child: Center(
+                            child: Text(
+                              item,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: bodyStyle,
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: onChanged,
+                ),
+              ),
+            ),
+            const Positioned(
+              right: 0,
+              child: IgnorePointer(
+                child: Icon(Icons.expand_more, size: 18),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -76,15 +93,20 @@ class CompactDropdownField<T> extends StatelessWidget {
   ) {
     return DropdownMenuItem<T>(
       value: value,
-      alignment: AlignmentDirectional.centerEnd,
-      child: Text(
-        label,
-        overflow: TextOverflow.ellipsis,
-        textAlign: TextAlign.end,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w400,
-              height: 1.3,
-            ),
+      alignment: AlignmentDirectional.center,
+      child: Directionality(
+        textDirection: TextDirection.ltr,
+        child: Center(
+          child: Text(
+            label,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w400,
+                  height: 1.3,
+                ),
+          ),
+        ),
       ),
     );
   }

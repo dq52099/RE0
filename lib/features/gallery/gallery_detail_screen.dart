@@ -6,7 +6,9 @@ import '../../core/api_error.dart';
 import '../../core/app_brand.dart';
 import '../../core/cached_gateway_image.dart';
 import '../../core/image_cache_service.dart';
+import '../../core/level_rewards_sheet.dart';
 import '../../core/providers.dart';
+import '../../core/value_parsers.dart';
 import '../compendium/image_preview_screen.dart';
 
 class GalleryDetailScreen extends ConsumerStatefulWidget {
@@ -89,7 +91,7 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
   }
 
   Future<void> _downloadImage() async {
-    if (_post['can_download'] != true) {
+    if (!boolish(_post['can_download'])) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('评论后才可以下载这张图片。')),
       );
@@ -162,12 +164,12 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
       await ref
           .read(gatewayClientProvider)
           .addGalleryComment(_post['id'].toString(), text);
+      final updated = await ref
+          .read(gatewayClientProvider)
+          .getGalleryPost(_post['id'].toString());
       if (!mounted) return;
       _commentController.clear();
-      setState(() {
-        _post['viewer_has_commented'] = true;
-        _post['comment_count'] = (int.tryParse(_post['comment_count']?.toString() ?? '0') ?? 0) + 1;
-      });
+      setState(() => _post = updated);
       await _loadComments();
     } catch (error) {
       if (!mounted) return;
@@ -217,6 +219,8 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
     final canViewPrompt = _canViewPrompt(_post);
     final currentUser = ref.read(authStateProvider);
     final isOwner = currentUser?['id']?.toString() == _post['user_id']?.toString();
+    final liked = boolish(_post['liked']);
+    final favorited = boolish(_post['favorited']);
     return Scaffold(
       appBar: AppBar(
         title: Text(brand.galleryTitle),
@@ -288,32 +292,27 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                       else
                         _lockedPromptPanel(brand),
                       const SizedBox(height: 12),
-                      Row(
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
                           _actionButton(
-                            icon: _post['liked'] == true
-                                ? Icons.favorite
-                                : Icons.favorite_border,
+                            icon: liked ? Icons.favorite : Icons.favorite_border,
                             label: '${_post['like_count'] ?? 0}',
-                            color: _post['liked'] == true ? brand.warningColor : null,
+                            color: liked ? brand.warningColor : null,
                             onTap: _toggleLike,
                           ),
-                          const SizedBox(width: 8),
                           _actionButton(
-                            icon: _post['favorited'] == true
-                                ? Icons.bookmark
-                                : Icons.bookmark_border,
+                            icon: favorited ? Icons.bookmark : Icons.bookmark_border,
                             label: '${_post['favorite_count'] ?? 0}',
-                            color: _post['favorited'] == true ? brand.primaryColor : null,
+                            color: favorited ? brand.primaryColor : null,
                             onTap: _toggleFavorite,
                           ),
-                          const SizedBox(width: 8),
                           _actionButton(
                             icon: Icons.content_copy_outlined,
                             label: '复制提示词',
                             onTap: canViewPrompt ? _copyPrompt : null,
                           ),
-                          const SizedBox(width: 8),
                           _actionButton(
                             icon: Icons.download_outlined,
                             label: '下载 ${_post['download_count'] ?? 0}',
@@ -428,7 +427,7 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                                         _formatTime(comment['created_at']?.toString()),
                                         style: Theme.of(context).textTheme.bodySmall,
                                       ),
-                                      if (comment['can_delete'] == true)
+                                      if (boolish(comment['can_delete']))
                                         IconButton(
                                           visualDensity: VisualDensity.compact,
                                           tooltip: '删除评论',
@@ -458,7 +457,7 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
   bool _canViewPrompt(Map<String, dynamic> item) {
     final currentUser = ref.read(authStateProvider);
     final currentUserId = currentUser?['id']?.toString();
-    return item['viewer_has_commented'] == true ||
+    return boolish(item['viewer_has_commented']) ||
         item['user_id']?.toString() == currentUserId;
   }
 
@@ -500,20 +499,32 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
     Color? color,
     VoidCallback? onTap,
   }) {
-    final active = color != null;
+    final activeColor = color;
+    final surface = Theme.of(context).colorScheme.surface;
     return InkWell(
       borderRadius: BorderRadius.circular(999),
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: active
-              ? color.withOpacity(0.14)
-              : Theme.of(context).colorScheme.surface.withOpacity(0.5),
+          color: activeColor != null
+              ? activeColor.withOpacity(0.24)
+              : surface.withOpacity(0.5),
           border: Border.all(
-            color: active ? color.withOpacity(0.28) : Colors.transparent,
+            color: activeColor != null
+                ? activeColor.withOpacity(0.70)
+                : Colors.transparent,
           ),
           borderRadius: BorderRadius.circular(999),
+          boxShadow: activeColor != null
+              ? [
+                  BoxShadow(
+                    color: activeColor.withOpacity(0.16),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -521,13 +532,14 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
             Icon(
               icon,
               size: 16,
-              color: color ?? Theme.of(context).textTheme.bodySmall?.color,
+              color: activeColor ?? Theme.of(context).textTheme.bodySmall?.color,
             ),
             const SizedBox(width: 6),
             Text(
               label,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: color ?? Theme.of(context).textTheme.bodySmall?.color,
+                    color: activeColor ??
+                        Theme.of(context).textTheme.bodySmall?.color,
                   ),
             ),
           ],
@@ -541,18 +553,23 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
     if (label == null || label.isEmpty) {
       return const SizedBox.shrink();
     }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: _badgeColor(levelInfo?['badge_color']?.toString()).withOpacity(0.14),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          color: _badgeColor(levelInfo?['badge_color']?.toString()),
-          fontWeight: FontWeight.w600,
+    final color = _badgeColor(levelInfo?['badge_color']?.toString());
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: () => showLevelRewardsSheet(context, levelInfo, accentColor: color),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.14),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: color,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
     );

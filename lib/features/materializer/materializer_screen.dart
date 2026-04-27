@@ -83,7 +83,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
               LayoutBuilder(
                 builder: (context, constraints) {
                   final fieldWidth = (constraints.maxWidth - 12) / 2;
-                  final menuWidth = fieldWidth + 56;
+                  final menuWidth = fieldWidth + 34;
                   return Row(
                     children: [
                       Expanded(
@@ -122,7 +122,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
               LayoutBuilder(
                 builder: (context, constraints) {
                   final fieldWidth = (constraints.maxWidth - 12) / 2;
-                  final menuWidth = fieldWidth + 56;
+                  final menuWidth = fieldWidth + 34;
                   return Row(
                     children: [
                       Expanded(

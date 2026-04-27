@@ -6,7 +6,9 @@ import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
 import '../../core/cached_gateway_image.dart';
 import '../../core/compact_dropdown_field.dart';
+import '../../core/level_rewards_sheet.dart';
 import '../../core/providers.dart';
+import '../../core/value_parsers.dart';
 import '../compendium/image_preview_screen.dart';
 import 'gallery_detail_screen.dart';
 
@@ -57,7 +59,6 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
   int _page = 1;
   int _totalPages = 1;
   int _pageSize = 12;
-  int _columns = 1;
   bool _isLoading = false;
   String? _error;
   String _sort = 'time';
@@ -126,6 +127,11 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
         .read(gatewayClientProvider)
         .toggleGalleryLike(item['id'].toString());
     _replaceItem(updated);
+    if (widget.view == 'liked' && !boolish(updated['liked']) && mounted) {
+      setState(() {
+        _items.removeWhere((entry) => entry['id'] == updated['id']);
+      });
+    }
   }
 
   Future<void> _toggleFavorite(Map<String, dynamic> item) async {
@@ -133,7 +139,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
         .read(gatewayClientProvider)
         .toggleGalleryFavorite(item['id'].toString());
     _replaceItem(updated);
-    if (widget.view == 'favorites' && updated['favorited'] != true && mounted) {
+    if (widget.view == 'favorites' && !boolish(updated['favorited']) && mounted) {
       setState(() {
         _items.removeWhere((entry) => entry['id'] == updated['id']);
       });
@@ -256,20 +262,16 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
               child: Center(child: Text(widget.emptyText)),
             )
           else
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _items.length,
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: _columns,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                mainAxisExtent: _cardExtent(),
-              ),
-              itemBuilder: (context, index) {
-                final item = _items[index];
-                return _galleryCard(brand, item, index);
-              },
+            Column(
+              children: [
+                for (var index = 0; index < _items.length; index++)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      bottom: index == _items.length - 1 ? 0 : 12,
+                    ),
+                    child: _galleryCard(brand, _items[index]),
+                  ),
+              ],
             ),
           const SizedBox(height: 16),
           _paginationBar(),
@@ -322,7 +324,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                     label: '排序',
                     value: _sort,
                     width: fieldWidth,
-                    menuWidth: fieldWidth + 56,
+                    menuWidth: fieldWidth + 34,
                     items: const {
                       'time': '时间',
                       'popular': '最受欢迎',
@@ -341,7 +343,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                     label: '每页',
                     value: _pageSize,
                     width: fieldWidth,
-                    menuWidth: fieldWidth + 56,
+                    menuWidth: fieldWidth + 34,
                     items: const {
                       12: '12张',
                       24: '24张',
@@ -424,18 +426,17 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
     );
   }
 
-  Widget _galleryCard(AppBrand brand, Map<String, dynamic> item, int index) {
-    final compact = _columns >= 3;
-    final imageHeight = compact ? (_columns >= 4 ? 90.0 : 108.0) : 180.0;
-    final cardPadding = compact ? 10.0 : 14.0;
-    final avatarRadius = compact ? 13.0 : 16.0;
-    final nameFontSize = compact ? 12.0 : 14.0;
-    final actionFontSize = compact ? 10.0 : 12.0;
-    final actionIconSize = compact ? 14.0 : 16.0;
-    final actionSpacing = compact ? 6.0 : 8.0;
-    final buttonPadding = compact
-        ? const EdgeInsets.symmetric(horizontal: 8, vertical: 6)
-        : const EdgeInsets.symmetric(horizontal: 10, vertical: 8);
+  Widget _galleryCard(AppBrand brand, Map<String, dynamic> item) {
+    const imageHeight = 252.0;
+    const cardPadding = 12.0;
+    const avatarRadius = 15.0;
+    const nameFontSize = 14.0;
+    const actionFontSize = 12.0;
+    const actionIconSize = 16.0;
+    const actionSpacing = 8.0;
+    const buttonPadding = EdgeInsets.symmetric(horizontal: 10, vertical: 8);
+    final liked = boolish(item['liked']);
+    final favorited = boolish(item['favorited']);
     final imageUrl = item['image_url']?.toString() ?? '';
     final previewItems = _items
         .map(
@@ -460,7 +461,8 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                     items: previewItems,
                     initialIndex: previewItems
                         .indexWhere((entry) => entry.url == imageUrl)
-                        .clamp(0, previewItems.length - 1),
+                        .clamp(0, previewItems.length - 1)
+                        .toInt(),
                     showDownload: false,
                   ),
                 ),
@@ -494,7 +496,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                             )
                           : null,
                     ),
-                    SizedBox(width: compact ? 8 : 10),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -529,39 +531,35 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Text(
                   _promptSummary(item),
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w400,
-                        fontSize: compact ? 12 : 14,
-                        height: 1.5,
+                        fontSize: 13,
+                        height: 1.35,
                       ),
-                  maxLines: compact ? 1 : 2,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                SizedBox(height: compact ? 8 : 12),
+                const SizedBox(height: 10),
                 Wrap(
                   spacing: actionSpacing,
                   runSpacing: actionSpacing,
                   children: [
                     _actionButton(
-                      icon: item['liked'] == true
-                          ? Icons.favorite
-                          : Icons.favorite_border,
+                      icon: liked ? Icons.favorite : Icons.favorite_border,
                       label: '${item['like_count'] ?? 0}',
-                      color: item['liked'] == true ? brand.warningColor : null,
+                      color: liked ? brand.warningColor : null,
                       onTap: () => _toggleLike(item),
                       iconSize: actionIconSize,
                       fontSize: actionFontSize,
                       padding: buttonPadding,
                     ),
                     _actionButton(
-                      icon: item['favorited'] == true
-                          ? Icons.bookmark
-                          : Icons.bookmark_border,
+                      icon: favorited ? Icons.bookmark : Icons.bookmark_border,
                       label: '${item['favorite_count'] ?? 0}',
-                      color: item['favorited'] == true ? brand.primaryColor : null,
+                      color: favorited ? brand.primaryColor : null,
                       onTap: () => _toggleFavorite(item),
                       iconSize: actionIconSize,
                       fontSize: actionFontSize,
@@ -620,20 +618,32 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
     required EdgeInsets padding,
   }) {
     final gap = fontSize <= 10 ? 4.0 : 6.0;
-    final active = color != null;
+    final activeColor = color;
+    final surface = Theme.of(context).colorScheme.surface;
     return InkWell(
       borderRadius: BorderRadius.circular(999),
       onTap: onTap,
       child: Container(
         padding: padding,
         decoration: BoxDecoration(
-          color: active
-              ? color.withOpacity(0.14)
-              : Theme.of(context).colorScheme.surface.withOpacity(0.5),
+          color: activeColor != null
+              ? activeColor.withOpacity(0.24)
+              : surface.withOpacity(0.5),
           border: Border.all(
-            color: active ? color.withOpacity(0.28) : Colors.transparent,
+            color: activeColor != null
+                ? activeColor.withOpacity(0.70)
+                : Colors.transparent,
           ),
           borderRadius: BorderRadius.circular(999),
+          boxShadow: activeColor != null
+              ? [
+                  BoxShadow(
+                    color: activeColor.withOpacity(0.16),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -641,14 +651,15 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
             Icon(
               icon,
               size: iconSize,
-              color: color ?? Theme.of(context).textTheme.bodySmall?.color,
+              color: activeColor ?? Theme.of(context).textTheme.bodySmall?.color,
             ),
             SizedBox(width: gap),
             Text(
               label,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     fontSize: fontSize,
-                    color: color ?? Theme.of(context).textTheme.bodySmall?.color,
+                    color: activeColor ??
+                        Theme.of(context).textTheme.bodySmall?.color,
                   ),
             ),
           ],
@@ -662,18 +673,23 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
     if (label == null || label.isEmpty) {
       return const SizedBox.shrink();
     }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: _badgeColor(levelInfo?['badge_color']?.toString()).withOpacity(0.14),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          color: _badgeColor(levelInfo?['badge_color']?.toString()),
-          fontWeight: FontWeight.w600,
+    final color = _badgeColor(levelInfo?['badge_color']?.toString());
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: () => showLevelRewardsSheet(context, levelInfo, accentColor: color),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.14),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: color,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
     );
@@ -700,22 +716,9 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
   }
 
   String _promptSummary(Map<String, dynamic> item) {
-    if (item['can_view_prompt'] == true) {
+    if (boolish(item['can_view_prompt'])) {
       return item['prompt']?.toString() ?? '';
     }
     return '评论后可解锁提示词';
-  }
-
-  double _cardExtent() {
-    if (_columns <= 1) {
-      return 372;
-    }
-    if (_columns >= 4) {
-      return 250;
-    }
-    if (_columns == 3) {
-      return 290;
-    }
-    return 360;
   }
 }

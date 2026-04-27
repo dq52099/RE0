@@ -8,6 +8,7 @@ import '../../core/app_brand.dart';
 import '../../core/app_update_service.dart';
 import '../../core/brand_background.dart';
 import '../../core/compact_dropdown_field.dart';
+import '../../core/level_rewards_sheet.dart';
 import '../../core/providers.dart';
 import '../admin/admin_screen.dart';
 import '../auth/login_screen.dart';
@@ -549,7 +550,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     label: '主题',
                     value: brand.id,
                     width: 126,
-                    menuWidth: 168,
+                    menuWidth: 151,
                     items: AppBrands.all
                         .map(
                           (item) => CompactDropdownField.centeredItem<String>(
@@ -701,7 +702,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                _chip(brand, '等级', levelInfo['label']?.toString() ?? 'LV0'),
+                _chip(
+                  brand,
+                  '等级',
+                  levelInfo['label']?.toString() ?? 'LV0',
+                  icon: Icons.workspace_premium_outlined,
+                  onTap: () => showLevelRewardsSheet(
+                    context,
+                    levelInfo,
+                    accentColor: brand.primaryColor,
+                  ),
+                ),
                 _chip(brand, '积分', '${user?['points'] ?? 0}'),
                 _chip(brand, '生图', _quotaText(generateQuota)),
                 _chip(brand, '改图', _quotaText(editQuota)),
@@ -713,14 +724,35 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _chip(AppBrand brand, String label, String value) {
-    return Container(
+  Widget _chip(
+    AppBrand brand,
+    String label,
+    String value, {
+    IconData? icon,
+    VoidCallback? onTap,
+  }) {
+    final content = Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         border: Border.all(color: brand.primaryColor.withOpacity(0.6)),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Text('$label: $value'),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('$label: $value'),
+          if (icon != null) ...[
+            const SizedBox(width: 6),
+            Icon(icon, size: 15, color: brand.primaryColor),
+          ],
+        ],
+      ),
+    );
+    if (onTap == null) return content;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: content,
     );
   }
 

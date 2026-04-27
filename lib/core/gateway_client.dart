@@ -278,6 +278,13 @@ class GatewayClient {
     }, fallback: '发布到画廊失败。');
   }
 
+  Future<Map<String, dynamic>> getGalleryPost(String postId) async {
+    return _guard(() async {
+      final res = await _dio.get('/api/gallery/posts/$postId');
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '读取作品详情失败。');
+  }
+
   Future<Map<String, dynamic>> toggleGalleryLike(String postId) async {
     return _guard(() async {
       final res = await _dio.post('/api/gallery/posts/$postId/like');
