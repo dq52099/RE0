@@ -1,6 +1,6 @@
 name: re0
-description: RE0 mobile image gateway client with switchable themes.
-version: 1.0.1+2
+description: 从零开始的异世界生图
+version: 1.0.2+3
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

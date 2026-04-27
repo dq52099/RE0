@@ -24,8 +24,8 @@ final appUpdateProvider = Provider<AppUpdateService>((ref) {
     appId: 're0',
     appName: 'RE0',
     packageName: 'com.dq52099.re0',
-    currentVersionName: '1.0.1',
-    currentVersionCode: 101,
+    currentVersionName: '1.0.2',
+    currentVersionCode: 102,
   );
 });
 
