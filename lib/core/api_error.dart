@@ -89,6 +89,17 @@ String _polishMessage(String message, String fallback) {
       normalized.contains('not enough credits')) {
     return '当前额度不足，请检查剩余额度或联系管理员。';
   }
+  if (normalized.contains('开放自助注册')) {
+    return '当前网关暂未开放自助注册。';
+  }
+  if (normalized.contains('保留名称')) {
+    return '这个账号名属于保留名称，请更换一个账号名。';
+  }
+  if (normalized.contains('already exists') ||
+      normalized.contains('已存在') ||
+      normalized.contains('已被占用')) {
+    return '这个账号名已经被占用，请换一个。';
+  }
   if (normalized.contains('timed out') || normalized.contains('timeout')) {
     return '请求超时，请稍后重试。';
   }

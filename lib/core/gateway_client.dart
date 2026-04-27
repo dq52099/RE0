@@ -53,6 +53,28 @@ class GatewayClient {
     }, fallback: '登录失败，请检查账号和密码。');
   }
 
+  Future<Map<String, dynamic>> bootstrap() async {
+    return _guard(() async {
+      final res = await _dio.get('/api/bootstrap');
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '读取登录配置失败。');
+  }
+
+  Future<Map<String, dynamic>> register(
+    String username,
+    String displayName,
+    String password,
+  ) async {
+    return _guard(() async {
+      final res = await _dio.post('/api/auth/register', data: {
+        'username': username,
+        'display_name': displayName,
+        'password': password,
+      });
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '注册失败，请稍后重试。');
+  }
+
   Future<Map<String, dynamic>> checkAuth() async {
     return _guard(() async {
       final res = await _dio.get('/api/auth/me');

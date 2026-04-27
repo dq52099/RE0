@@ -19,11 +19,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _allowRegistration = true;
 
   @override
   void initState() {
     super.initState();
+    _loadBootstrap();
     _checkSavedAuth();
+  }
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadBootstrap() async {
+    try {
+      final client = ref.read(gatewayClientProvider);
+      await client.init(_defaultServerUrl);
+      final bootstrap = await client.bootstrap();
+      if (!mounted) return;
+      setState(() {
+        _allowRegistration =
+            bootstrap['allow_public_registration'] != false;
+      });
+    } catch (_) {
+      // Fall back to showing registration entry.
+    }
   }
 
   Future<void> _checkSavedAuth() async {
@@ -66,6 +90,121 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           SnackBar(content: Text(friendlyError(e, fallback: '登录失败，请检查账号和密码。'))),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _openRegisterDialog() async {
+    final username = TextEditingController();
+    final displayName = TextEditingController();
+    final password = TextEditingController();
+    final confirmPassword = TextEditingController();
+    final payload = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('注册新账号'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: username,
+                  decoration: const InputDecoration(
+                    labelText: '账号',
+                    helperText: '4-24 位，小写字母开头，可用数字、下划线和短横线',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: displayName,
+                  decoration: const InputDecoration(
+                    labelText: '显示名称',
+                    helperText: '2-32 个字符',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: password,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: '密码',
+                    helperText: '至少 10 位，需包含大小写字母、数字和特殊字符',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: confirmPassword,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: '确认密码'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final nextUsername = username.text.trim();
+                final nextDisplayName = displayName.text.trim();
+                if (nextUsername.isEmpty ||
+                    nextDisplayName.isEmpty ||
+                    password.text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('请完整填写注册信息。')),
+                  );
+                  return;
+                }
+                if (password.text != confirmPassword.text) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('两次输入的密码不一致。')),
+                  );
+                  return;
+                }
+                Navigator.pop(context, {
+                  'username': nextUsername,
+                  'display_name': nextDisplayName,
+                  'password': password.text,
+                });
+              },
+              child: const Text('注册并登录'),
+            ),
+          ],
+        );
+      },
+    );
+    username.dispose();
+    displayName.dispose();
+    password.dispose();
+    confirmPassword.dispose();
+    if (payload == null) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final client = ref.read(gatewayClientProvider);
+      await client.init(_defaultServerUrl);
+      final res = await client.register(
+        payload['username']!,
+        payload['display_name']!,
+        payload['password']!,
+      );
+      final prefs = ref.read(sharedPrefsProvider);
+      await prefs.setString('server_url', _defaultServerUrl);
+      ref.read(authStateProvider.notifier).state = res['user'];
+      ref.read(energyProvider.notifier).state = res['user']['quota_summary'];
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(e, fallback: '注册失败，请稍后重试。'))),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -144,6 +283,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         onPressed: _login,
                         child: const Text('登录'),
                       ),
+                if (_allowRegistration) ...[
+                  const SizedBox(height: 14),
+                  TextButton(
+                    onPressed: _isLoading ? null : _openRegisterDialog,
+                    child: const Text('注册新账号'),
+                  ),
+                ],
               ],
             ),
           ),

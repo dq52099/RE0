@@ -5,7 +5,7 @@
     <application
         android:usesCleartextTraffic="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="RE0"
+        android:label="从零开始生图"
         android:name="${applicationName}">
         <activity
             android:name=".MainActivity"

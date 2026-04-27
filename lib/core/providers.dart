@@ -24,10 +24,10 @@ final appUpdateProvider = Provider<AppUpdateService>((ref) {
     repository: 'dq52099/RE0',
     assetNamePrefix: 'RE0',
     appId: 're0',
-    appName: 'RE0',
+    appName: '从零开始生图',
     packageName: 'com.dq52099.re0',
-    currentVersionName: '1.1.3',
-    currentVersionCode: 10103,
+    currentVersionName: '1.1.4',
+    currentVersionCode: 10104,
   );
 });
 

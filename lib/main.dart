@@ -24,7 +24,7 @@ class Re0App extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final brand = ref.watch(brandProvider);
     return MaterialApp(
-      title: 'RE0',
+      title: '从零开始生图',
       debugShowCheckedModeBanner: false,
       theme: brand.theme,
       home: const LoginScreen(),

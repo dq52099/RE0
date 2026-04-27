@@ -20,7 +20,7 @@ class MainActivity : FlutterActivity() {
                 "saveImageToGallery" -> saveImageToGallery(
                     path = call.argument<String>("path"),
                     fileName = call.argument<String>("fileName") ?: "re0-image.png",
-                    albumName = call.argument<String>("albumName") ?: "RE0",
+                    albumName = call.argument<String>("albumName") ?: "从零开始生图",
                     result = result,
                 )
                 "openApk" -> openApk(

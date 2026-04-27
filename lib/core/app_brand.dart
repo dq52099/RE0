@@ -388,7 +388,7 @@ class AppBrands {
 
   static final yanyun = _standard(
     style: BrandStyle.yanyun,
-    title: '烟云十六声',
+    title: '燕云十六声',
     backgroundAsset: 'assets/backgrounds/yanyun.png',
     primaryColor: const Color(0xFF7D4E2D),
     warningColor: const Color(0xFFB86F32),
@@ -405,7 +405,7 @@ class AppBrands {
     historyTitle: '江湖画卷 - 历史',
     promptLabel: '题画词',
     editPromptLabel: '改画批注',
-    generatePromptHint: '写下山河、侠影、烟云与风骨...',
+    generatePromptHint: '写下山河、侠影、燕云与风骨...',
     editPromptHint: '描述要如何重写这幅画卷...',
     generateQuotaLabel: '笔墨',
     editQuotaLabel: '改画笔墨',

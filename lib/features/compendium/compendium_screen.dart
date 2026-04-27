@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/api_error.dart';
 import '../../core/app_brand.dart';
@@ -33,10 +34,12 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   final List<Map<String, dynamic>> _items = [];
   final Set<String> _hiddenKeys = {};
   final Set<String> _deletingKeys = {};
+  final Set<String> _retryingKeys = {};
   Timer? _searchDebounce;
   int _page = 1;
   bool _hasMore = true;
   bool _isLoading = false;
+  bool _isBulkDeleting = false;
   bool _pendingReset = false;
   String? _error;
   String _query = '';
@@ -236,44 +239,168 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     );
     if (confirmed != true) return;
 
-    setState(() => _deletingKeys.add(key));
-    var serverDeleted = false;
     try {
-      final id = item['id']?.toString();
-      if (id != null && id.isNotEmpty) {
-        await ref.read(gatewayClientProvider).deleteHistoryItem(id);
-        serverDeleted = true;
-      }
-    } catch (_) {
-      serverDeleted = false;
-    }
-
-    try {
-      final url = item['url']?.toString();
-      if (url != null && url.isNotEmpty) {
-        await ref.read(imageCacheProvider).removeCachedFileFor(url);
-      }
-      setState(() {
-        _hiddenKeys.add(key);
-        _items.removeWhere((entry) => _historyKey(entry) == key);
-      });
-      await ref
-          .read(sharedPrefsProvider)
-          .setStringList(_hiddenStorageKey, _hiddenKeys.toList());
+      await _hideHistoryItems([item], deletingKeys: {key});
       if (!mounted) return;
-      setState(() => _deletingKeys.remove(key));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(serverDeleted ? '图片记录已删除。' : '图片记录已从本机隐藏。'),
-        ),
+        const SnackBar(content: Text('图片记录已清理。')),
       );
     } catch (error) {
       if (!mounted) return;
-      setState(() => _deletingKeys.remove(key));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(friendlyError(error, fallback: '删除图片失败。'))),
       );
     }
+  }
+
+  Future<void> _hideHistoryItems(
+    List<Map<String, dynamic>> items, {
+    Set<String>? deletingKeys,
+  }) async {
+    final keys = items.map(_historyKey).toSet();
+    try {
+      if (deletingKeys != null && deletingKeys.isNotEmpty) {
+        setState(() => _deletingKeys.addAll(deletingKeys));
+      }
+      for (final item in items) {
+        try {
+          final id = item['id']?.toString();
+          if (id != null && id.isNotEmpty) {
+            await ref.read(gatewayClientProvider).deleteHistoryItem(id);
+          }
+        } catch (_) {
+          // Fall back to local hide if server-side delete is unavailable.
+        }
+        final url = item['url']?.toString();
+        if (url != null && url.isNotEmpty) {
+          await ref.read(imageCacheProvider).removeCachedFileFor(url);
+        }
+      }
+      setState(() {
+        _hiddenKeys.addAll(keys);
+        _items.removeWhere((entry) => keys.contains(_historyKey(entry)));
+        _deletingKeys.removeAll(keys);
+      });
+      await ref
+          .read(sharedPrefsProvider)
+          .setStringList(_hiddenStorageKey, _hiddenKeys.toList());
+    } catch (_) {
+      setState(() => _deletingKeys.removeAll(keys));
+      rethrow;
+    }
+  }
+
+  Future<void> _deleteFailedItems(List<Map<String, dynamic>> failedItems) async {
+    if (failedItems.isEmpty || _isBulkDeleting) return;
+    _dismissKeyboard();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('批量清理失败记录'),
+        content: Text('将移除当前可见的 ${failedItems.length} 条失败记录，并清理对应缓存。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('批量删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _isBulkDeleting = true);
+    try {
+      await _hideHistoryItems(failedItems);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已清理 ${failedItems.length} 条失败记录。')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(error, fallback: '批量删除失败。'))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isBulkDeleting = false);
+      }
+    }
+  }
+
+  Future<void> _retryFailedGenerate(Map<String, dynamic> item) async {
+    final key = _historyKey(item);
+    if (_retryingKeys.contains(key)) return;
+    _dismissKeyboard();
+    setState(() => _retryingKeys.add(key));
+    try {
+      final prompt = item['revised_prompt']?.toString().trim().isNotEmpty == true
+          ? item['revised_prompt'].toString().trim()
+          : item['prompt']?.toString().trim() ?? '';
+      if (prompt.isEmpty) {
+        throw const GatewayException('这条失败记录没有可重试的提示词。');
+      }
+      final response = await ref.read(gatewayClientProvider).materialize(
+            prompt,
+            1,
+            item['size']?.toString().trim().isNotEmpty == true
+                ? item['size'].toString().trim()
+                : 'auto',
+            'auto',
+            'auto',
+            'png',
+          );
+      ref.read(energyProvider.notifier).state =
+          _quotaSummaryFromResponse(response['quota_summary']);
+      if (!mounted) return;
+      await _refresh();
+      final previewItems = (response['data'] as List? ?? [])
+          .whereType<Map>()
+          .map(
+            (result) => PreviewImageEntry(
+              url: result['url']?.toString() ?? '',
+              title: ref.read(brandProvider).generateActionLabel,
+              caption: prompt,
+            ),
+          )
+          .where((entry) => entry.url.isNotEmpty)
+          .toList();
+      if (previewItems.isNotEmpty) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ImagePreviewScreen(items: previewItems),
+          ),
+        );
+      }
+      final errors = (response['errors'] as List? ?? []).length;
+      if (errors > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('已重新生成 1 张图片，另有 $errors 次尝试未完成。')),
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(error, fallback: '重新生成失败。'))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _retryingKeys.remove(key));
+      }
+    }
+  }
+
+  Future<void> _copyPrompt(Map<String, dynamic> item) async {
+    final prompt = item['prompt']?.toString().trim() ?? '';
+    if (prompt.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: prompt));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('提示词已复制。')),
+    );
   }
 
   @override
@@ -281,11 +408,30 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     super.build(context);
     final brand = ref.watch(brandProvider);
     final visibleItems = _visibleItems;
+    final failedVisibleItems =
+        visibleItems.where((item) => !_isSuccessful(item)).toList();
 
     return Scaffold(
       appBar: AppBar(
         title: Text(brand.historyTitle),
         actions: [
+          if (failedVisibleItems.isNotEmpty)
+            _isBulkDeleting
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    child: Center(
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  )
+                : IconButton(
+                    tooltip: '批量删除失败记录',
+                    icon: const Icon(Icons.delete_sweep_outlined),
+                    onPressed: () => _deleteFailedItems(failedVisibleItems),
+                  ),
           IconButton(
             tooltip: '刷新',
             icon: const Icon(Icons.refresh),
@@ -448,10 +594,25 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     required bool selected,
     required VoidCallback onSelected,
   }) {
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) => onSelected(),
+    final width = label.length >= 5 ? 108.0 : 88.0;
+    return SizedBox(
+      width: width,
+      child: ChoiceChip(
+        showCheckmark: false,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+        labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+        label: Center(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+        ),
+        selected: selected,
+        onSelected: (_) => onSelected(),
+      ),
     );
   }
 
@@ -459,6 +620,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     final imageUrl = item['url']?.toString();
     final key = _historyKey(item);
     final isDeleting = _deletingKeys.contains(key);
+    final isRetrying = _retryingKeys.contains(key);
     final isSuccess = _isSuccessful(item);
     final previewItems = _previewItems(_visibleItems, brand);
     final previewIndex = previewItems.indexWhere((entry) => entry.url == imageUrl);
@@ -541,11 +703,63 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                 ),
                 const SizedBox(height: 8),
                 Text(item['prompt']?.toString() ?? ''),
-                if (!isSuccess && item['error_message'] != null) ...[
+                if (!isSuccess) ...[
                   const SizedBox(height: 8),
-                  Text(
-                    item['error_message'].toString(),
-                    style: TextStyle(color: brand.warningColor),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: brand.warningColor.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: brand.warningColor.withOpacity(0.26),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.auto_awesome_motion_outlined,
+                          size: 18,
+                          color: brand.warningColor,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _failureMessage(brand, item),
+                            style: TextStyle(color: brand.warningColor),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (_canRetryFailedGenerate(item))
+                        OutlinedButton.icon(
+                          onPressed: isRetrying
+                              ? null
+                              : () => _retryFailedGenerate(item),
+                          icon: isRetrying
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.refresh),
+                          label: const Text('重新生成'),
+                        ),
+                      OutlinedButton.icon(
+                        onPressed: () => _copyPrompt(item),
+                        icon: const Icon(Icons.content_copy_outlined),
+                        label: const Text('复制提示词'),
+                      ),
+                    ],
                   ),
                 ],
               ],
@@ -586,6 +800,18 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     return item['status']?.toString() == 'success';
   }
 
+  bool _canRetryFailedGenerate(Map<String, dynamic> item) {
+    return !_isSuccessful(item) && item['action']?.toString() == 'generate';
+  }
+
+  String _failureMessage(AppBrand brand, Map<String, dynamic> item) {
+    final action = item['action']?.toString();
+    if (action == 'edit') {
+      return '${brand.editActionLabel}未能稳定收束，这次回溯只留下残响。当前回廊没有归档原始底图，暂不支持一键回溯。';
+    }
+    return '${brand.generateActionLabel}在成像前中断，${brand.historyTabLabel}已经记下这次尝试。稍后可以直接重新生成。';
+  }
+
   List<PreviewImageEntry> _previewItems(
     List<Map<String, dynamic>> items,
     AppBrand brand,
@@ -602,5 +828,15 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
         )
         .where((entry) => entry.url.isNotEmpty)
         .toList();
+  }
+
+  Map<String, dynamic> _quotaSummaryFromResponse(dynamic value) {
+    if (value is Map) {
+      return Map<String, dynamic>.from(value);
+    }
+    return {
+      'generate': {'remaining': 0, 'total': 0, 'used': 0},
+      'edit': {'remaining': 0, 'total': 0, 'used': 0},
+    };
   }
 }
