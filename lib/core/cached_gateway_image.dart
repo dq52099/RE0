@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'api_error.dart';
 import 'image_cache_service.dart';
 import 'providers.dart';
 
@@ -16,6 +17,8 @@ class CachedGatewayImage extends ConsumerStatefulWidget {
     this.borderRadius,
     this.showDownload = true,
     this.accentColor,
+    this.cacheWidth,
+    this.cacheHeight,
   });
 
   final String url;
@@ -25,6 +28,8 @@ class CachedGatewayImage extends ConsumerStatefulWidget {
   final BorderRadius? borderRadius;
   final bool showDownload;
   final Color? accentColor;
+  final int? cacheWidth;
+  final int? cacheHeight;
 
   @override
   ConsumerState<CachedGatewayImage> createState() => _CachedGatewayImageState();
@@ -65,7 +70,7 @@ class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage> {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('下载失败: $error')),
+        SnackBar(content: Text(friendlyError(error, fallback: '图片下载失败，请稍后重试。'))),
       );
     } finally {
       if (mounted) {
@@ -85,6 +90,10 @@ class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage> {
             width: widget.width,
             height: widget.height,
             fit: widget.fit,
+            cacheWidth: widget.cacheWidth,
+            cacheHeight: widget.cacheHeight,
+            filterQuality: FilterQuality.low,
+            gaplessPlayback: true,
             errorBuilder: (_, __, ___) => _networkFallback(),
           );
         }
@@ -153,6 +162,10 @@ class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage> {
       width: widget.width,
       height: widget.height,
       fit: widget.fit,
+      cacheWidth: widget.cacheWidth,
+      cacheHeight: widget.cacheHeight,
+      filterQuality: FilterQuality.low,
+      gaplessPlayback: true,
       errorBuilder: (_, __, ___) => Container(
         width: widget.width,
         height: widget.height ?? 220,

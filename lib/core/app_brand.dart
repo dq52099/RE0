@@ -3,6 +3,11 @@ import 'package:flutter/material.dart';
 enum BrandStyle {
   botw,
   re0,
+  genshin,
+  starRail,
+  wuthering,
+  zzz,
+  yanyun,
 }
 
 class AppBrand {
@@ -38,6 +43,9 @@ class AppBrand {
     required this.warningColor,
     required this.successColor,
     required this.panelColor,
+    required this.backgroundAsset,
+    required this.backgroundOverlay,
+    required this.backgroundOverlayOpacity,
     required this.historyImageRadius,
     required this.theme,
   });
@@ -73,6 +81,9 @@ class AppBrand {
   final Color warningColor;
   final Color successColor;
   final Color panelColor;
+  final String backgroundAsset;
+  final Color backgroundOverlay;
+  final double backgroundOverlayOpacity;
   final BorderRadius historyImageRadius;
   final ThemeData theme;
 
@@ -80,6 +91,58 @@ class AppBrand {
 }
 
 class AppBrands {
+  static AppBrand _standard({
+    required BrandStyle style,
+    required String title,
+    required String backgroundAsset,
+    required Color primaryColor,
+    required Color warningColor,
+    required Color successColor,
+    required Color panelColor,
+    required Color backgroundOverlay,
+    required double backgroundOverlayOpacity,
+    required ThemeData theme,
+  }) {
+    return AppBrand(
+      style: style,
+      appTitle: title,
+      loginTitle: '登录 $title',
+      generateTabLabel: '生图',
+      editTabLabel: '改图',
+      historyTabLabel: '记忆回廊',
+      generateTitle: '$title - 生图',
+      editTitle: '$title - 改图',
+      historyTitle: '$title - 记忆回廊',
+      promptLabel: '提示词',
+      editPromptLabel: '改图提示词',
+      generatePromptHint: '描述你想要生成的画面...',
+      editPromptHint: '描述你想要如何修改这张图...',
+      generateQuotaLabel: '生图额度',
+      editQuotaLabel: '改图额度',
+      generateButtonLabel: '开始生图',
+      editButtonLabel: '开始改图',
+      generateLoadingText: '图片生成中...',
+      editLoadingText: '图片修改中...',
+      generateErrorLabel: '生图失败',
+      editErrorLabel: '改图失败',
+      generateActionLabel: '生图',
+      editActionLabel: '改图',
+      emptyHistoryText: '暂无历史记录',
+      pickImageText: '点击选择原图',
+      consoleTitle: title,
+      galleryAlbumName: title,
+      primaryColor: primaryColor,
+      warningColor: warningColor,
+      successColor: successColor,
+      panelColor: panelColor,
+      backgroundAsset: backgroundAsset,
+      backgroundOverlay: backgroundOverlay,
+      backgroundOverlayOpacity: backgroundOverlayOpacity,
+      historyImageRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+      theme: theme,
+    );
+  }
+
   static final botw = AppBrand(
     style: BrandStyle.botw,
     appTitle: '希卡之石',
@@ -112,6 +175,9 @@ class AppBrands {
     warningColor: const Color(0xFFFF9600),
     successColor: const Color(0xFF00FF99),
     panelColor: const Color(0xFF121212),
+    backgroundAsset: 'assets/backgrounds/botw.png',
+    backgroundOverlay: const Color(0xFF061417),
+    backgroundOverlayOpacity: 0.68,
     historyImageRadius: const BorderRadius.vertical(top: Radius.circular(4)),
     theme: _botwTheme,
   );
@@ -148,11 +214,87 @@ class AppBrands {
     warningColor: const Color(0xFFD4AF37),
     successColor: const Color(0xFF7FFFD4),
     panelColor: const Color(0xFFE6E6FA),
+    backgroundAsset: 'assets/backgrounds/re0.png',
+    backgroundOverlay: const Color(0xFFF8FBFF),
+    backgroundOverlayOpacity: 0.72,
     historyImageRadius: const BorderRadius.vertical(top: Radius.circular(22)),
     theme: _re0Theme,
   );
 
-  static List<AppBrand> get all => [re0, botw];
+  static final genshin = _standard(
+    style: BrandStyle.genshin,
+    title: '原神',
+    backgroundAsset: 'assets/backgrounds/genshin.png',
+    primaryColor: const Color(0xFF2E8B57),
+    warningColor: const Color(0xFFC5892F),
+    successColor: const Color(0xFF4ECDC4),
+    panelColor: const Color(0xFFF8F4E3),
+    backgroundOverlay: const Color(0xFFFFFEF6),
+    backgroundOverlayOpacity: 0.70,
+    theme: _genshinTheme,
+  );
+
+  static final starRail = _standard(
+    style: BrandStyle.starRail,
+    title: '星穹铁道',
+    backgroundAsset: 'assets/backgrounds/star_rail.png',
+    primaryColor: const Color(0xFF5B7CFA),
+    warningColor: const Color(0xFFD0A43A),
+    successColor: const Color(0xFF5AD7FF),
+    panelColor: const Color(0xFF14182A),
+    backgroundOverlay: const Color(0xFF060A18),
+    backgroundOverlayOpacity: 0.70,
+    theme: _starRailTheme,
+  );
+
+  static final wuthering = _standard(
+    style: BrandStyle.wuthering,
+    title: '鸣潮',
+    backgroundAsset: 'assets/backgrounds/wuthering.png',
+    primaryColor: const Color(0xFF1B8C8F),
+    warningColor: const Color(0xFFE6A73A),
+    successColor: const Color(0xFF2ED3B7),
+    panelColor: const Color(0xFFEAF3F2),
+    backgroundOverlay: const Color(0xFFF7FCFB),
+    backgroundOverlayOpacity: 0.68,
+    theme: _wutheringTheme,
+  );
+
+  static final zzz = _standard(
+    style: BrandStyle.zzz,
+    title: '绝区零',
+    backgroundAsset: 'assets/backgrounds/zzz.png',
+    primaryColor: const Color(0xFFE6C229),
+    warningColor: const Color(0xFFFF6B35),
+    successColor: const Color(0xFF42E8B4),
+    panelColor: const Color(0xFF171717),
+    backgroundOverlay: const Color(0xFF090909),
+    backgroundOverlayOpacity: 0.70,
+    theme: _zzzTheme,
+  );
+
+  static final yanyun = _standard(
+    style: BrandStyle.yanyun,
+    title: '烟云十六声',
+    backgroundAsset: 'assets/backgrounds/yanyun.png',
+    primaryColor: const Color(0xFF7D4E2D),
+    warningColor: const Color(0xFFB86F32),
+    successColor: const Color(0xFF4E8F6A),
+    panelColor: const Color(0xFFF4EFE7),
+    backgroundOverlay: const Color(0xFFFFFBF4),
+    backgroundOverlayOpacity: 0.72,
+    theme: _yanyunTheme,
+  );
+
+  static List<AppBrand> get all => [
+        re0,
+        genshin,
+        starRail,
+        wuthering,
+        zzz,
+        yanyun,
+        botw,
+      ];
 
   static AppBrand byId(String? id) {
     return all.firstWhere(
@@ -218,6 +360,161 @@ final ThemeData _botwTheme = ThemeData(
     ),
     bodyLarge: TextStyle(color: Colors.white70),
   ),
+);
+
+ThemeData _lightTheme({
+  required Color primary,
+  required Color secondary,
+  required Color surface,
+  required Color background,
+  Color error = const Color(0xFFA23535),
+}) {
+  return ThemeData(
+    useMaterial3: true,
+    colorScheme: ColorScheme.light(
+      primary: primary,
+      secondary: secondary,
+      surface: surface,
+      error: error,
+    ),
+    scaffoldBackgroundColor: background,
+    cardTheme: CardTheme(
+      color: surface.withOpacity(0.92),
+      elevation: 2,
+      shadowColor: primary.withOpacity(0.14),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: primary.withOpacity(0.14)),
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: surface.withOpacity(0.78),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: primary.withOpacity(0.24)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: primary, width: 2),
+      ),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: primary,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    ),
+    appBarTheme: AppBarTheme(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      centerTitle: true,
+      foregroundColor: primary,
+      titleTextStyle: TextStyle(
+        color: primary,
+        fontSize: 20,
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+  );
+}
+
+ThemeData _darkTheme({
+  required Color primary,
+  required Color secondary,
+  required Color surface,
+  required Color background,
+  Color error = const Color(0xFFFF6B6B),
+}) {
+  return ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.dark,
+    colorScheme: ColorScheme.dark(
+      primary: primary,
+      secondary: secondary,
+      surface: surface,
+      error: error,
+    ),
+    scaffoldBackgroundColor: background,
+    cardTheme: CardTheme(
+      color: surface.withOpacity(0.9),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: primary.withOpacity(0.24)),
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: Colors.black.withOpacity(0.32),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: primary.withOpacity(0.3)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: primary, width: 2),
+      ),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: primary,
+        foregroundColor: Colors.black,
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    ),
+    appBarTheme: AppBarTheme(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      centerTitle: true,
+      foregroundColor: primary,
+      titleTextStyle: TextStyle(
+        color: primary,
+        fontSize: 20,
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+  );
+}
+
+final ThemeData _genshinTheme = _lightTheme(
+  primary: const Color(0xFF2E8B57),
+  secondary: const Color(0xFFC5892F),
+  surface: const Color(0xFFFFFFFF),
+  background: const Color(0xFFF8F9F0),
+);
+
+final ThemeData _starRailTheme = _darkTheme(
+  primary: const Color(0xFF7EA2FF),
+  secondary: const Color(0xFFD0A43A),
+  surface: const Color(0xFF161C30),
+  background: const Color(0xFF080B16),
+);
+
+final ThemeData _wutheringTheme = _lightTheme(
+  primary: const Color(0xFF1B8C8F),
+  secondary: const Color(0xFFE6A73A),
+  surface: const Color(0xFFFFFFFF),
+  background: const Color(0xFFF0F7F6),
+);
+
+final ThemeData _zzzTheme = _darkTheme(
+  primary: const Color(0xFFE6C229),
+  secondary: const Color(0xFFFF6B35),
+  surface: const Color(0xFF181818),
+  background: const Color(0xFF0D0D0D),
+);
+
+final ThemeData _yanyunTheme = _lightTheme(
+  primary: const Color(0xFF7D4E2D),
+  secondary: const Color(0xFFB86F32),
+  surface: const Color(0xFFFFFCF6),
+  background: const Color(0xFFF5F0E8),
 );
 
 final ThemeData _re0Theme = ThemeData(

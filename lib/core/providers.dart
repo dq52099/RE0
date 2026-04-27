@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app_brand.dart';
 import 'app_update_service.dart';
 import 'gateway_client.dart';
+import 'image_capabilities.dart';
 import 'image_cache_service.dart';
 
 final sharedPrefsProvider = Provider<SharedPreferences>((ref) {
@@ -24,8 +25,8 @@ final appUpdateProvider = Provider<AppUpdateService>((ref) {
     appId: 're0',
     appName: 'RE0',
     packageName: 'com.dq52099.re0',
-    currentVersionName: '1.0.2',
-    currentVersionCode: 102,
+    currentVersionName: '1.1.0',
+    currentVersionCode: 10100,
   );
 });
 
@@ -55,6 +56,12 @@ final energyProvider = StateProvider<Map<String, dynamic>>((ref) => {
   'edit': {'remaining': 0, 'total': 0, 'used': 0},
 });
 
+final imageCapabilitiesProvider = FutureProvider<ImageCapabilities>((ref) async {
+  final client = ref.read(gatewayClientProvider);
+  final data = await client.imageCapabilities();
+  return ImageCapabilities.fromJson(data);
+});
+
 final materializerProvider = AsyncNotifierProvider<MaterializerNotifier, List<dynamic>>(() {
   return MaterializerNotifier();
 });
@@ -63,11 +70,25 @@ class MaterializerNotifier extends AsyncNotifier<List<dynamic>> {
   @override
   Future<List<dynamic>> build() async => [];
 
-  Future<void> materialize(String runes, int count, String size, String quality, String background) async {
+  Future<void> materialize(
+    String runes,
+    int count,
+    String size,
+    String quality,
+    String background,
+    String outputFormat,
+  ) async {
     state = const AsyncValue.loading();
     try {
       final client = ref.read(gatewayClientProvider);
-      final res = await client.materialize(runes, count, size, quality, background);
+      final res = await client.materialize(
+        runes,
+        count,
+        size,
+        quality,
+        background,
+        outputFormat,
+      );
       ref.read(energyProvider.notifier).state = res['quota_summary'];
       state = AsyncValue.data(res['data']);
     } catch (e, st) {
@@ -75,11 +96,27 @@ class MaterializerNotifier extends AsyncNotifier<List<dynamic>> {
     }
   }
 
-  Future<void> recall(String runes, String imagePath, int count, String size) async {
+  Future<void> recall(
+    String runes,
+    String imagePath,
+    int count,
+    String size,
+    String quality,
+    String background,
+    String outputFormat,
+  ) async {
     state = const AsyncValue.loading();
     try {
       final client = ref.read(gatewayClientProvider);
-      final res = await client.recall(runes, imagePath, count, size);
+      final res = await client.recall(
+        runes,
+        imagePath,
+        count,
+        size,
+        quality,
+        background,
+        outputFormat,
+      );
       ref.read(energyProvider.notifier).state = res['quota_summary'];
       state = AsyncValue.data(res['data']);
     } catch (e, st) {

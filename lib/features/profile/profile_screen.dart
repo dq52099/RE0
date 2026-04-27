@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api_error.dart';
 import '../../core/app_brand.dart';
 import '../../core/app_update_service.dart';
+import '../../core/brand_background.dart';
 import '../../core/providers.dart';
+import '../admin/admin_screen.dart';
 import '../auth/login_screen.dart';
-import '../sanctuary/sanctuary_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -15,34 +17,25 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  late Future<int> _cacheSizeFuture;
   bool _isClearingCache = false;
   bool _isLoggingOut = false;
   bool _isCheckingUpdate = false;
   bool _isDownloadingUpdate = false;
   double? _updateProgress;
 
-  @override
-  void initState() {
-    super.initState();
-    _cacheSizeFuture = ref.read(imageCacheProvider).cacheSizeBytes();
-  }
-
   Future<void> _clearCache() async {
     setState(() => _isClearingCache = true);
     try {
       await ref.read(imageCacheProvider).clearCache();
       if (!mounted) return;
-      setState(() {
-        _cacheSizeFuture = ref.read(imageCacheProvider).cacheSizeBytes();
-      });
+      setState(() {});
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('图片缓存已清理')),
       );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('缓存清理失败: $error')),
+        SnackBar(content: Text(friendlyError(error, fallback: '缓存清理失败。'))),
       );
     } finally {
       if (mounted) {
@@ -85,7 +78,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('检查更新失败: $error')),
+        SnackBar(content: Text(friendlyError(error, fallback: '检查更新失败。'))),
       );
     } finally {
       if (mounted) {
@@ -150,7 +143,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('更新下载失败: $error')),
+        SnackBar(content: Text(friendlyError(error, fallback: '更新下载失败。'))),
       );
     } finally {
       if (mounted) {
@@ -162,10 +155,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
-  void _openConsole({required String title, String? targetView}) {
+  void _openAdmin({String? targetView}) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => SanctuaryScreen(title: title, targetView: targetView),
+        builder: (_) => AdminScreen(initialView: targetView),
       ),
     );
   }
@@ -179,105 +172,104 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('我的')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _buildProfileCard(brand, user, hasSystemManagement),
-          const SizedBox(height: 16),
-          Card(
-            child: Column(
-              children: [
-                ListTile(
-                  leading: Icon(Icons.person_outline, color: brand.primaryColor),
-                  title: const Text('个人资料'),
-                  subtitle: const Text('打开网关个人资料与账号设置'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _openConsole(title: '个人资料', targetView: 'profile'),
-                ),
-                if (hasSystemManagement) ...[
+      body: BrandBackground(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            _buildProfileCard(brand, user, hasSystemManagement),
+            const SizedBox(height: 16),
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: Icon(Icons.person_outline, color: brand.primaryColor),
+                    title: const Text('个人资料'),
+                    subtitle: const Text('查看当前账号、角色与额度'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _showProfileDetails(brand, user),
+                  ),
+                  if (hasSystemManagement) ...[
+                    const Divider(height: 1),
+                    ListTile(
+                      leading: Icon(
+                        Icons.admin_panel_settings,
+                        color: brand.warningColor,
+                      ),
+                      title: const Text('系统管理'),
+                      subtitle: const Text('原生管理页：用户、密钥、系统设置与审计'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => _openAdmin(targetView: systemTargetView),
+                    ),
+                  ],
                   const Divider(height: 1),
                   ListTile(
-                    leading: Icon(
-                      Icons.admin_panel_settings,
-                      color: brand.warningColor,
+                    leading: Icon(Icons.palette_outlined, color: brand.primaryColor),
+                    title: const Text('主题风格'),
+                    subtitle: Text(brand.appTitle),
+                    trailing: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: brand.id,
+                        items: AppBrands.all
+                            .map(
+                              (item) => DropdownMenuItem<String>(
+                                value: item.id,
+                                child: Text(item.appTitle),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            ref.read(brandProvider.notifier).setBrand(value);
+                          }
+                        },
+                      ),
                     ),
-                    title: const Text('系统管理'),
-                    subtitle: const Text('管理员入口：用户、密钥、系统设置与审计'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => _openConsole(
-                      title: '系统管理',
-                      targetView: systemTargetView,
-                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: Icon(Icons.system_update, color: brand.primaryColor),
+                    title: const Text('检查更新'),
+                    subtitle: Text('当前版本 ${ref.read(appUpdateProvider).currentVersionName}'),
+                    trailing: _updateTrailing(),
+                    onTap: (_isCheckingUpdate || _isDownloadingUpdate) ? null : _checkUpdate,
+                  ),
+                  const Divider(height: 1),
+                  FutureBuilder<int>(
+                    future: ref.read(imageCacheProvider).cacheSizeBytes(),
+                    builder: (context, snapshot) {
+                      return ListTile(
+                        leading: Icon(Icons.cached, color: brand.successColor),
+                        title: const Text('图片缓存'),
+                        subtitle: Text('当前缓存 ${_formatBytes(snapshot.data ?? 0)}'),
+                        trailing: _isClearingCache
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.delete_outline),
+                        onTap: _isClearingCache ? null : _clearCache,
+                      );
+                    },
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: Icon(Icons.logout, color: brand.warningColor),
+                    title: const Text('退出登录'),
+                    trailing: _isLoggingOut
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : null,
+                    onTap: _isLoggingOut ? null : _logout,
                   ),
                 ],
-                const Divider(height: 1),
-                ListTile(
-                  leading: Icon(Icons.palette_outlined, color: brand.primaryColor),
-                  title: const Text('主题风格'),
-                  subtitle: Text(brand.appTitle),
-                  trailing: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: brand.id,
-                      items: AppBrands.all
-                          .map(
-                            (item) => DropdownMenuItem<String>(
-                              value: item.id,
-                              child: Text(item.appTitle),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          ref.read(brandProvider.notifier).setBrand(value);
-                        }
-                      },
-                    ),
-                  ),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: Icon(Icons.system_update, color: brand.primaryColor),
-                  title: const Text('检查更新'),
-                  subtitle: Text('当前版本 ${ref.read(appUpdateProvider).currentVersionName}'),
-                  trailing: _updateTrailing(),
-                  onTap: (_isCheckingUpdate || _isDownloadingUpdate) ? null : _checkUpdate,
-                ),
-                const Divider(height: 1),
-                FutureBuilder<int>(
-                  future: _cacheSizeFuture,
-                  builder: (context, snapshot) {
-                    return ListTile(
-                      leading: Icon(Icons.cached, color: brand.successColor),
-                      title: const Text('图片缓存'),
-                      subtitle: Text('当前缓存 ${_formatBytes(snapshot.data ?? 0)}'),
-                      trailing: _isClearingCache
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.delete_outline),
-                      onTap: _isClearingCache ? null : _clearCache,
-                    );
-                  },
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: Icon(Icons.logout, color: brand.warningColor),
-                  title: const Text('退出登录'),
-                  trailing: _isLoggingOut
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : null,
-                  onTap: _isLoggingOut ? null : _logout,
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -357,6 +349,52 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text('$label: $value'),
+    );
+  }
+
+  void _showProfileDetails(AppBrand brand, Map<String, dynamic>? user) {
+    final role = user?['role'] as Map? ?? {};
+    final group = user?['group'] as Map? ?? {};
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+            children: [
+              Text(
+                user?['display_name']?.toString() ?? '未知用户',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              Text('@${user?['username'] ?? '-'}'),
+              const SizedBox(height: 16),
+              _profileLine('角色', role['name']?.toString() ?? '-'),
+              _profileLine('用户组', group['name']?.toString() ?? '-'),
+              _profileLine('登录网关', 'image.6688667.xyz'),
+              const SizedBox(height: 12),
+              Text(
+                '账号资料修改请联系管理员在系统管理中调整。',
+                style: TextStyle(color: brand.primaryColor),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _profileLine(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          SizedBox(width: 72, child: Text(label)),
+          Expanded(child: Text(value)),
+        ],
+      ),
     );
   }
 

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/api_error.dart';
+import '../../core/brand_background.dart';
 import '../../core/providers.dart';
 import '../home/home_screen.dart';
 
@@ -59,7 +61,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('登录失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(friendlyError(e, fallback: '登录失败，请检查账号和密码。'))),
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -71,42 +75,44 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final brand = ref.watch(brandProvider);
 
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.auto_awesome, size: 80, color: brand.primaryColor),
-              const SizedBox(height: 20),
-              Text(
-                brand.loginTitle,
-                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'image.6688667.xyz',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 40),
-              TextField(
-                controller: _usernameController,
-                decoration: const InputDecoration(labelText: '称呼 (Username)'),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: '真名 (Password)'),
-              ),
-              const SizedBox(height: 32),
-              _isLoading
-                  ? const CircularProgressIndicator()
-                  : ElevatedButton(
-                      onPressed: _login,
-                      child: const Text('缔结契约 (Login)'),
-                    ),
-            ],
+      body: BrandBackground(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.auto_awesome, size: 80, color: brand.primaryColor),
+                const SizedBox(height: 20),
+                Text(
+                  brand.loginTitle,
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'image.6688667.xyz',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 40),
+                TextField(
+                  controller: _usernameController,
+                  decoration: const InputDecoration(labelText: '账号'),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: '密码'),
+                ),
+                const SizedBox(height: 32),
+                _isLoading
+                    ? const CircularProgressIndicator()
+                    : ElevatedButton(
+                        onPressed: _login,
+                        child: const Text('登录'),
+                      ),
+              ],
+            ),
           ),
         ),
       ),
