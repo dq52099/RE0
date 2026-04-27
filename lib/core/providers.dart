@@ -26,8 +26,8 @@ final appUpdateProvider = Provider<AppUpdateService>((ref) {
     appId: 're0',
     appName: '从零开始生图',
     packageName: 'com.dq52099.re0',
-    currentVersionName: '1.1.18',
-    currentVersionCode: 10118,
+    currentVersionName: '1.1.19',
+    currentVersionCode: 10119,
   );
 });
 

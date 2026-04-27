@@ -57,7 +57,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
   int _page = 1;
   int _totalPages = 1;
   int _pageSize = 12;
-  int _columns = 2;
+  int _columns = 1;
   bool _isLoading = false;
   String? _error;
   String _sort = 'time';
@@ -312,57 +312,50 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
           ],
         ),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            _smallDropdown(
-              label: '排序',
-              value: _sort,
-              width: 120,
-              menuWidth: 98,
-              items: const {
-                'time': '时间',
-                'popular': '最受欢迎',
-                'comments': '评论最多',
-                'downloads': '下载最多',
-              },
-              onChanged: (value) {
-                setState(() => _sort = value!);
-                _load(reset: true);
-              },
-            ),
-            _smallDropdown(
-              label: '每页',
-              value: _pageSize,
-              width: 92,
-              menuWidth: 70,
-              items: const {
-                12: '12张',
-                24: '24张',
-                36: '36张',
-              },
-              onChanged: (value) {
-                setState(() => _pageSize = value!);
-                _load(reset: true);
-              },
-            ),
-            _smallDropdown(
-              label: '列数',
-              value: _columns,
-              width: 88,
-              menuWidth: 74,
-              items: const {
-                1: '单列',
-                2: '两列',
-                3: '三列',
-                4: '四列',
-              },
-              onChanged: (value) {
-                setState(() => _columns = value!);
-              },
-            ),
-          ],
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final fieldWidth = (constraints.maxWidth - 12) / 2;
+            return Row(
+              children: [
+                Expanded(
+                  child: _smallDropdown(
+                    label: '排序',
+                    value: _sort,
+                    width: fieldWidth,
+                    menuWidth: fieldWidth + 56,
+                    items: const {
+                      'time': '时间',
+                      'popular': '最受欢迎',
+                      'comments': '评论最多',
+                      'downloads': '下载最多',
+                    },
+                    onChanged: (value) {
+                      setState(() => _sort = value!);
+                      _load(reset: true);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _smallDropdown(
+                    label: '每页',
+                    value: _pageSize,
+                    width: fieldWidth,
+                    menuWidth: fieldWidth + 56,
+                    items: const {
+                      12: '12张',
+                      24: '24张',
+                      36: '36张',
+                    },
+                    onChanged: (value) {
+                      setState(() => _pageSize = value!);
+                      _load(reset: true);
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -627,23 +620,36 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
     required EdgeInsets padding,
   }) {
     final gap = fontSize <= 10 ? 4.0 : 6.0;
+    final active = color != null;
     return InkWell(
       borderRadius: BorderRadius.circular(999),
       onTap: onTap,
       child: Container(
         padding: padding,
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface.withOpacity(0.5),
+          color: active
+              ? color.withOpacity(0.14)
+              : Theme.of(context).colorScheme.surface.withOpacity(0.5),
+          border: Border.all(
+            color: active ? color.withOpacity(0.28) : Colors.transparent,
+          ),
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: iconSize, color: color),
+            Icon(
+              icon,
+              size: iconSize,
+              color: color ?? Theme.of(context).textTheme.bodySmall?.color,
+            ),
             SizedBox(width: gap),
             Text(
               label,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: fontSize),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontSize: fontSize,
+                    color: color ?? Theme.of(context).textTheme.bodySmall?.color,
+                  ),
             ),
           ],
         ),

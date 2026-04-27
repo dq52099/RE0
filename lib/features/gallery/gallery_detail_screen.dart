@@ -7,6 +7,7 @@ import '../../core/app_brand.dart';
 import '../../core/cached_gateway_image.dart';
 import '../../core/image_cache_service.dart';
 import '../../core/providers.dart';
+import '../compendium/image_preview_screen.dart';
 
 class GalleryDetailScreen extends ConsumerStatefulWidget {
   const GalleryDetailScreen({
@@ -190,6 +191,26 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
     );
   }
 
+  Future<void> _openImage() async {
+    final url = _post['image_url']?.toString() ?? '';
+    if (url.isEmpty) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ImagePreviewScreen(
+          items: [
+            PreviewImageEntry(
+              url: url,
+              title: _post['display_name']?.toString(),
+              caption: _post['prompt']?.toString(),
+            ),
+          ],
+          initialIndex: 0,
+          showDownload: false,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final brand = ref.watch(brandProvider);
@@ -216,13 +237,16 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CachedGatewayImage(
-                  url: _post['image_url']?.toString() ?? '',
-                  width: double.infinity,
-                  height: 280,
-                  fit: BoxFit.cover,
-                  showDownload: false,
-                  accentColor: brand.primaryColor,
+                GestureDetector(
+                  onTap: _openImage,
+                  child: CachedGatewayImage(
+                    url: _post['image_url']?.toString() ?? '',
+                    width: double.infinity,
+                    height: 280,
+                    fit: BoxFit.cover,
+                    showDownload: false,
+                    accentColor: brand.primaryColor,
+                  ),
                 ),
                 Padding(
                   padding: const EdgeInsets.all(14),
@@ -476,21 +500,36 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
     Color? color,
     VoidCallback? onTap,
   }) {
+    final active = color != null;
     return InkWell(
       borderRadius: BorderRadius.circular(999),
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface.withOpacity(0.5),
+          color: active
+              ? color.withOpacity(0.14)
+              : Theme.of(context).colorScheme.surface.withOpacity(0.5),
+          border: Border.all(
+            color: active ? color.withOpacity(0.28) : Colors.transparent,
+          ),
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: color),
+            Icon(
+              icon,
+              size: 16,
+              color: color ?? Theme.of(context).textTheme.bodySmall?.color,
+            ),
             const SizedBox(width: 6),
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: color ?? Theme.of(context).textTheme.bodySmall?.color,
+                  ),
+            ),
           ],
         ),
       ),

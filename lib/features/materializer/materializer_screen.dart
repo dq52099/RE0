@@ -80,70 +80,92 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                 _buildTaskNotice('改图任务正在进行，请等待完成后再开始生图。'),
               ],
               const SizedBox(height: 16),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  _dropdownField<int>(
-                    label: '数量',
-                    value: _count,
-                    width: 104,
-                    menuWidth: 78,
-                    items: List<int>.generate(options.maxImages, (index) => index + 1)
-                        .map((e) => CompactDropdownField.centeredItem<int>(e, '$e张', context))
-                        .toList(),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final fieldWidth = (constraints.maxWidth - 12) / 2;
+                  final menuWidth = fieldWidth + 56;
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: _dropdownField<int>(
+                          label: '数量',
+                          value: _count,
+                          width: fieldWidth,
+                          menuWidth: menuWidth,
+                          items: List<int>.generate(options.maxImages, (index) => index + 1)
+                              .map((e) => CompactDropdownField.centeredItem<int>(e, '$e张', context))
+                              .toList(),
+                          selectedLabels:
+                              List<int>.generate(options.maxImages, (index) => index + 1)
+                                  .map((e) => '$e张')
+                                  .toList(),
+                          onChanged: (value) => setState(() => _count = value!),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _dropdownField<String>(
+                          label: '尺寸',
+                          value: size,
+                          width: fieldWidth,
+                          menuWidth: menuWidth,
+                          items: _items(options.sizes),
+                          selectedLabels: options.sizes.map((item) => item.label).toList(),
+                          onChanged: (value) => setState(() => _size = value!),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final fieldWidth = (constraints.maxWidth - 12) / 2;
+                  final menuWidth = fieldWidth + 56;
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: _dropdownField<String>(
+                          label: '质量',
+                          value: quality,
+                          width: fieldWidth,
+                          menuWidth: menuWidth,
+                          items: _items(options.qualities),
+                          selectedLabels: options.qualities.map((item) => item.label).toList(),
+                          onChanged: (value) => setState(() => _quality = value!),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _dropdownField<String>(
+                          label: '背景',
+                          value: background,
+                          width: fieldWidth,
+                          menuWidth: menuWidth,
+                          items: _items(options.backgrounds),
+                          selectedLabels: options.backgrounds.map((item) => item.label).toList(),
+                          onChanged: (value) => setState(() => _background = value!),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  return _dropdownField<String>(
+                    label: '输出格式',
+                    value: outputFormat,
+                    width: constraints.maxWidth,
+                    menuWidth: constraints.maxWidth,
+                    items: _items(capabilities.outputFormats),
                     selectedLabels:
-                        List<int>.generate(options.maxImages, (index) => index + 1)
-                            .map((e) => '$e张')
-                            .toList(),
-                    onChanged: (value) => setState(() => _count = value!),
-                  ),
-                  _dropdownField<String>(
-                    label: '尺寸',
-                    value: size,
-                    width: 148,
-                    menuWidth: 112,
-                    items: _items(options.sizes),
-                    selectedLabels: options.sizes.map((item) => item.label).toList(),
-                    onChanged: (value) => setState(() => _size = value!),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  _dropdownField<String>(
-                    label: '质量',
-                    value: quality,
-                    width: 112,
-                    menuWidth: 90,
-                    items: _items(options.qualities),
-                    selectedLabels: options.qualities.map((item) => item.label).toList(),
-                    onChanged: (value) => setState(() => _quality = value!),
-                  ),
-                  _dropdownField<String>(
-                    label: '背景',
-                    value: background,
-                    width: 126,
-                    menuWidth: 96,
-                    items: _items(options.backgrounds),
-                    selectedLabels: options.backgrounds.map((item) => item.label).toList(),
-                    onChanged: (value) => setState(() => _background = value!),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _dropdownField<String>(
-                label: '输出格式',
-                value: outputFormat,
-                width: 126,
-                menuWidth: 96,
-                items: _items(capabilities.outputFormats),
-                selectedLabels:
-                    capabilities.outputFormats.map((item) => item.label).toList(),
-                onChanged: (value) => setState(() => _outputFormat = value!),
+                        capabilities.outputFormats.map((item) => item.label).toList(),
+                    onChanged: (value) => setState(() => _outputFormat = value!),
+                  );
+                },
               ),
               const SizedBox(height: 16),
               SizedBox(

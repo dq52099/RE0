@@ -76,11 +76,11 @@ class CompactDropdownField<T> extends StatelessWidget {
   ) {
     return DropdownMenuItem<T>(
       value: value,
-      alignment: Alignment.center,
+      alignment: AlignmentDirectional.centerEnd,
       child: Text(
         label,
         overflow: TextOverflow.ellipsis,
-        textAlign: TextAlign.center,
+        textAlign: TextAlign.end,
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               fontWeight: FontWeight.w400,
               height: 1.3,

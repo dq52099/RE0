@@ -549,7 +549,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     label: '主题',
                     value: brand.id,
                     width: 126,
-                    menuWidth: 104,
+                    menuWidth: 168,
                     items: AppBrands.all
                         .map(
                           (item) => CompactDropdownField.centeredItem<String>(
@@ -701,8 +701,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                _chip(brand, '角色', role['name']?.toString() ?? '-'),
-                _chip(brand, '用户组', group['name']?.toString() ?? '-'),
                 _chip(brand, '等级', levelInfo['label']?.toString() ?? 'LV0'),
                 _chip(brand, '积分', '${user?['points'] ?? 0}'),
                 _chip(brand, '生图', _quotaText(generateQuota)),
