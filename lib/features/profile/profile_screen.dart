@@ -97,7 +97,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     final cropped = await ImageCropper().cropImage(
       sourcePath: picked.path,
-      cropStyle: CropStyle.circle,
       compressFormat: ImageCompressFormat.png,
       maxWidth: 1024,
       maxHeight: 1024,
@@ -109,6 +108,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           toolbarWidgetColor: Colors.white,
           activeControlsWidgetColor: ref.read(brandProvider).primaryColor,
           initAspectRatio: CropAspectRatioPreset.square,
+          cropStyle: CropStyle.circle,
+          aspectRatioPresets: [CropAspectRatioPreset.square],
         ),
       ],
     );
