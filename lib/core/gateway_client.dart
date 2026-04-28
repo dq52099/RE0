@@ -6,6 +6,8 @@ import 'package:path_provider/path_provider.dart';
 import 'api_error.dart';
 
 class GatewayClient {
+  static const Duration _imageRequestTimeout = Duration(minutes: 20);
+
   late Dio _dio;
   String baseUrl = '';
   PersistCookieJar? cookieJar;
@@ -134,15 +136,22 @@ class GatewayClient {
     String outputFormat,
   ) async {
     return _guard(() async {
-      final res = await _dio.post('/api/images/generate', data: {
-        'prompt': runes,
-        'n': count,
-        'size': size,
-        'quality': quality,
-        'background': background,
-        'output_format': outputFormat,
-        'response_format': 'url',
-      });
+      final res = await _dio.post(
+        '/api/images/generate',
+        data: {
+          'prompt': runes,
+          'n': count,
+          'size': size,
+          'quality': quality,
+          'background': background,
+          'output_format': outputFormat,
+          'response_format': 'url',
+        },
+        options: Options(
+          receiveTimeout: _imageRequestTimeout,
+          sendTimeout: _imageRequestTimeout,
+        ),
+      );
       return Map<String, dynamic>.from(res.data as Map);
     }, fallback: '图片生成失败。');
   }
@@ -167,7 +176,14 @@ class GatewayClient {
         'response_format': 'url',
         'image': await MultipartFile.fromFile(imagePath),
       });
-      final res = await _dio.post('/api/images/edit', data: formData);
+      final res = await _dio.post(
+        '/api/images/edit',
+        data: formData,
+        options: Options(
+          receiveTimeout: _imageRequestTimeout,
+          sendTimeout: _imageRequestTimeout,
+        ),
+      );
       return Map<String, dynamic>.from(res.data as Map);
     }, fallback: '图片修改失败。');
   }
