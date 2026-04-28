@@ -22,6 +22,8 @@ class CompactDropdownField<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final requestedMenuWidth = menuWidth ?? width;
+    final resolvedMenuWidth = requestedMenuWidth > width ? width : requestedMenuWidth;
     final bodyStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
           fontWeight: FontWeight.w400,
           height: 1.3,
@@ -29,8 +31,9 @@ class CompactDropdownField<T> extends StatelessWidget {
     final decoration = InputDecoration(
       labelText: label,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      labelStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
-            fontWeight: FontWeight.w400,
+      labelStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            height: 1.2,
           ),
     );
 
@@ -49,7 +52,7 @@ class CompactDropdownField<T> extends StatelessWidget {
                   isDense: true,
                   isExpanded: true,
                   menuMaxHeight: 280,
-                  menuWidth: menuWidth,
+                  menuWidth: resolvedMenuWidth,
                   alignment: Alignment.center,
                   borderRadius: BorderRadius.circular(16),
                   icon: const SizedBox.shrink(),

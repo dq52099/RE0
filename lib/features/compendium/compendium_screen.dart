@@ -782,6 +782,8 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                           child: Text(
                             _failureMessage(brand, item),
                             style: TextStyle(color: brand.warningColor),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
@@ -855,45 +857,52 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   }
 
   Widget _promptPanel(AppBrand brand, String prompt) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: brand.primaryColor.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: brand.primaryColor.withOpacity(0.18)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.notes_outlined,
-                size: 16,
-                color: brand.primaryColor,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                '提示词',
-                style: TextStyle(
+    return SizedBox(
+      height: 118,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: brand.primaryColor.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: brand.primaryColor.withOpacity(0.18)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.notes_outlined,
+                  size: 16,
                   color: brand.primaryColor,
-                  fontWeight: FontWeight.w600,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '提示词',
+                  style: TextStyle(
+                    color: brand.primaryColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: Text(
+                prompt.isEmpty ? '未记录提示词' : prompt,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  height: 1.45,
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            prompt.isEmpty ? '未记录提示词' : prompt,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
-              height: 1.45,
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

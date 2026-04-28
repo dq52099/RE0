@@ -324,7 +324,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                     label: '排序',
                     value: _sort,
                     width: fieldWidth,
-                    menuWidth: fieldWidth + 34,
+                    menuWidth: fieldWidth,
                     items: const {
                       'time': '时间',
                       'popular': '最受欢迎',
@@ -343,7 +343,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                     label: '每页',
                     value: _pageSize,
                     width: fieldWidth,
-                    menuWidth: fieldWidth + 34,
+                    menuWidth: fieldWidth,
                     items: const {
                       12: '12张',
                       24: '24张',
@@ -427,7 +427,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
   }
 
   Widget _galleryCard(AppBrand brand, Map<String, dynamic> item) {
-    const imageHeight = 252.0;
+    const imageHeight = 288.0;
     const cardPadding = 12.0;
     const avatarRadius = 15.0;
     const nameFontSize = 14.0;
@@ -619,6 +619,9 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
   }) {
     final gap = fontSize <= 10 ? 4.0 : 6.0;
     final activeColor = color;
+    final foregroundColor = activeColor != null
+        ? Colors.white
+        : Theme.of(context).textTheme.bodySmall?.color;
     final surface = Theme.of(context).colorScheme.surface;
     return InkWell(
       borderRadius: BorderRadius.circular(999),
@@ -627,11 +630,11 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
         padding: padding,
         decoration: BoxDecoration(
           color: activeColor != null
-              ? activeColor.withOpacity(0.24)
+              ? activeColor
               : surface.withOpacity(0.5),
           border: Border.all(
             color: activeColor != null
-                ? activeColor.withOpacity(0.70)
+                ? activeColor
                 : Colors.transparent,
           ),
           borderRadius: BorderRadius.circular(999),
@@ -651,15 +654,14 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
             Icon(
               icon,
               size: iconSize,
-              color: activeColor ?? Theme.of(context).textTheme.bodySmall?.color,
+              color: foregroundColor,
             ),
             SizedBox(width: gap),
             Text(
               label,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     fontSize: fontSize,
-                    color: activeColor ??
-                        Theme.of(context).textTheme.bodySmall?.color,
+                    color: foregroundColor,
                   ),
             ),
           ],

@@ -28,6 +28,7 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
   final TextEditingController _commentController = TextEditingController();
   bool _isSubmittingComment = false;
   bool _isRefreshingComments = false;
+  bool _isDownloading = false;
   List<Map<String, dynamic>> _comments = [];
 
   @override
@@ -91,35 +92,37 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
   }
 
   Future<void> _downloadImage() async {
+    if (_isDownloading) return;
     if (!boolish(_post['can_download'])) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('评论后才可以下载这张图片。')),
       );
       return;
     }
+    setState(() => _isDownloading = true);
     try {
+      final brand = ref.read(brandProvider);
+      final saved = await ref.read(imageCacheProvider).saveImageToDevice(
+            _post['image_url']?.toString() ?? '',
+            albumName: brand.galleryAlbumName,
+          );
       final updated = await ref
           .read(gatewayClientProvider)
           .recordGalleryDownload(_post['id'].toString());
-      final brand = ref.read(brandProvider);
-      final saved = await ref.read(imageCacheProvider).saveImageToDevice(
-            updated['image_url']?.toString() ?? '',
-            albumName: brand.galleryAlbumName,
-          );
       if (!mounted) return;
       setState(() => _post = updated);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            saved.savedToGallery ? '已保存到系统相册。' : '已保存到本地。',
-          ),
-        ),
+      _showFloatingSnackBar(
+        saved.savedToGallery ? '已保存到系统相册。' : '已保存到本地。',
       );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(friendlyError(error))),
       );
+    } finally {
+      if (mounted) {
+        setState(() => _isDownloading = false);
+      }
     }
   }
 
@@ -316,7 +319,8 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                           _actionButton(
                             icon: Icons.download_outlined,
                             label: '下载 ${_post['download_count'] ?? 0}',
-                            onTap: _downloadImage,
+                            onTap: _isDownloading ? null : _downloadImage,
+                            busy: _isDownloading,
                           ),
                         ],
                       ),
@@ -498,8 +502,12 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
     required String label,
     Color? color,
     VoidCallback? onTap,
+    bool busy = false,
   }) {
     final activeColor = color;
+    final foregroundColor = activeColor != null
+        ? Colors.white
+        : Theme.of(context).textTheme.bodySmall?.color;
     final surface = Theme.of(context).colorScheme.surface;
     return InkWell(
       borderRadius: BorderRadius.circular(999),
@@ -508,11 +516,11 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: activeColor != null
-              ? activeColor.withOpacity(0.24)
+              ? activeColor
               : surface.withOpacity(0.5),
           border: Border.all(
             color: activeColor != null
-                ? activeColor.withOpacity(0.70)
+                ? activeColor
                 : Colors.transparent,
           ),
           borderRadius: BorderRadius.circular(999),
@@ -529,17 +537,26 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 16,
-              color: activeColor ?? Theme.of(context).textTheme.bodySmall?.color,
-            ),
+            if (busy)
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: foregroundColor,
+                ),
+              )
+            else
+              Icon(
+                icon,
+                size: 16,
+                color: foregroundColor,
+              ),
             const SizedBox(width: 6),
             Text(
               label,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: activeColor ??
-                        Theme.of(context).textTheme.bodySmall?.color,
+                    color: foregroundColor,
                   ),
             ),
           ],
@@ -593,5 +610,18 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
     final hour = local.hour.toString().padLeft(2, '0');
     final minute = local.minute.toString().padLeft(2, '0');
     return '$month-$day $hour:$minute';
+  }
+
+  void _showFloatingSnackBar(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+          duration: const Duration(milliseconds: 1400),
+          content: Text(message),
+        ),
+      );
   }
 }

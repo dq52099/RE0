@@ -105,9 +105,9 @@ Future<void> showLevelRewardsSheet(
             children: [
               Row(
                 children: [
-                  Icon(Icons.workspace_premium_outlined, color: highlight),
+                  Icon(Icons.calendar_today_outlined, color: highlight),
                   const SizedBox(width: 8),
-                  Text('等级奖励', style: theme.textTheme.titleMedium),
+                  Text('每日奖励', style: theme.textTheme.titleMedium),
                 ],
               ),
               const SizedBox(height: 12),
@@ -131,7 +131,7 @@ Future<void> showLevelRewardsSheet(
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '积分 $currentPoints · 生图 +${current.generateBonus} · 改图 +${current.editBonus}',
+                      '积分 $currentPoints · 每日生图 +${current.generateBonus} · 每日改图 +${current.editBonus}',
                     ),
                     if (next != null) ...[
                       const SizedBox(height: 6),
@@ -214,7 +214,7 @@ Widget _rewardTile(
               ),
               const SizedBox(height: 4),
               Text(
-                '${reward.minPoints} 积分解锁 · 生图 +${reward.generateBonus} · 改图 +${reward.editBonus}',
+                '${reward.minPoints} 积分解锁 · 每日生图 +${reward.generateBonus} · 每日改图 +${reward.editBonus}',
                 style: theme.textTheme.bodySmall,
               ),
             ],

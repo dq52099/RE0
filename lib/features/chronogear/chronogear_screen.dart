@@ -122,7 +122,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
               LayoutBuilder(
                 builder: (context, constraints) {
                   final fieldWidth = (constraints.maxWidth - 12) / 2;
-                  final menuWidth = fieldWidth + 34;
+                  final menuWidth = fieldWidth;
                   return Row(
                     children: [
                       Expanded(
@@ -161,7 +161,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
               LayoutBuilder(
                 builder: (context, constraints) {
                   final fieldWidth = (constraints.maxWidth - 12) / 2;
-                  final menuWidth = fieldWidth + 34;
+                  final menuWidth = fieldWidth;
                   return Row(
                     children: [
                       Expanded(

@@ -9,6 +9,7 @@ import '../../core/app_update_service.dart';
 import '../../core/brand_background.dart';
 import '../../core/compact_dropdown_field.dart';
 import '../../core/level_rewards_sheet.dart';
+import '../../core/points_sheet.dart';
 import '../../core/providers.dart';
 import '../admin/admin_screen.dart';
 import '../auth/login_screen.dart';
@@ -106,7 +107,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '签到成功，获得 ${reward['generate'] ?? 0} 次生图和 ${reward['edit'] ?? 0} 次改图奖励。',
+            '签到成功，获得 ${reward['generate'] ?? 0} 次生图、${reward['edit'] ?? 0} 次改图和 5 积分。',
           ),
         ),
       );
@@ -550,7 +551,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     label: '主题',
                     value: brand.id,
                     width: 126,
-                    menuWidth: 151,
+                    menuWidth: 126,
                     items: AppBrands.all
                         .map(
                           (item) => CompactDropdownField.centeredItem<String>(
@@ -713,7 +714,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     accentColor: brand.primaryColor,
                   ),
                 ),
-                _chip(brand, '积分', '${user?['points'] ?? 0}'),
+                _chip(
+                  brand,
+                  '积分',
+                  '${user?['points'] ?? 0}',
+                  icon: Icons.toll_outlined,
+                  onTap: () => showPointsSheet(
+                    context,
+                    ref.read(gatewayClientProvider).getPointsSummary(),
+                    accentColor: brand.primaryColor,
+                  ),
+                ),
                 _chip(brand, '生图', _quotaText(generateQuota)),
                 _chip(brand, '改图', _quotaText(editQuota)),
               ],

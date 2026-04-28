@@ -263,6 +263,13 @@ class GatewayClient {
     }, fallback: '签到失败，请稍后重试。');
   }
 
+  Future<Map<String, dynamic>> getPointsSummary() async {
+    return _guard(() async {
+      final res = await _dio.get('/api/me/points');
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '读取积分明细失败。');
+  }
+
   Future<Map<String, dynamic>> getGalleryPosts({
     required String view,
     String? keyword,
