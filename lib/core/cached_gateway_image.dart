@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'api_error.dart';
 import 'image_cache_service.dart';
 import 'providers.dart';
-import 'top_toast.dart';
 
 class CachedGatewayImage extends ConsumerStatefulWidget {
   const CachedGatewayImage({
@@ -69,7 +68,9 @@ class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage>
       final message = saved.savedToGallery
           ? '已保存到系统相册'
           : '已保存到本地: ${saved.file.path}';
-      showTopToast(context, message);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(message)));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

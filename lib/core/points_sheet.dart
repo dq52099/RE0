@@ -107,10 +107,6 @@ class _PointsSheetContent extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        Text('积分规则', style: theme.textTheme.titleSmall),
-        const SizedBox(height: 8),
-        ...rules.map((item) => _ruleTile(context, item)),
-        const SizedBox(height: 16),
         Text('今日变化', style: theme.textTheme.titleSmall),
         const SizedBox(height: 8),
         if (events.isEmpty)
@@ -127,6 +123,10 @@ class _PointsSheetContent extends StatelessWidget {
           )
         else
           ...events.map((item) => _eventTile(context, item)),
+        const SizedBox(height: 16),
+        Text('积分规则', style: theme.textTheme.titleSmall),
+        const SizedBox(height: 8),
+        ...rules.map((item) => _ruleTile(context, item)),
       ],
     );
   }
@@ -145,9 +145,10 @@ class _PointsSheetContent extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           value,
-          style: theme.textTheme.titleMedium?.copyWith(
+          style: theme.textTheme.headlineSmall?.copyWith(
             color: color,
             fontWeight: FontWeight.w700,
+            height: 1.05,
           ),
         ),
       ],

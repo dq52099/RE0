@@ -8,7 +8,6 @@ import '../../core/cached_gateway_image.dart';
 import '../../core/image_cache_service.dart';
 import '../../core/level_rewards_sheet.dart';
 import '../../core/providers.dart';
-import '../../core/top_toast.dart';
 import '../../core/value_parsers.dart';
 import '../compendium/image_preview_screen.dart';
 
@@ -112,10 +111,13 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
           .recordGalleryDownload(_post['id'].toString());
       if (!mounted) return;
       setState(() => _post = updated);
-      showTopToast(
-        context,
-        saved.savedToGallery ? '已保存到系统相册。' : '已保存到本地。',
-      );
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(saved.savedToGallery ? '已保存到系统相册。' : '已保存到本地。'),
+          ),
+        );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

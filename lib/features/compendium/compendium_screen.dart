@@ -388,13 +388,84 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     }
   }
 
-  Future<void> _copyPrompt(Map<String, dynamic> item) async {
+  Future<void> _copyPrompt(Map<String, dynamic> item) {
     final prompt = item['prompt']?.toString().trim() ?? '';
+    return _copyPromptText(prompt);
+  }
+
+  Future<void> _copyPromptText(String prompt) async {
     if (prompt.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: prompt));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('提示词已复制。')),
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('提示词已复制。')));
+  }
+
+  Future<void> _showPromptDetails(Map<String, dynamic> item) async {
+    final brand = ref.read(brandProvider);
+    final prompt = item['prompt']?.toString().trim() ?? '';
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) {
+        final theme = Theme.of(context);
+        return SafeArea(
+          child: FractionallySizedBox(
+            heightFactor: 0.72,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.notes_outlined, color: brand.primaryColor),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '提示词详情',
+                          style: theme.textTheme.titleMedium,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: '复制提示词',
+                        onPressed: prompt.isEmpty
+                            ? null
+                            : () => _copyPromptText(prompt),
+                        icon: const Icon(Icons.content_copy_outlined),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: brand.primaryColor.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: brand.primaryColor.withOpacity(0.18),
+                        ),
+                      ),
+                      child: SingleChildScrollView(
+                        child: SelectableText(
+                          prompt.isEmpty ? '未记录提示词' : prompt,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            height: 1.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -740,7 +811,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                   ],
                 ),
                 const SizedBox(height: 8),
-                _promptPanel(brand, item['prompt']?.toString() ?? ''),
+                _promptPanel(brand, item),
                 const SizedBox(height: 10),
                 Wrap(
                   spacing: 8,
@@ -856,52 +927,76 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     return item['status']?.toString() == 'success';
   }
 
-  Widget _promptPanel(AppBrand brand, String prompt) {
+  Widget _promptPanel(AppBrand brand, Map<String, dynamic> item) {
+    final prompt = item['prompt']?.toString().trim() ?? '';
+    final radius = BorderRadius.circular(14);
     return SizedBox(
       height: 118,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: brand.primaryColor.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: brand.primaryColor.withOpacity(0.18)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: radius,
+          onTap: () => _showPromptDetails(item),
+          onLongPress: prompt.isEmpty ? null : () => _copyPromptText(prompt),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: brand.primaryColor.withOpacity(0.08),
+              borderRadius: radius,
+              border: Border.all(color: brand.primaryColor.withOpacity(0.18)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.notes_outlined,
-                  size: 16,
-                  color: brand.primaryColor,
+                Row(
+                  children: [
+                    Icon(
+                      Icons.notes_outlined,
+                      size: 16,
+                      color: brand.primaryColor,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '提示词',
+                        style: TextStyle(
+                          color: brand.primaryColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: '复制提示词',
+                      constraints: const BoxConstraints.tightFor(
+                        width: 28,
+                        height: 28,
+                      ),
+                      padding: EdgeInsets.zero,
+                      onPressed: prompt.isEmpty
+                          ? null
+                          : () => _copyPromptText(prompt),
+                      icon: const Icon(Icons.content_copy_outlined, size: 16),
+                      color: brand.primaryColor,
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  '提示词',
-                  style: TextStyle(
-                    color: brand.primaryColor,
-                    fontWeight: FontWeight.w600,
+                const SizedBox(height: 6),
+                Expanded(
+                  child: Text(
+                    prompt.isEmpty ? '未记录提示词' : prompt,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      height: 1.45,
+                    ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: Text(
-                prompt.isEmpty ? '未记录提示词' : prompt,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  height: 1.45,
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

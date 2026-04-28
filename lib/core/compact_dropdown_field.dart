@@ -28,70 +28,70 @@ class CompactDropdownField<T> extends StatelessWidget {
     final requestedMenuWidth = menuWidth ?? maxMenuWidth;
     final resolvedMenuWidth =
         requestedMenuWidth > maxMenuWidth ? maxMenuWidth : requestedMenuWidth;
+    final selectedIndex = items.indexWhere((item) => item.value == value);
+    final selectedLabel =
+        selectedIndex >= 0 && selectedIndex < selectedLabels.length
+            ? selectedLabels[selectedIndex]
+            : value.toString();
     final theme = Theme.of(context);
     final bodyStyle = theme.textTheme.bodyMedium?.copyWith(
           fontWeight: FontWeight.w400,
           height: 1.3,
         );
-    final labelStyle = theme.textTheme.titleSmall?.copyWith(
+    final labelStyle = theme.textTheme.bodyMedium?.copyWith(
       fontSize: 15,
-      fontWeight: FontWeight.w700,
+      fontWeight: FontWeight.w400,
       height: 1.15,
     );
     final decoration = InputDecoration(
       labelText: label,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       labelStyle: labelStyle,
       floatingLabelStyle: labelStyle,
     );
 
     return SizedBox(
       width: width,
-      child: InputDecorator(
-        decoration: decoration,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Directionality(
-              textDirection: TextDirection.rtl,
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<T>(
-                  value: value,
-                  isDense: true,
-                  isExpanded: true,
-                  menuMaxHeight: 280,
-                  menuWidth: resolvedMenuWidth,
-                  alignment: Alignment.center,
-                  borderRadius: BorderRadius.circular(16),
-                  icon: const SizedBox.shrink(),
-                  style: bodyStyle,
-                  items: items,
-                  selectedItemBuilder: (context) => selectedLabels
-                      .map(
-                        (item) => Directionality(
-                          textDirection: TextDirection.ltr,
-                          child: Center(
-                            child: Text(
-                              item,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: bodyStyle,
-                            ),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: onChanged,
+      child: PopupMenuButton<T>(
+        initialValue: value,
+        tooltip: '',
+        padding: EdgeInsets.zero,
+        position: PopupMenuPosition.under,
+        offset: Offset(width - resolvedMenuWidth, 4),
+        constraints: BoxConstraints.tightFor(width: resolvedMenuWidth),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        itemBuilder: (context) => items
+            .map(
+              (item) => PopupMenuItem<T>(
+                value: item.value,
+                enabled: item.enabled,
+                height: 42,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Center(child: item.child),
                 ),
               ),
-            ),
-            const Positioned(
-              right: 0,
-              child: IgnorePointer(
-                child: Icon(Icons.expand_more, size: 18),
+            )
+            .toList(),
+        onSelected: (next) => onChanged(next),
+        child: InputDecorator(
+          decoration: decoration,
+          isEmpty: selectedLabel.isEmpty,
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  selectedLabel,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: bodyStyle,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(width: 8),
+              const Icon(Icons.expand_more, size: 18),
+            ],
+          ),
         ),
       ),
     );

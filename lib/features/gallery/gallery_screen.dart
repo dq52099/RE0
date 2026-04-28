@@ -292,12 +292,15 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
             labelText: '搜索画廊',
             hintText: '按提示词或作者搜索',
             prefixIcon: Icon(Icons.search),
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            prefixIconConstraints: BoxConstraints(minWidth: 38, minHeight: 38),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: 6,
+          runSpacing: 6,
           children: [
             _chip('全部', _actionFilter == null, () {
               setState(() => _actionFilter = null);
@@ -313,10 +316,10 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
             }),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         LayoutBuilder(
           builder: (context, constraints) {
-            final fieldWidth = (constraints.maxWidth - 12) / 2;
+            final fieldWidth = (constraints.maxWidth - 8) / 2;
             return Row(
               children: [
                 Expanded(
@@ -337,7 +340,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                     },
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Expanded(
                   child: _smallDropdown(
                     label: '每页',
@@ -364,8 +367,15 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
   }
 
   Widget _chip(String label, bool selected, VoidCallback onTap) {
+    final theme = Theme.of(context);
     return ChoiceChip(
       showCheckmark: false,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+      labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+      labelStyle: theme.textTheme.labelMedium?.copyWith(
+        fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+      ),
       label: Text(label),
       selected: selected,
       onSelected: (_) => onTap(),
