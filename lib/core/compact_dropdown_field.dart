@@ -22,19 +22,27 @@ class CompactDropdownField<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final requestedMenuWidth = menuWidth ?? width;
-    final resolvedMenuWidth = requestedMenuWidth > width ? width : requestedMenuWidth;
-    final bodyStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+    const menuSafetyInset = 8.0;
+    final maxMenuWidth =
+        width > menuSafetyInset ? width - menuSafetyInset : width;
+    final requestedMenuWidth = menuWidth ?? maxMenuWidth;
+    final resolvedMenuWidth =
+        requestedMenuWidth > maxMenuWidth ? maxMenuWidth : requestedMenuWidth;
+    final theme = Theme.of(context);
+    final bodyStyle = theme.textTheme.bodyMedium?.copyWith(
           fontWeight: FontWeight.w400,
           height: 1.3,
         );
+    final labelStyle = theme.textTheme.titleSmall?.copyWith(
+      fontSize: 15,
+      fontWeight: FontWeight.w700,
+      height: 1.15,
+    );
     final decoration = InputDecoration(
       labelText: label,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      labelStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            height: 1.2,
-          ),
+      labelStyle: labelStyle,
+      floatingLabelStyle: labelStyle,
     );
 
     return SizedBox(
