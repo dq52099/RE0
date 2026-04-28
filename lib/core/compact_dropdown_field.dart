@@ -60,6 +60,7 @@ class CompactDropdownField<T> extends StatelessWidget {
         offset: Offset(width - resolvedMenuWidth, 4),
         constraints: BoxConstraints.tightFor(width: resolvedMenuWidth),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        onOpened: () => FocusManager.instance.primaryFocus?.unfocus(),
         itemBuilder: (context) => items
             .map(
               (item) => PopupMenuItem<T>(
@@ -74,7 +75,10 @@ class CompactDropdownField<T> extends StatelessWidget {
               ),
             )
             .toList(),
-        onSelected: (next) => onChanged(next),
+        onSelected: (next) {
+          FocusManager.instance.primaryFocus?.unfocus();
+          onChanged(next);
+        },
         child: InputDecorator(
           decoration: decoration,
           isEmpty: selectedLabel.isEmpty,

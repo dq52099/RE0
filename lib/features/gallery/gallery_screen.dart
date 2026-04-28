@@ -287,6 +287,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
         TextField(
           controller: _searchController,
           textInputAction: TextInputAction.search,
+          onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
           onSubmitted: (_) => _load(reset: true),
           decoration: const InputDecoration(
             labelText: '搜索画廊',
@@ -299,8 +300,8 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
         ),
         const SizedBox(height: 8),
         Wrap(
-          spacing: 6,
-          runSpacing: 6,
+          spacing: 8,
+          runSpacing: 8,
           children: [
             _chip('全部', _actionFilter == null, () {
               setState(() => _actionFilter = null);
@@ -316,7 +317,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
             }),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 14),
         LayoutBuilder(
           builder: (context, constraints) {
             final fieldWidth = (constraints.maxWidth - 8) / 2;

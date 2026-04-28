@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../../core/api_error.dart';
 import '../../core/app_brand.dart';
 import '../../core/cached_gateway_image.dart';
+import '../../core/compact_save_notice.dart';
 import '../../core/image_cache_service.dart';
 import '../../core/level_rewards_sheet.dart';
 import '../../core/providers.dart';
@@ -111,13 +112,10 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
           .recordGalleryDownload(_post['id'].toString());
       if (!mounted) return;
       setState(() => _post = updated);
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(saved.savedToGallery ? '已保存到系统相册。' : '已保存到本地。'),
-          ),
-        );
+      showCompactSaveNotice(
+        context,
+        saved.savedToGallery ? '已保存相册' : '已保存本地',
+      );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'api_error.dart';
+import 'compact_save_notice.dart';
 import 'image_cache_service.dart';
 import 'providers.dart';
 
@@ -65,12 +66,10 @@ class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage>
           .read(imageCacheProvider)
           .saveImageToDevice(widget.url, albumName: brand.galleryAlbumName);
       if (!mounted) return;
-      final message = saved.savedToGallery
-          ? '已保存到系统相册'
-          : '已保存到本地: ${saved.file.path}';
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(message)));
+      showCompactSaveNotice(
+        context,
+        saved.savedToGallery ? '已保存相册' : '已保存本地',
+      );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

@@ -981,17 +981,15 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                Expanded(
-                  child: Text(
-                    prompt.isEmpty ? '未记录提示词' : prompt,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      height: 1.45,
-                    ),
+                const SizedBox(height: 8),
+                Text(
+                  prompt.isEmpty ? '未记录提示词' : prompt,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    height: 1.35,
                   ),
                 ),
               ],

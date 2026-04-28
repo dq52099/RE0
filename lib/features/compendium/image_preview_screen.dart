@@ -75,6 +75,7 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
     }
     final brand = ref.watch(brandProvider);
     final current = widget.items[_currentIndex];
+    final caption = (current.caption ?? '').trim();
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -116,70 +117,56 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
               );
             },
           ),
-          if (widget.items.length > 1)
+          if (widget.items.length > 1 || caption.isNotEmpty)
             Positioned(
               left: 16,
               right: 16,
-              bottom: 24,
-              child: Row(
+              top: 12,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _navButton(
-                    icon: Icons.chevron_left,
-                    enabled: _currentIndex > 0,
-                    onTap: () => _pageController.previousPage(
-                      duration: const Duration(milliseconds: 220),
-                      curve: Curves.easeOut,
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.58),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            '${_currentIndex + 1} / ${widget.items.length}',
-                            style: const TextStyle(color: Colors.white),
-                          ),
+                  if (widget.items.length > 1)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 7,
                         ),
-                        if ((current.caption ?? '').trim().isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.52),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Text(
-                              current.caption!,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(color: Colors.white70),
-                            ),
-                          ),
-                        ],
-                      ],
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.56),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '${_currentIndex + 1} / ${widget.items.length}',
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ),
                     ),
-                  ),
-                  _navButton(
-                    icon: Icons.chevron_right,
-                    enabled: _currentIndex < widget.items.length - 1,
-                    onTap: () => _pageController.nextPage(
-                      duration: const Duration(milliseconds: 220),
-                      curve: Curves.easeOut,
+                  if (caption.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.52),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(
+                        caption,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          height: 1.35,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -188,19 +175,4 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
     );
   }
 
-  Widget _navButton({
-    required IconData icon,
-    required bool enabled,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.black.withOpacity(enabled ? 0.52 : 0.22),
-      shape: const CircleBorder(),
-      child: IconButton(
-        onPressed: enabled ? onTap : null,
-        color: Colors.white,
-        icon: Icon(icon),
-      ),
-    );
-  }
 }
