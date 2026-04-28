@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/api_error.dart';
 import '../../core/app_brand.dart';
@@ -76,6 +77,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     if (isAdmin || permissions.contains('user.view') || menus.contains('users')) {
       sections.add(const _AdminSection('users', '用户'));
     }
+    if (isAdmin || permissions.contains('invite.view') || menus.contains('invites')) {
+      sections.add(const _AdminSection('invites', '邀请码'));
+    }
     if (isAdmin || permissions.contains('group.view') || menus.contains('groups')) {
       sections.add(const _AdminSection('groups', '用户组'));
     }
@@ -108,6 +112,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         return _overviewPage(brand);
       case 'users':
         return _usersPage(brand, canManage: _can(user, 'user.manage'));
+      case 'invites':
+        return _invitationCodesPage(brand, canManage: _can(user, 'invite.manage'));
       case 'groups':
         return _groupsPage(brand, canManage: _can(user, 'group.manage'));
       case 'roles':
@@ -202,6 +208,65 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 _quotaLine('改图', _map(quota['edit'])),
                 '生图保留: ${_text(retention['generate'])}',
                 '改图保留: ${_text(retention['edit'])}',
+              ],
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _invitationCodesPage(AppBrand brand, {required bool canManage}) {
+    return _futureSection<List<Map<String, dynamic>>>(
+      future: _loadMapList(ref.read(gatewayClientProvider).adminInvitationCodes()),
+      builder: (codes) {
+        final unusedCodes = codes
+            .where((item) => _text(item['status']) == 'unused')
+            .map((item) => _text(item['code']))
+            .where((code) => code != '-')
+            .toList();
+        return _adminList(
+          action: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (canManage)
+                FilledButton.icon(
+                  onPressed: _createInvitationCodes,
+                  icon: const Icon(Icons.add_card),
+                  label: const Text('生成邀请码'),
+                ),
+              OutlinedButton.icon(
+                onPressed: unusedCodes.isEmpty
+                    ? null
+                    : () => _copyText(unusedCodes.join('\n'), '未使用邀请码已复制。'),
+                icon: const Icon(Icons.copy_all),
+                label: const Text('复制未使用'),
+              ),
+            ],
+          ),
+          children: codes.map((item) {
+            final status = _text(item['status']);
+            final usedBy = _text(
+              item['used_by_display_name'],
+              fallback: _text(item['used_by_username'], fallback: ''),
+            );
+            return _infoCard(
+              title: _text(item['code']),
+              subtitle: status == 'unused'
+                  ? '未使用，复制后发给新用户注册。'
+                  : '已使用的邀请码会保留展示，便于追溯。',
+              badge: _text(item['status_label']),
+              trailing: IconButton(
+                tooltip: '复制邀请码',
+                icon: const Icon(Icons.copy),
+                onPressed: () => _copyText(_text(item['code']), '邀请码已复制。'),
+              ),
+              lines: [
+                '创建: ${_text(item['created_at'])}',
+                '创建人: ${_text(item['created_by_display_name'], fallback: _text(item['created_by_username']))}',
+                if (status != 'unused') '使用人: ${usedBy.isEmpty ? '-' : usedBy}',
+                if (status != 'unused') '使用时间: ${_text(item['used_at'])}',
               ],
             );
           }).toList(),
@@ -1023,6 +1088,100 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     await _save(() => ref.read(gatewayClientProvider).saveAdminSystemSettings(payload), '系统设置已保存。');
   }
 
+  Future<void> _createInvitationCodes() async {
+    final countController = TextEditingController(text: '5');
+    final count = await showDialog<int>(
+      context: context,
+      builder: (context) => _adminDialog(
+        title: '生成邀请码',
+        icon: Icons.add_card,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: countController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: '生成数量',
+                helperText: '单次 1 到 100 个，生成后会保留在列表中。',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = int.tryParse(countController.text.trim()) ?? 0;
+              Navigator.pop(context, value);
+            },
+            child: const Text('生成'),
+          ),
+        ],
+      ),
+    );
+    countController.dispose();
+    if (count == null) return;
+    if (count < 1 || count > 100) {
+      _showMessage('生成数量需为 1 到 100。', isError: true);
+      return;
+    }
+    try {
+      final created = await ref
+          .read(gatewayClientProvider)
+          .createAdminInvitationCodes(count);
+      final codes = _mapList(created)
+          .map((item) => _text(item['code']))
+          .where((code) => code != '-')
+          .toList();
+      if (!mounted) return;
+      _showMessage('已生成 ${codes.length} 个邀请码。');
+      _reload();
+      if (codes.isNotEmpty) {
+        await _showGeneratedInvitationCodes(codes);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage(friendlyError(error), isError: true);
+    }
+  }
+
+  Future<void> _showGeneratedInvitationCodes(List<String> codes) {
+    final text = codes.join('\n');
+    return showDialog<void>(
+      context: context,
+      builder: (context) => _adminDialog(
+        title: '本次生成的邀请码',
+        icon: Icons.copy_all,
+        content: SelectableText(
+          text,
+          style: const TextStyle(
+            fontFamily: 'monospace',
+            height: 1.45,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('关闭'),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: text));
+              if (context.mounted) Navigator.pop(context);
+              if (mounted) _showMessage('本批邀请码已复制。');
+            },
+            icon: const Icon(Icons.copy),
+            label: const Text('复制本批'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<Map<String, dynamic>?> _basicEntityDialog({
     required String title,
     required TextEditingController name,
@@ -1115,6 +1274,14 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       () => ref.read(gatewayClientProvider).probeImageCapabilities(),
       '图片尺寸探测已完成。',
     );
+  }
+
+  Future<void> _copyText(String text, String success) async {
+    final value = text.trim();
+    if (value.isEmpty || value == '-') return;
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    _showMessage(success);
   }
 
   Future<void> _save(Future<dynamic> Function() action, String success) async {

@@ -19,11 +19,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   final _usernameController = TextEditingController();
   final _displayNameController = TextEditingController();
+  final _invitationCodeController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
   String? _usernameError;
   String? _displayNameError;
+  String? _invitationCodeError;
   String? _passwordError;
   String? _confirmPasswordError;
   bool _isSubmitting = false;
@@ -32,6 +34,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   void dispose() {
     _usernameController.dispose();
     _displayNameController.dispose();
+    _invitationCodeController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -40,11 +43,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   bool _validate() {
     final username = _usernameController.text.trim();
     final displayName = _displayNameController.text.trim();
+    final invitationCode = _invitationCodeController.text.trim();
     final password = _passwordController.text;
     final confirmPassword = _confirmPasswordController.text;
 
     String? usernameError;
     String? displayNameError;
+    String? invitationCodeError;
     String? passwordError;
     String? confirmPasswordError;
 
@@ -62,6 +67,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       displayNameError = '显示名称长度需为 2 到 32 个字符。';
     }
 
+    if (invitationCode.isEmpty) {
+      invitationCodeError = '请输入邀请码。';
+    } else if (invitationCode.length < 4) {
+      invitationCodeError = '邀请码格式不正确。';
+    }
+
     if (password.isEmpty) {
       passwordError = '请输入密码。';
     } else if (password.length < 10) {
@@ -77,12 +88,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     setState(() {
       _usernameError = usernameError;
       _displayNameError = displayNameError;
+      _invitationCodeError = invitationCodeError;
       _passwordError = passwordError;
       _confirmPasswordError = confirmPasswordError;
     });
 
     return usernameError == null &&
         displayNameError == null &&
+        invitationCodeError == null &&
         passwordError == null &&
         confirmPasswordError == null;
   }
@@ -97,6 +110,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       final res = await client.register(
         _usernameController.text.trim(),
         _displayNameController.text.trim(),
+        _invitationCodeController.text.trim(),
         _passwordController.text,
       );
       final prefs = ref.read(sharedPrefsProvider);
@@ -145,7 +159,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '创建一个新的生图账号，注册成功后会直接进入主页。',
+                          '使用管理员发放的邀请码创建账号，注册成功后会直接进入主页。',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                         const SizedBox(height: 24),
@@ -174,6 +188,21 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             labelText: '显示名称',
                             helperText: '2-32 个字符',
                             errorText: _displayNameError,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _invitationCodeController,
+                          textCapitalization: TextCapitalization.characters,
+                          onChanged: (_) {
+                            if (_invitationCodeError != null) {
+                              setState(() => _invitationCodeError = null);
+                            }
+                          },
+                          decoration: InputDecoration(
+                            labelText: '邀请码',
+                            helperText: '向管理员获取，每个邀请码只能使用一次',
+                            errorText: _invitationCodeError,
                           ),
                         ),
                         const SizedBox(height: 12),

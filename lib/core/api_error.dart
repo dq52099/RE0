@@ -115,6 +115,9 @@ String _polishMessage(String message, String fallback) {
   if (normalized.contains('开放自助注册')) {
     return '当前网关暂未开放自助注册。';
   }
+  if (normalized.contains('邀请码')) {
+    return text;
+  }
   if (normalized.contains('保留名称')) {
     return '这个账号名属于保留名称，请更换一个账号名。';
   }

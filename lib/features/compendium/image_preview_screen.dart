@@ -117,57 +117,53 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
               );
             },
           ),
-          if (widget.items.length > 1 || caption.isNotEmpty)
+          if (widget.items.length > 1)
+            Positioned(
+              right: 16,
+              top: 12,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.56),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '${_currentIndex + 1} / ${widget.items.length}',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+              ),
+            ),
+          if (caption.isNotEmpty)
             Positioned(
               left: 16,
               right: 16,
-              top: 12,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (widget.items.length > 1)
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 7,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.56),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          '${_currentIndex + 1} / ${widget.items.length}',
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                      ),
-                    ),
-                  if (caption.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.52),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Text(
-                        caption,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          height: 1.35,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
+              bottom: widget.showDownload ? 78 : 20,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.52),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  caption,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    height: 1.35,
+                  ),
+                ),
               ),
             ),
         ],

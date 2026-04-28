@@ -65,12 +65,14 @@ class GatewayClient {
   Future<Map<String, dynamic>> register(
     String username,
     String displayName,
+    String invitationCode,
     String password,
   ) async {
     return _guard(() async {
       final res = await _dio.post('/api/auth/register', data: {
         'username': username,
         'display_name': displayName,
+        'invitation_code': invitationCode,
         'password': password,
       });
       return Map<String, dynamic>.from(res.data as Map);
@@ -380,6 +382,20 @@ class GatewayClient {
 
   Future<List<dynamic>> adminUsers() async {
     return _getList('/api/admin/users', fallback: '读取用户列表失败。');
+  }
+
+  Future<List<dynamic>> adminInvitationCodes() async {
+    return _getList('/api/admin/invitation-codes', fallback: '读取邀请码失败。');
+  }
+
+  Future<List<dynamic>> createAdminInvitationCodes(int count) async {
+    return _guard(() async {
+      final res = await _dio.post(
+        '/api/admin/invitation-codes',
+        data: {'count': count},
+      );
+      return List<dynamic>.from(res.data as List);
+    }, fallback: '生成邀请码失败。');
   }
 
   Future<dynamic> saveAdminUser(String? id, Map<String, dynamic> payload) async {
