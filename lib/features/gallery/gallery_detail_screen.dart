@@ -8,6 +8,7 @@ import '../../core/cached_gateway_image.dart';
 import '../../core/image_cache_service.dart';
 import '../../core/level_rewards_sheet.dart';
 import '../../core/providers.dart';
+import '../../core/top_toast.dart';
 import '../../core/value_parsers.dart';
 import '../compendium/image_preview_screen.dart';
 
@@ -111,7 +112,8 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
           .recordGalleryDownload(_post['id'].toString());
       if (!mounted) return;
       setState(() => _post = updated);
-      _showFloatingSnackBar(
+      showTopToast(
+        context,
         saved.savedToGallery ? '已保存到系统相册。' : '已保存到本地。',
       );
     } catch (error) {
@@ -610,18 +612,5 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
     final hour = local.hour.toString().padLeft(2, '0');
     final minute = local.minute.toString().padLeft(2, '0');
     return '$month-$day $hour:$minute';
-  }
-
-  void _showFloatingSnackBar(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 96),
-          duration: const Duration(milliseconds: 1400),
-          content: Text(message),
-        ),
-      );
   }
 }

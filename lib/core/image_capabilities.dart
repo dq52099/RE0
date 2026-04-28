@@ -46,12 +46,12 @@ class ImageCapabilities {
   static ImageCapabilities fallback() {
     const sizes = [
       ImageOption(value: 'auto', label: '自动'),
-      ImageOption(value: '1024x1024', label: '1024 × 1024'),
-      ImageOption(value: '1536x1024', label: '1536 × 1024'),
-      ImageOption(value: '1024x1536', label: '1024 × 1536'),
-      ImageOption(value: '2048x2048', label: '2048 × 2048'),
-      ImageOption(value: '3840x2160', label: '3840 × 2160'),
-      ImageOption(value: '2160x3840', label: '2160 × 3840'),
+      ImageOption(value: '1024x1024', label: '1024 × 1024 · 1:1 方图'),
+      ImageOption(value: '1536x1024', label: '1536 × 1024 · 3:2 横屏'),
+      ImageOption(value: '1024x1536', label: '1024 × 1536 · 2:3 竖屏'),
+      ImageOption(value: '2048x2048', label: '2048 × 2048 · 1:1 方图'),
+      ImageOption(value: '3840x2160', label: '3840 × 2160 · 16:9 横屏 4K'),
+      ImageOption(value: '2160x3840', label: '2160 × 3840 · 9:16 手机竖屏 4K'),
     ];
     const qualities = [
       ImageOption(value: 'auto', label: '自动'),
@@ -156,8 +156,35 @@ class ImageCapabilities {
     final normalized = value.trim();
     final sizeMatch = RegExp(r'^(\d+)x(\d+)$').firstMatch(normalized);
     if (sizeMatch != null) {
-      return '${sizeMatch.group(1)} × ${sizeMatch.group(2)}';
+      final width = sizeMatch.group(1) ?? '';
+      final height = sizeMatch.group(2) ?? '';
+      final plain = '$width × $height';
+      final provided = label?.trim();
+      if (provided != null && provided.isNotEmpty && provided != plain) {
+        return provided;
+      }
+      return _sizeLabel(width, height);
     }
     return (label == null || label.trim().isEmpty) ? value : label;
+  }
+
+  static String _sizeLabel(String width, String height) {
+    final plain = '$width × $height';
+    if (width == height) {
+      return '$plain · 1:1 方图';
+    }
+    if (width == '3840' && height == '2160') {
+      return '$plain · 16:9 横屏 4K';
+    }
+    if (width == '2160' && height == '3840') {
+      return '$plain · 9:16 手机竖屏 4K';
+    }
+    if (width == '1536' && height == '1024') {
+      return '$plain · 3:2 横屏';
+    }
+    if (width == '1024' && height == '1536') {
+      return '$plain · 2:3 竖屏';
+    }
+    return plain;
   }
 }
