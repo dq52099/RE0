@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'api_error.dart';
 import 'image_save_flow.dart';
-import 'image_cache_service.dart';
+import 'providers.dart';
 
 class CachedGatewayImage extends ConsumerStatefulWidget {
   const CachedGatewayImage({

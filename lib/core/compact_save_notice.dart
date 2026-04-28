@@ -125,4 +125,5 @@ class _CenterNoticeState extends State<_CenterNotice>
         ),
       ),
     );
+  }
 }
