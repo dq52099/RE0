@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../../core/api_error.dart';
 import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
+import '../../core/compact_save_notice.dart';
 import '../../core/providers.dart';
 
 class AdminScreen extends ConsumerStatefulWidget {
@@ -1302,6 +1303,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   }
 
   void _showMessage(String message, {bool isError = false}) {
+    if (!isError) {
+      showCenterNotice(context, message);
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),

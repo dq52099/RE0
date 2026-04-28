@@ -5,6 +5,7 @@ import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
 import '../../core/cached_gateway_image.dart';
 import '../../core/compact_dropdown_field.dart';
+import '../../core/compact_save_notice.dart';
 import '../../core/image_capabilities.dart';
 import '../../core/providers.dart';
 import '../compendium/image_preview_screen.dart';
@@ -174,16 +175,12 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                   onPressed: materializerState.isLoading ? null : () async {
                     final prompt = _spellController.text.trim();
                     if (prompt.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('请先填写提示词。')),
-                      );
+                      showCenterNotice(context, '请先填写提示词');
                       return;
                     }
                     final currentTask = ref.read(activeImageTaskProvider);
                     if (currentTask == ImageTaskKind.edit) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('改图任务进行中，请稍后再试。')),
-                      );
+                      showCenterNotice(context, '改图任务进行中，请稍后再试');
                       return;
                     }
                     FocusScope.of(context).unfocus();
@@ -200,9 +197,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                             outputFormat,
                           );
                       if (!mounted || notice == null) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(notice)),
-                      );
+                      showCenterNotice(context, notice);
                     } catch (error) {
                       if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(

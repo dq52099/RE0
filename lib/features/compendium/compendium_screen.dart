@@ -8,6 +8,7 @@ import '../../core/api_error.dart';
 import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
 import '../../core/cached_gateway_image.dart';
+import '../../core/compact_save_notice.dart';
 import '../../core/providers.dart';
 import 'image_preview_screen.dart';
 
@@ -243,9 +244,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     try {
       await _hideHistoryItems([item], deletingKeys: {key});
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('图片记录已清理。')),
-      );
+      showCenterNotice(context, '图片记录已清理');
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -317,9 +316,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     try {
       await _hideHistoryItems(failedItems);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已清理 ${failedItems.length} 条失败记录。')),
-      );
+      showCenterNotice(context, '已清理 ${failedItems.length} 条失败记录');
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -367,14 +364,9 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
         );
       }
       final errors = (response['errors'] as List? ?? []).length;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            errors > 0
-                ? '已重新生成，新结果已替换旧失败记录，另有 $errors 次尝试未完成。'
-                : '已重新生成，新结果已替换旧失败记录。',
-          ),
-        ),
+      showCenterNotice(
+        context,
+        errors > 0 ? '已重新生成，另有 $errors 次未完成' : '已重新生成',
       );
     } catch (error) {
       if (!mounted) return;
@@ -397,9 +389,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     if (prompt.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: prompt));
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('提示词已复制。')));
+    showCenterNotice(context, '提示词已复制');
   }
 
   Future<void> _showPromptDetails(Map<String, dynamic> item) async {
@@ -478,9 +468,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     try {
       await ref.read(gatewayClientProvider).publishGalleryPost(historyId);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已发布到画廊。')),
-      );
+      showCenterNotice(context, '已发布到画廊');
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

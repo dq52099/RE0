@@ -343,7 +343,7 @@ class GatewayClient {
   Future<void> deleteGalleryPost(String postId) async {
     await _guard(() async {
       await _dio.delete('/api/gallery/posts/$postId');
-    }, fallback: '取消发布失败。');
+    }, fallback: '删除作品失败。');
   }
 
   Future<Map<String, dynamic>> addGalleryComment(

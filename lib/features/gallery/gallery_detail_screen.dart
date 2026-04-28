@@ -6,7 +6,7 @@ import '../../core/api_error.dart';
 import '../../core/app_brand.dart';
 import '../../core/cached_gateway_image.dart';
 import '../../core/compact_save_notice.dart';
-import '../../core/image_cache_service.dart';
+import '../../core/image_save_flow.dart';
 import '../../core/level_rewards_sheet.dart';
 import '../../core/providers.dart';
 import '../../core/value_parsers.dart';
@@ -95,27 +95,22 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
   Future<void> _downloadImage() async {
     if (_isDownloading) return;
     if (!boolish(_post['can_download'])) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('评论后才可以下载这张图片。')),
-      );
+      showCenterNotice(context, '评论后才可以下载');
       return;
     }
     setState(() => _isDownloading = true);
     try {
-      final brand = ref.read(brandProvider);
-      final saved = await ref.read(imageCacheProvider).saveImageToDevice(
-            _post['image_url']?.toString() ?? '',
-            albumName: brand.galleryAlbumName,
-          );
+      final saved = await saveImageWithUserFlow(
+        context,
+        ref,
+        _post['image_url']?.toString() ?? '',
+      );
+      if (saved == null) return;
       final updated = await ref
           .read(gatewayClientProvider)
           .recordGalleryDownload(_post['id'].toString());
       if (!mounted) return;
       setState(() => _post = updated);
-      showCompactSaveNotice(
-        context,
-        saved.savedToGallery ? '已保存相册' : '已保存本地',
-      );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -146,13 +141,29 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
   }
 
   Future<void> _unpublish() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除画廊作品'),
+        content: const Text('删除后会从画廊移除该作品，并撤销该作品产生的积分。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
     try {
       await ref.read(gatewayClientProvider).deleteGalleryPost(_post['id'].toString());
       if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('作品已取消发布。')),
-      );
+      showCenterNotice(context, '作品已删除');
+      Navigator.pop(context, true);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -193,9 +204,7 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
     if (prompt.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: prompt));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('提示词已复制。')),
-    );
+    showCenterNotice(context, '提示词已复制');
   }
 
   Future<void> _openImage() async {
@@ -224,15 +233,16 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
     final canViewPrompt = _canViewPrompt(_post);
     final currentUser = ref.read(authStateProvider);
     final isOwner = currentUser?['id']?.toString() == _post['user_id']?.toString();
+    final canDelete = boolish(_post['can_delete']) || isOwner;
     final liked = boolish(_post['liked']);
     final favorited = boolish(_post['favorited']);
     return Scaffold(
       appBar: AppBar(
         title: Text(brand.galleryTitle),
         actions: [
-          if (isOwner)
+          if (canDelete)
             IconButton(
-              tooltip: '取消发布',
+              tooltip: '删除作品',
               icon: const Icon(Icons.delete_outline),
               onPressed: _unpublish,
             ),
@@ -324,6 +334,13 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                             onTap: _isDownloading ? null : _downloadImage,
                             busy: _isDownloading,
                           ),
+                          if (canDelete)
+                            _actionButton(
+                              icon: Icons.delete_outline,
+                              label: '删除',
+                              color: brand.warningColor,
+                              onTap: _unpublish,
+                            ),
                         ],
                       ),
                     ],

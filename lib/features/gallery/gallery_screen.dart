@@ -6,6 +6,7 @@ import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
 import '../../core/cached_gateway_image.dart';
 import '../../core/compact_dropdown_field.dart';
+import '../../core/compact_save_notice.dart';
 import '../../core/level_rewards_sheet.dart';
 import '../../core/providers.dart';
 import '../../core/value_parsers.dart';
@@ -143,6 +144,40 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
       setState(() {
         _items.removeWhere((entry) => entry['id'] == updated['id']);
       });
+    }
+  }
+
+  Future<void> _deletePost(Map<String, dynamic> item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除画廊作品'),
+        content: const Text('删除后会从画廊移除该作品，并撤销该作品产生的积分。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ref.read(gatewayClientProvider).deleteGalleryPost(item['id'].toString());
+      if (!mounted) return;
+      setState(() {
+        _items.removeWhere((entry) => entry['id']?.toString() == item['id']?.toString());
+      });
+      showCenterNotice(context, '作品已删除');
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(error))),
+      );
     }
   }
 
@@ -448,13 +483,16 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
     const buttonPadding = EdgeInsets.symmetric(horizontal: 10, vertical: 8);
     final liked = boolish(item['liked']);
     final favorited = boolish(item['favorited']);
+    final currentUser = ref.read(authStateProvider);
+    final isOwner = currentUser?['id']?.toString() == item['user_id']?.toString();
+    final canDelete = boolish(item['can_delete']) || isOwner;
     final imageUrl = item['image_url']?.toString() ?? '';
     final previewItems = _items
         .map(
           (entry) => PreviewImageEntry(
             url: entry['image_url']?.toString() ?? '',
-            title: entry['prompt']?.toString(),
-            caption: entry['display_name']?.toString(),
+            title: entry['display_name']?.toString(),
+            caption: _promptSummary(entry),
           ),
         )
         .where((entry) => entry.url.isNotEmpty)
@@ -600,6 +638,16 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                       fontSize: actionFontSize,
                       padding: buttonPadding,
                     ),
+                    if (canDelete)
+                      _actionButton(
+                        icon: Icons.delete_outline,
+                        label: '删除',
+                        color: brand.warningColor,
+                        onTap: () => _deletePost(item),
+                        iconSize: actionIconSize,
+                        fontSize: actionFontSize,
+                        padding: buttonPadding,
+                      ),
                   ],
                 ),
               ],

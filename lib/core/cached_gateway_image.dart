@@ -4,9 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'api_error.dart';
-import 'compact_save_notice.dart';
+import 'image_save_flow.dart';
 import 'image_cache_service.dart';
-import 'providers.dart';
 
 class CachedGatewayImage extends ConsumerStatefulWidget {
   const CachedGatewayImage({
@@ -61,15 +60,7 @@ class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage>
   Future<void> _saveImage() async {
     setState(() => _isSaving = true);
     try {
-      final brand = ref.read(brandProvider);
-      final saved = await ref
-          .read(imageCacheProvider)
-          .saveImageToDevice(widget.url, albumName: brand.galleryAlbumName);
-      if (!mounted) return;
-      showCompactSaveNotice(
-        context,
-        saved.savedToGallery ? '已保存相册' : '已保存本地',
-      );
+      await saveImageWithUserFlow(context, ref, widget.url);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -135,24 +126,32 @@ class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage>
           right: 8,
           bottom: 8,
           child: Material(
-            color: Colors.black.withOpacity(0.62),
-            shape: CircleBorder(
-              side: BorderSide(
-                color: widget.accentColor ?? Theme.of(context).colorScheme.primary,
-                width: 1,
+            color: Colors.white.withOpacity(0.88),
+            elevation: 8,
+            shadowColor: Colors.black.withOpacity(0.22),
+            shape: const CircleBorder(),
+            child: Ink(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: (widget.accentColor ?? Theme.of(context).colorScheme.primary)
+                      .withOpacity(0.28),
+                ),
               ),
-            ),
-            child: IconButton(
-              tooltip: '下载到手机',
-              color: Colors.white,
-              onPressed: _isSaving ? null : _saveImage,
-              icon: _isSaving
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.download),
+              child: IconButton(
+                tooltip: '下载到手机',
+                color: widget.accentColor ?? Theme.of(context).colorScheme.primary,
+                onPressed: _isSaving ? null : _saveImage,
+                icon: _isSaving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.download_rounded),
+              ),
             ),
           ),
         ),

@@ -58,11 +58,15 @@ class ImageCacheService {
   Future<SavedImage> saveImageToDevice(
     String url, {
     required String albumName,
+    bool overwrite = false,
   }) async {
     final cachedFile = await cachedFileFor(url);
     final downloadDirectory = await _downloadDirectory();
     final targetName = _downloadFileName(url);
-    final targetFile = await _uniqueFile(downloadDirectory, targetName);
+    final targetFile = File('${downloadDirectory.path}/$targetName');
+    if (overwrite && await targetFile.exists()) {
+      await targetFile.delete();
+    }
     final savedFile = await cachedFile.copy(targetFile.path);
 
     String? galleryUri;
@@ -74,6 +78,7 @@ class ImageCacheService {
             'path': savedFile.path,
             'fileName': _baseName(savedFile.path),
             'albumName': albumName,
+            'overwrite': overwrite,
           },
         );
       } on PlatformException {
@@ -84,6 +89,35 @@ class ImageCacheService {
     }
 
     return SavedImage(file: savedFile, galleryUri: galleryUri);
+  }
+
+  Future<bool> hasSavedImageForUrl(
+    String url, {
+    required String albumName,
+  }) async {
+    final downloadDirectory = await _downloadDirectory();
+    final targetName = _downloadFileName(url);
+    final targetFile = File('${downloadDirectory.path}/$targetName');
+    if (await targetFile.exists()) {
+      return true;
+    }
+    if (!Platform.isAndroid) {
+      return false;
+    }
+    try {
+      final uri = await _downloadsChannel.invokeMethod<String>(
+        'findImageInGallery',
+        {
+          'fileName': targetName,
+          'albumName': albumName,
+        },
+      );
+      return uri != null && uri.isNotEmpty;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
   }
 
   Future<int> cacheSizeBytes() async {
@@ -140,26 +174,12 @@ class ImageCacheService {
     return directory;
   }
 
-  Future<File> _uniqueFile(Directory directory, String fileName) async {
-    final dotIndex = fileName.lastIndexOf('.');
-    final stem = dotIndex > 0 ? fileName.substring(0, dotIndex) : fileName;
-    final extension = dotIndex > 0 ? fileName.substring(dotIndex) : '';
-
-    var candidate = File('${directory.path}/$fileName');
-    var index = 1;
-    while (await candidate.exists()) {
-      candidate = File('${directory.path}/$stem-$index$extension');
-      index += 1;
-    }
-    return candidate;
-  }
-
   String _cacheFileName(String url) {
     return 'img-${_stableHash(url)}${_extensionFromUrl(url)}';
   }
 
   String _downloadFileName(String url) {
-    return 're0-${DateTime.now().millisecondsSinceEpoch}-${_stableHash(url)}${_extensionFromUrl(url)}';
+    return 're0-${_stableHash(url)}${_extensionFromUrl(url)}';
   }
 
   String _extensionFromUrl(String url) {

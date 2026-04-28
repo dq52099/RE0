@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api_error.dart';
 import '../../core/cached_gateway_image.dart';
+import '../../core/image_save_flow.dart';
 import '../../core/providers.dart';
 
 class PreviewImageEntry {
@@ -35,6 +37,7 @@ class ImagePreviewScreen extends ConsumerStatefulWidget {
 class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
   late final PageController _pageController;
   late int _currentIndex;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -82,93 +85,154 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
         title: Text(current.title ?? '图片预览'),
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-      ),
-      body: Stack(
-        children: [
-          PageView.builder(
-            controller: _pageController,
-            itemCount: widget.items.length,
-            onPageChanged: (index) {
-              setState(() => _currentIndex = index);
-            },
-            itemBuilder: (context, index) {
-              final item = widget.items[index];
-              return LayoutBuilder(
-                builder: (context, constraints) {
-                  return InteractiveViewer(
-                    minScale: 0.8,
-                    maxScale: 5,
-                    child: SizedBox(
-                      width: constraints.maxWidth,
-                      height: constraints.maxHeight,
-                      child: Center(
-                        child: CachedGatewayImage(
-                          url: item.url,
-                          width: constraints.maxWidth,
-                          height: constraints.maxHeight,
-                          fit: BoxFit.contain,
-                          showDownload: widget.showDownload,
-                          accentColor: brand.primaryColor,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
+        actions: [
           if (widget.items.length > 1)
-            Positioned(
-              right: 16,
-              top: 12,
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 7,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.56),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    '${_currentIndex + 1} / ${widget.items.length}',
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                ),
-              ),
-            ),
-          if (caption.isNotEmpty)
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: widget.showDownload ? 78 : 20,
+            Center(
               child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
+                margin: const EdgeInsets.only(right: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.52),
-                  borderRadius: BorderRadius.circular(14),
+                  color: Colors.white.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: Colors.white.withOpacity(0.14)),
                 ),
                 child: Text(
-                  caption,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    height: 1.35,
-                  ),
+                  '${_currentIndex + 1}/${widget.items.length}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
                 ),
               ),
             ),
         ],
       ),
+      body: Column(
+        children: [
+          Expanded(
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: widget.items.length,
+              onPageChanged: (index) {
+                setState(() => _currentIndex = index);
+              },
+              itemBuilder: (context, index) {
+                final item = widget.items[index];
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    return InteractiveViewer(
+                      minScale: 0.8,
+                      maxScale: 5,
+                      child: SizedBox(
+                        width: constraints.maxWidth,
+                        height: constraints.maxHeight,
+                        child: Center(
+                          child: CachedGatewayImage(
+                            url: item.url,
+                            width: constraints.maxWidth,
+                            height: constraints.maxHeight,
+                            fit: BoxFit.contain,
+                            showDownload: false,
+                            accentColor: brand.primaryColor,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          if (caption.isNotEmpty || widget.showDownload)
+            _bottomPanel(
+              caption: caption,
+              accentColor: brand.primaryColor,
+            ),
+        ],
+      ),
     );
+  }
+
+  Widget _bottomPanel({
+    required String caption,
+    required Color accentColor,
+  }) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.86),
+          border: Border(top: BorderSide(color: Colors.white.withOpacity(0.08))),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: caption.isEmpty
+                  ? const SizedBox.shrink()
+                  : Text(
+                      caption,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        height: 1.35,
+                      ),
+                    ),
+            ),
+            if (widget.showDownload) ...[
+              const SizedBox(width: 12),
+              _downloadButton(accentColor),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _downloadButton(Color accentColor) {
+    return Material(
+      color: Colors.white.withOpacity(0.90),
+      elevation: 10,
+      shadowColor: Colors.black.withOpacity(0.28),
+      shape: const CircleBorder(),
+      child: Ink(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: accentColor.withOpacity(0.26)),
+        ),
+        child: IconButton(
+          tooltip: '保存到系统相册',
+          onPressed: _isSaving ? null : _saveCurrentImage,
+          color: accentColor,
+          icon: _isSaving
+              ? const SizedBox(
+                  width: 19,
+                  height: 19,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.download_rounded),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _saveCurrentImage() async {
+    if (_isSaving || widget.items.isEmpty) return;
+    setState(() => _isSaving = true);
+    try {
+      await saveImageWithUserFlow(context, ref, widget.items[_currentIndex].url);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(error, fallback: '图片下载失败，请稍后重试。'))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 
 }

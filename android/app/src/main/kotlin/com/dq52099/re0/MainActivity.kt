@@ -1,7 +1,9 @@
 package com.dq52099.re0
 
 import android.content.ContentValues
+import android.content.ContentUris
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import androidx.core.content.FileProvider
@@ -21,7 +23,14 @@ class MainActivity : FlutterActivity() {
                     path = call.argument<String>("path"),
                     fileName = call.argument<String>("fileName") ?: "re0-image.png",
                     albumName = call.argument<String>("albumName") ?: "从零开始生图",
+                    overwrite = call.argument<Boolean>("overwrite") ?: false,
                     result = result,
+                )
+                "findImageInGallery" -> result.success(
+                    findImageInGallery(
+                        fileName = call.argument<String>("fileName") ?: "re0-image.png",
+                        albumName = call.argument<String>("albumName") ?: "从零开始生图",
+                    )?.toString()
                 )
                 "openApk" -> openApk(
                     path = call.argument<String>("path"),
@@ -36,6 +45,7 @@ class MainActivity : FlutterActivity() {
         path: String?,
         fileName: String,
         albumName: String,
+        overwrite: Boolean,
         result: MethodChannel.Result,
     ) {
         if (path.isNullOrBlank()) {
@@ -50,26 +60,35 @@ class MainActivity : FlutterActivity() {
                 return
             }
 
+            val resolver = applicationContext.contentResolver
+            val existingUri = findImageInGallery(fileName, albumName)
             val values = ContentValues().apply {
                 put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
                 put(MediaStore.Images.Media.MIME_TYPE, mimeTypeFor(fileName))
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/$albumName")
-                    put(MediaStore.Images.Media.IS_PENDING, 1)
+                    if (existingUri == null) {
+                        put(MediaStore.Images.Media.IS_PENDING, 1)
+                    }
                 }
             }
 
-            val resolver = applicationContext.contentResolver
-            val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-                ?: throw IllegalStateException("Unable to create MediaStore item.")
+            if (existingUri != null && !overwrite) {
+                result.success(existingUri.toString())
+                return
+            }
 
-            resolver.openOutputStream(uri)?.use { output ->
+            val uri = existingUri
+                ?: (resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                    ?: throw IllegalStateException("Unable to create MediaStore item."))
+
+            resolver.openOutputStream(uri, "wt")?.use { output ->
                 source.inputStream().use { input ->
                     input.copyTo(output)
                 }
             } ?: throw IllegalStateException("Unable to open MediaStore output stream.")
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && existingUri == null) {
                 values.clear()
                 values.put(MediaStore.Images.Media.IS_PENDING, 0)
                 resolver.update(uri, values, null, null)
@@ -79,6 +98,34 @@ class MainActivity : FlutterActivity() {
         } catch (error: Exception) {
             result.error("SAVE_FAILED", error.message, null)
         }
+    }
+
+    private fun findImageInGallery(fileName: String, albumName: String): Uri? {
+        val resolver = applicationContext.contentResolver
+        val projection = arrayOf(MediaStore.Images.Media._ID)
+        val collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        val selection: String
+        val args: Array<String>
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            selection = "${MediaStore.Images.Media.DISPLAY_NAME} = ? AND ${MediaStore.Images.Media.RELATIVE_PATH} = ?"
+            args = arrayOf(fileName, "Pictures/$albumName/")
+        } else {
+            selection = "${MediaStore.Images.Media.DISPLAY_NAME} = ?"
+            args = arrayOf(fileName)
+        }
+        resolver.query(
+            collection,
+            projection,
+            selection,
+            args,
+            "${MediaStore.Images.Media.DATE_ADDED} DESC",
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID))
+                return ContentUris.withAppendedId(collection, id)
+            }
+        }
+        return null
     }
 
     private fun openApk(path: String?, result: MethodChannel.Result) {

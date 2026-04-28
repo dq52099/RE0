@@ -8,6 +8,7 @@ import '../../core/app_brand.dart';
 import '../../core/app_update_service.dart';
 import '../../core/brand_background.dart';
 import '../../core/compact_dropdown_field.dart';
+import '../../core/compact_save_notice.dart';
 import '../../core/level_rewards_sheet.dart';
 import '../../core/points_sheet.dart';
 import '../../core/providers.dart';
@@ -61,9 +62,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       await ref.read(imageCacheProvider).clearCache();
       if (!mounted) return;
       setState(_refreshCacheSize);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('图片缓存已清理')),
-      );
+      showCenterNotice(context, '图片缓存已清理');
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -104,12 +103,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       if (!mounted) return;
       setState(_refreshCacheSize);
       final reward = result['checkin']['today_reward'] as Map? ?? {};
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '签到成功，获得 ${reward['generate'] ?? 0} 次生图、${reward['edit'] ?? 0} 次改图和 5 积分。',
-          ),
-        ),
+      showCenterNotice(
+        context,
+        '签到成功，+${reward['generate'] ?? 0} 生图 / +${reward['edit'] ?? 0} 改图 / +5 积分',
       );
     } catch (error) {
       if (!mounted) return;
@@ -160,9 +156,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ref.read(authStateProvider.notifier).state = updated;
       ref.read(energyProvider.notifier).state = updated['quota_summary'];
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('头像已更新')),
-      );
+      showCenterNotice(context, '头像已更新');
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -182,9 +176,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       final info = await updateService.checkForUpdate();
       if (!mounted) return;
       if (!info.available) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('已是最新版本 ${updateService.currentVersionName}')),
-        );
+        showCenterNotice(context, '已是最新版本 ${updateService.currentVersionName}');
         return;
       }
       await _showUpdateDialog(info);
@@ -250,9 +242,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       );
       await updateService.openInstaller(apkFile);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('安装界面已打开')),
-      );
+      showCenterNotice(context, '安装界面已打开');
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -359,9 +349,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ref.read(authStateProvider.notifier).state = updated;
       ref.read(energyProvider.notifier).state = updated['quota_summary'];
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('个人资料已保存')),
-      );
+      showCenterNotice(context, '个人资料已保存');
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -447,9 +435,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             payload['new_password']!,
           );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('密码已修改')),
-      );
+      showCenterNotice(context, '密码已修改');
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -644,25 +630,37 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             Row(
               children: [
                 Stack(
+                  clipBehavior: Clip.none,
                   children: [
                     _avatar(user, brand),
                     Positioned(
-                      right: -4,
-                      bottom: -4,
+                      right: -2,
+                      bottom: -2,
                       child: Material(
                         color: Theme.of(context).colorScheme.surface,
+                        elevation: 4,
+                        shadowColor: Colors.black.withOpacity(0.16),
                         shape: const CircleBorder(),
-                        child: IconButton(
-                          tooltip: '更换头像',
-                          visualDensity: VisualDensity.compact,
-                          onPressed: _isUpdatingAvatar ? null : _pickAndUploadAvatar,
-                          icon: _isUpdatingAvatar
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Icon(Icons.edit, size: 16),
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: _isUpdatingAvatar ? null : _pickAndUploadAvatar,
+                          child: SizedBox(
+                            width: 30,
+                            height: 30,
+                            child: Center(
+                              child: _isUpdatingAvatar
+                                  ? const SizedBox(
+                                      width: 15,
+                                      height: 15,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : Icon(
+                                      Icons.edit,
+                                      size: 15,
+                                      color: brand.primaryColor,
+                                    ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -782,8 +780,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final displayName = user?['display_name']?.toString().trim() ?? '';
     final initial = displayName.isNotEmpty ? displayName.substring(0, 1) : '图';
     return Container(
-      width: 64,
-      height: 64,
+      width: 80,
+      height: 80,
       decoration: BoxDecoration(
         color: brand.panelColor.withOpacity(0.18),
         border: Border.all(color: brand.primaryColor),
@@ -795,7 +793,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               child: Text(
                 initial,
                 style: const TextStyle(
-                  fontSize: 22,
+                  fontSize: 26,
                   fontWeight: FontWeight.bold,
                 ),
               ),
