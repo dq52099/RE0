@@ -423,6 +423,78 @@ class GatewayClient {
     }, fallback: 'AI 整理反馈失败。');
   }
 
+  Future<Map<String, dynamic>> getAdminFeedbackAutomation() async {
+    return _getMap('/api/admin/feedback/automation',
+        fallback: '读取反馈 AI 自动整理设置失败。');
+  }
+
+  Future<Map<String, dynamic>> saveAdminFeedbackAutomation({
+    required bool autoEnabled,
+    required bool autoReplyEnabled,
+    required bool autoExportEnabled,
+  }) async {
+    return _guard(() async {
+      final res = await _dio.post('/api/admin/feedback/automation', data: {
+        'auto_enabled': autoEnabled,
+        'auto_reply_enabled': autoReplyEnabled,
+        'auto_export_enabled': autoExportEnabled,
+      });
+      return _mapResponse(res.data);
+    }, fallback: '保存反馈 AI 自动整理设置失败。');
+  }
+
+  Future<Map<String, dynamic>> runAdminFeedbackAutomation() async {
+    return _guard(() async {
+      final res = await _dio.post('/api/admin/feedback/auto-run');
+      return _mapResponse(res.data);
+    }, fallback: '执行反馈 AI 自动整理失败。');
+  }
+
+  Future<Map<String, dynamic>> getAdminFeedbackInsights(String period) async {
+    return _guard(() async {
+      final res = await _dio.get(
+        '/api/admin/feedback/insights',
+        queryParameters: {'period': period},
+      );
+      return _mapResponse(res.data);
+    }, fallback: '读取反馈需求清单失败。');
+  }
+
+  Future<Map<String, dynamic>> exportAdminFeedbackInsights(
+      String period) async {
+    return _guard(() async {
+      final res = await _dio.post(
+        '/api/admin/feedback/export',
+        queryParameters: {'period': period},
+      );
+      return _mapResponse(res.data);
+    }, fallback: '导出反馈需求清单失败。');
+  }
+
+  Future<Map<String, dynamic>> getMyNotifications({int limit = 80}) async {
+    return _guard(() async {
+      final res = await _dio.get(
+        '/api/me/notifications',
+        queryParameters: {'limit': limit},
+      );
+      return _mapResponse(res.data);
+    }, fallback: '读取通知失败。');
+  }
+
+  Future<Map<String, dynamic>> markNotificationRead(String id) async {
+    return _guard(() async {
+      final res = await _dio.post('/api/me/notifications/$id/read');
+      return _mapResponse(res.data);
+    }, fallback: '标记通知失败。');
+  }
+
+  Future<Map<String, dynamic>> markAllNotificationsRead() async {
+    return _guard(() async {
+      final res = await _dio.post('/api/me/notifications/read-all');
+      return _mapResponse(res.data);
+    }, fallback: '标记通知失败。');
+  }
+
   Future<Map<String, dynamic>> getGalleryPosts({
     required String view,
     String? keyword,

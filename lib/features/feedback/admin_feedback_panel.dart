@@ -28,16 +28,24 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
 
   final TextEditingController _keywordController = TextEditingController();
   Future<Map<String, dynamic>>? _future;
+  Future<Map<String, dynamic>>? _automationFuture;
+  Future<Map<String, dynamic>>? _insightsFuture;
   String _type = '';
   String _status = '';
+  String _insightPeriod = 'day';
   DateTimeRange? _range;
   int _page = 1;
   final Set<String> _busyIds = {};
+  bool _isSavingAutomation = false;
+  bool _isExportingInsights = false;
+  bool _isRunningAutomation = false;
 
   @override
   void initState() {
     super.initState();
     _reload();
+    _reloadAutomation();
+    _reloadInsights();
   }
 
   @override
@@ -67,9 +75,29 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
         );
   }
 
+  void _reloadAutomation() {
+    if (!widget.canAi) return;
+    _automationFuture =
+        ref.read(gatewayClientProvider).getAdminFeedbackAutomation();
+  }
+
+  void _reloadInsights() {
+    _insightsFuture = ref
+        .read(gatewayClientProvider)
+        .getAdminFeedbackInsights(_insightPeriod);
+  }
+
   Future<void> _refresh() async {
-    setState(_reload);
-    await _future;
+    setState(() {
+      _reload();
+      _reloadAutomation();
+      _reloadInsights();
+    });
+    await Future.wait([
+      if (_future != null) _future!,
+      if (_automationFuture != null) _automationFuture!,
+      if (_insightsFuture != null) _insightsFuture!,
+    ]);
   }
 
   Future<void> _pickRange() async {
@@ -387,6 +415,75 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
     }
   }
 
+  Future<void> _saveAutomation(
+    Map<String, dynamic> current, {
+    bool? autoEnabled,
+    bool? autoReplyEnabled,
+    bool? autoExportEnabled,
+  }) async {
+    setState(() => _isSavingAutomation = true);
+    try {
+      await ref.read(gatewayClientProvider).saveAdminFeedbackAutomation(
+            autoEnabled: autoEnabled ?? (current['auto_enabled'] == true),
+            autoReplyEnabled:
+                autoReplyEnabled ?? (current['auto_reply_enabled'] == true),
+            autoExportEnabled:
+                autoExportEnabled ?? (current['auto_export_enabled'] == true),
+          );
+      if (!mounted) return;
+      showCenterNotice(context, '反馈 AI 自动整理设置已保存');
+      setState(_reloadAutomation);
+    } catch (error) {
+      if (!mounted) return;
+      _showError(error, '保存反馈 AI 自动整理设置失败。');
+    } finally {
+      if (mounted) setState(() => _isSavingAutomation = false);
+    }
+  }
+
+  Future<void> _runAutomationNow() async {
+    setState(() => _isRunningAutomation = true);
+    try {
+      final result =
+          await ref.read(gatewayClientProvider).runAdminFeedbackAutomation();
+      if (!mounted) return;
+      showCenterNotice(
+        context,
+        '已整理 ${result['summarized'] ?? 0} 条，回复 ${result['replied'] ?? 0} 条',
+      );
+      setState(() {
+        _reload();
+        _reloadInsights();
+        _reloadAutomation();
+      });
+    } catch (error) {
+      if (!mounted) return;
+      _showError(error, '执行反馈 AI 自动整理失败。');
+    } finally {
+      if (mounted) setState(() => _isRunningAutomation = false);
+    }
+  }
+
+  Future<void> _exportInsights() async {
+    setState(() => _isExportingInsights = true);
+    try {
+      final result = await ref
+          .read(gatewayClientProvider)
+          .exportAdminFeedbackInsights(_insightPeriod);
+      if (!mounted) return;
+      showCenterNotice(context, '已导出：${feedbackText(result['file_path'])}');
+      setState(() {
+        _reloadAutomation();
+        _reloadInsights();
+      });
+    } catch (error) {
+      if (!mounted) return;
+      _showError(error, '导出反馈需求清单失败。');
+    } finally {
+      if (mounted) setState(() => _isExportingInsights = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Map<String, dynamic>>(
@@ -398,6 +495,12 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              if (widget.canAi) ...[
+                _automationPanel(),
+                const SizedBox(height: 12),
+              ],
+              _insightsPanel(),
+              const SizedBox(height: 12),
               _filters(),
               const SizedBox(height: 12),
               if (snapshot.connectionState != ConnectionState.done)
@@ -419,6 +522,232 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
           ),
         );
       },
+    );
+  }
+
+  Widget _automationPanel() {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _automationFuture,
+      builder: (context, snapshot) {
+        final data = snapshot.data ?? const <String, dynamic>{};
+        return Card(
+          margin: EdgeInsets.zero,
+          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.58),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.auto_awesome_outlined,
+                        color: Theme.of(context).colorScheme.primary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '反馈 AI 自动整理',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                    ),
+                    if (snapshot.connectionState != ConnectionState.done ||
+                        _isSavingAutomation)
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('每 5 分钟整理新反馈'),
+                  value: data['auto_enabled'] == true,
+                  onChanged: snapshot.hasData && !_isSavingAutomation
+                      ? (value) => _saveAutomation(data, autoEnabled: value)
+                      : null,
+                ),
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('自动回复已整理内容'),
+                  value: data['auto_reply_enabled'] == true,
+                  onChanged: snapshot.hasData && !_isSavingAutomation
+                      ? (value) =>
+                          _saveAutomation(data, autoReplyEnabled: value)
+                      : null,
+                ),
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('每日导出反馈清单'),
+                  value: data['auto_export_enabled'] != false,
+                  onChanged: snapshot.hasData && !_isSavingAutomation
+                      ? (value) =>
+                          _saveAutomation(data, autoExportEnabled: value)
+                      : null,
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton.icon(
+                    onPressed: _isRunningAutomation ? null : _runAutomationNow,
+                    icon: _isRunningAutomation
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.play_arrow_outlined),
+                    label: const Text('立即整理'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _insightsPanel() {
+    return Card(
+      margin: EdgeInsets.zero,
+      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.58),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.leaderboard_outlined,
+                    color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '反馈需求清单',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: widget.canAi && !_isExportingInsights
+                      ? _exportInsights
+                      : null,
+                  icon: _isExportingInsights
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.file_download_outlined),
+                  label: const Text('导出'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _periodChip('day', '最近一天'),
+                _periodChip('week', '最近7天'),
+                _periodChip('month', '最近一月'),
+              ],
+            ),
+            const SizedBox(height: 10),
+            FutureBuilder<Map<String, dynamic>>(
+              future: _insightsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                if (snapshot.hasError) {
+                  return Text(
+                    friendlyError(snapshot.error ?? '读取反馈需求清单失败。',
+                        fallback: '读取反馈需求清单失败。'),
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error),
+                  );
+                }
+                final data = snapshot.data ?? const <String, dynamic>{};
+                final rankings = (data['rankings'] as List? ?? [])
+                    .whereType<Map>()
+                    .map((item) => Map<String, dynamic>.from(item))
+                    .take(5)
+                    .toList();
+                if (rankings.isEmpty) {
+                  return const Text('当前周期暂无反馈。');
+                }
+                return Column(
+                  children: rankings.map(_rankingTile).toList(),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _periodChip(String value, String label) {
+    return ChoiceChip(
+      showCheckmark: false,
+      label: Text(label),
+      selected: _insightPeriod == value,
+      onSelected: (_) {
+        setState(() {
+          _insightPeriod = value;
+          _reloadInsights();
+        });
+      },
+    );
+  }
+
+  Widget _rankingTile(Map<String, dynamic> item) {
+    final tags = (item['tags'] as List? ?? [])
+        .map((tag) => tag.toString())
+        .where((tag) => tag.trim().isNotEmpty)
+        .take(4)
+        .toList();
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '#${item['rank'] ?? '-'} ${feedbackText(item['title'])}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            feedbackText(item['summary'], fallback: ''),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              _metaPill(Icons.repeat, '${item['count'] ?? 0} 次'),
+              _metaPill(Icons.priority_high, '${item['priority'] ?? 'medium'}'),
+              ...tags.map((tag) => _metaPill(Icons.sell_outlined, tag)),
+            ],
+          ),
+        ],
+      ),
     );
   }
 

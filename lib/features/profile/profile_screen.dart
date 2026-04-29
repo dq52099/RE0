@@ -18,6 +18,7 @@ import '../auth/login_screen.dart';
 import '../compendium/image_preview_screen.dart';
 import '../feedback/feedback_screen.dart';
 import '../gallery/gallery_collections_screen.dart';
+import '../notifications/notifications_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key, this.refreshToken = 0});
@@ -39,6 +40,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   double? _updateProgress;
   Future<int>? _cacheSizeFuture;
   Future<Map<String, dynamic>>? _checkInStatusFuture;
+  Future<Map<String, dynamic>>? _notificationsFuture;
   AppUpdateInfo? _latestUpdateInfo;
   bool _hasAutoCheckedUpdate = false;
 
@@ -61,6 +63,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _cacheSizeFuture = ref.read(imageCacheProvider).cacheSizeBytes();
     _checkInStatusFuture =
         ref.read(gatewayClientProvider).getDailyCheckInStatus();
+    _notificationsFuture = ref.read(gatewayClientProvider).getMyNotifications(
+          limit: 20,
+        );
   }
 
   Future<void> _clearCache() async {
@@ -229,7 +234,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             children: [
               Text('安装包大小: ${_formatBytes(info.fileSize)}'),
               const SizedBox(height: 8),
-              Text(info.releaseNotes),
+              Text(_briefReleaseNotes(info.releaseNotes)),
             ],
           ),
           actions: [
@@ -295,6 +300,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const FeedbackScreen()),
     );
+  }
+
+  Future<void> _openNotifications() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+    );
+    if (!mounted) return;
+    setState(_refreshCacheSize);
   }
 
   void _openAvatarPreview(Map<String, dynamic>? user) {
@@ -565,6 +578,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ),
               ),
             ),
+            FutureBuilder<Map<String, dynamic>>(
+              future: _notificationsFuture,
+              builder: (context, snapshot) {
+                final unread = int.tryParse(
+                      snapshot.data?['unread_count']?.toString() ?? '',
+                    ) ??
+                    0;
+                return _menuCard(
+                  child: ListTile(
+                    leading: Icon(Icons.notifications_none_outlined,
+                        color: brand.primaryColor),
+                    title: const Text('通知'),
+                    subtitle: const Text('评论、点赞、收藏和反馈处理进度'),
+                    trailing: _notificationTrailing(unread),
+                    onTap: _openNotifications,
+                  ),
+                );
+              },
+            ),
             _menuCard(
               child: ListTile(
                 leading: Icon(Icons.person_outline, color: brand.primaryColor),
@@ -694,8 +726,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final editQuota = quota['edit'] as Map? ?? {};
 
     return Card(
+      elevation: 0,
+      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.62),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.08),
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -849,10 +886,47 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget _menuCard({required Widget child}) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
+      elevation: 0,
+      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.58),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.08),
+        ),
       ),
       child: child,
+    );
+  }
+
+  Widget _notificationTrailing(int unread) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        const Icon(Icons.chevron_right),
+        if (unread > 0)
+          Positioned(
+            right: -4,
+            top: -7,
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 17),
+              height: 17,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.error,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                unread > 99 ? '99+' : unread.toString(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -1048,6 +1122,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       'api_key.view',
       'audit.view',
       'feedback.view',
+      'gallery.manage',
     }).isNotEmpty) {
       return true;
     }
@@ -1066,10 +1141,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       'apiKeys',
       'audit',
       'feedback',
+      'gallery',
     }).isNotEmpty;
   }
 
   String? _systemTargetView(Map<String, dynamic>? user) {
+    if (_hasSystemManagement(user)) return 'overview';
+
     final menus = (user?['menus'] as List? ?? [])
         .whereType<Map>()
         .map((item) => item['key']?.toString())
@@ -1122,5 +1200,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
     final mb = kb / 1024;
     return '${mb.toStringAsFixed(1)} MB';
+  }
+
+  String _briefReleaseNotes(String value) {
+    final lines = value
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .take(5)
+        .toList();
+    if (lines.isEmpty) return '包含最新修复与体验优化。';
+    return lines.join('\n');
   }
 }

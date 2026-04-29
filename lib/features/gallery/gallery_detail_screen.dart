@@ -27,9 +27,11 @@ class GalleryDetailScreen extends ConsumerStatefulWidget {
 class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
   late Map<String, dynamic> _post;
   final TextEditingController _commentController = TextEditingController();
+  final FocusNode _commentFocusNode = FocusNode();
   bool _isSubmittingComment = false;
   bool _isRefreshingComments = false;
   bool _isDownloading = false;
+  String? _replyingToName;
   List<Map<String, dynamic>> _comments = [];
 
   @override
@@ -42,6 +44,7 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
   @override
   void dispose() {
     _commentController.dispose();
+    _commentFocusNode.dispose();
     super.dispose();
   }
 
@@ -188,6 +191,7 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
           .getGalleryPost(_post['id'].toString());
       if (!mounted) return;
       _commentController.clear();
+      _replyingToName = null;
       setState(() => _post = updated);
       await _loadComments();
     } catch (error) {
@@ -208,6 +212,22 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
     await Clipboard.setData(ClipboardData(text: prompt));
     if (!mounted) return;
     showCenterNotice(context, '提示词已复制');
+  }
+
+  void _replyToComment(Map<String, dynamic> comment) {
+    final name = comment['display_name']?.toString().trim() ??
+        comment['username']?.toString().trim() ??
+        '';
+    if (name.isEmpty) return;
+    final prefix = '@$name ';
+    setState(() => _replyingToName = name);
+    if (!_commentController.text.startsWith(prefix)) {
+      _commentController.text = prefix;
+      _commentController.selection = TextSelection.collapsed(
+        offset: _commentController.text.length,
+      );
+    }
+    _commentFocusNode.requestFocus();
   }
 
   Future<void> _openImage() async {
@@ -283,7 +303,7 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                                 _post['author_avatar_url']?.toString() ?? '',
                             displayName:
                                 _post['display_name']?.toString() ?? '-',
-                            radius: 18,
+                            radius: 22,
                             fallback: '画',
                             brand: brand,
                           ),
@@ -392,10 +412,23 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: _commentController,
+                    focusNode: _commentFocusNode,
                     maxLines: 2,
-                    decoration: const InputDecoration(
-                      labelText: '评论',
+                    decoration: InputDecoration(
+                      labelText: _replyingToName == null
+                          ? '评论'
+                          : '回复 $_replyingToName',
                       hintText: '发表评论后可查看提示词',
+                      suffixIcon: _replyingToName == null
+                          ? null
+                          : IconButton(
+                              tooltip: '取消回复',
+                              icon: const Icon(Icons.close),
+                              onPressed: () {
+                                setState(() => _replyingToName = null);
+                                _commentController.clear();
+                              },
+                            ),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -434,7 +467,7 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                                       '',
                               displayName:
                                   comment['display_name']?.toString() ?? '-',
-                              radius: 18,
+                              radius: 20,
                               fallback: '评',
                               brand: brand,
                             ),
@@ -482,6 +515,14 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                                           onPressed: () => _deleteComment(
                                               comment['id'].toString()),
                                         ),
+                                      IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        tooltip: '回复',
+                                        icon: const Icon(Icons.reply_outlined,
+                                            size: 18),
+                                        onPressed: () =>
+                                            _replyToComment(comment),
+                                      ),
                                     ],
                                   ),
                                   const SizedBox(height: 6),

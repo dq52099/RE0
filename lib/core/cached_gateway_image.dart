@@ -153,17 +153,17 @@ class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage>
           right: 8,
           bottom: 8,
           child: Material(
-            color: Colors.black.withValues(alpha: 0.54),
-            elevation: 8,
+            color: Colors.black.withValues(alpha: 0.42),
+            elevation: 4,
             shadowColor: Colors.black.withValues(alpha: 0.22),
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(13),
             child: Ink(
-              width: 46,
-              height: 46,
+              width: 42,
+              height: 42,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.circular(13),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.26),
+                  color: Colors.white.withValues(alpha: 0.22),
                 ),
               ),
               child: IconButton(
@@ -179,7 +179,7 @@ class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage>
                           color: Colors.white,
                         ),
                       )
-                    : const Icon(Icons.download_rounded, size: 22),
+                    : const Icon(Icons.download_rounded, size: 21),
               ),
             ),
           ),

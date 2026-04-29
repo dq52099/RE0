@@ -67,28 +67,42 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    DropdownButtonFormField<String>(
-                      initialValue: type,
-                      decoration: const InputDecoration(labelText: '类型'),
-                      items: feedbackTypes
-                          .map(
-                            (item) => DropdownMenuItem<String>(
-                              value: item,
-                              child: Text(feedbackTypeLabel(item)),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setDialogState(() => type = value);
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 12),
                     TextField(
                       controller: title,
                       maxLength: 80,
                       decoration: const InputDecoration(labelText: '标题'),
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '类型',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: SegmentedButton<String>(
+                        segments: feedbackTypes
+                            .map(
+                              (item) => ButtonSegment<String>(
+                                value: item,
+                                label: Text(feedbackTypeLabel(item)),
+                                icon: Icon(
+                                  item == 'wish'
+                                      ? Icons.auto_awesome_outlined
+                                      : Icons.feedback_outlined,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        selected: {type},
+                        onSelectionChanged: (values) {
+                          FocusScope.of(context).unfocus();
+                          setDialogState(() => type = values.first);
+                        },
+                      ),
                     ),
                     const SizedBox(height: 8),
                     TextField(

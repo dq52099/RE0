@@ -8,6 +8,7 @@ import '../../core/brand_background.dart';
 import '../../core/compact_save_notice.dart';
 import '../../core/providers.dart';
 import '../feedback/admin_feedback_panel.dart';
+import '../gallery/gallery_screen.dart';
 
 class AdminScreen extends ConsumerStatefulWidget {
   const AdminScreen({super.key, this.initialView});
@@ -59,7 +60,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 .map(
                   (item) => KeyedSubtree(
                     key: ValueKey('${item.key}-$_revision'),
-                    child: _sectionBody(context, brand, item, user),
+                    child: _sectionBody(context, brand, item, user, sections),
                   ),
                 )
                 .toList(),
@@ -94,6 +95,16 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       sections.add(const _AdminSection('invites', '邀请码'));
     }
     if (isAdmin ||
+        permissions.contains('feedback.view') ||
+        menus.contains('feedback')) {
+      sections.add(const _AdminSection('feedback', '用户反馈'));
+    }
+    if (isAdmin ||
+        permissions.contains('gallery.manage') ||
+        menus.contains('gallery')) {
+      sections.add(const _AdminSection('gallery', '画廊'));
+    }
+    if (isAdmin ||
         permissions.contains('group.view') ||
         menus.contains('groups')) {
       sections.add(const _AdminSection('groups', '用户组'));
@@ -114,11 +125,6 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       sections.add(const _AdminSection('apiKeys', '密钥'));
     }
     if (isAdmin ||
-        permissions.contains('feedback.view') ||
-        menus.contains('feedback')) {
-      sections.add(const _AdminSection('feedback', '用户反馈'));
-    }
-    if (isAdmin ||
         permissions.contains('settings.view') ||
         menus.contains('settings')) {
       sections.add(const _AdminSection('settings', '设置'));
@@ -136,10 +142,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     AppBrand brand,
     _AdminSection section,
     Map<String, dynamic>? user,
+    List<_AdminSection> sections,
   ) {
     switch (section.key) {
       case 'overview':
-        return _overviewPage(brand);
+        return _overviewPage(brand, sections);
       case 'users':
         return _usersPage(brand, canManage: _can(user, 'user.manage'));
       case 'invites':
@@ -159,6 +166,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           canReply: _can(user, 'feedback.reply'),
           canAi: _can(user, 'feedback.ai'),
         );
+      case 'gallery':
+        return const GalleryFeedView(
+          view: 'all',
+          emptyText: '画廊还没有公开作品',
+        );
       case 'settings':
         return _settingsPage(brand, canManage: _can(user, 'settings.manage'));
       case 'audit':
@@ -168,52 +180,100 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     }
   }
 
-  Widget _overviewPage(AppBrand brand) {
+  Widget _overviewPage(AppBrand brand, List<_AdminSection> sections) {
     return _futureSection<Map<String, dynamic>>(
       future: ref.read(gatewayClientProvider).adminOverview(),
       builder: (overview) {
         final items = [
-          ('用户', overview['user_count']),
-          ('用户组', overview['group_count']),
-          ('角色', overview['role_count']),
-          ('可用密钥', overview['active_api_key_count']),
+          _OverviewItem('用户', overview['user_count'], Icons.people_outline,
+              'users', '查看用户账号与额度'),
+          _OverviewItem('邀请码', overview['unused_invitation_count'],
+              Icons.card_membership_outlined, 'invites', '未使用邀请码'),
+          _OverviewItem(
+              '用户反馈',
+              overview['feedback_count'],
+              Icons.forum_outlined,
+              'feedback',
+              '未关闭 ${overview['feedback_open_count'] ?? 0} 条'),
+          _OverviewItem(
+              '画廊作品',
+              overview['gallery_post_count'],
+              Icons.photo_library_outlined,
+              'gallery',
+              '评论 ${overview['gallery_comment_count'] ?? 0} 条'),
+          _OverviewItem('用户组', overview['group_count'],
+              Icons.group_work_outlined, 'groups', '管理默认额度'),
+          _OverviewItem('角色', overview['role_count'],
+              Icons.admin_panel_settings_outlined, 'roles', '管理权限组合'),
+          _OverviewItem('可用密钥', overview['active_api_key_count'],
+              Icons.key_outlined, 'apiKeys', '对外调用密钥'),
+          _OverviewItem('画廊点赞', overview['gallery_like_count'],
+              Icons.favorite_border, 'gallery', '作品互动数据'),
         ];
-        return GridView.builder(
+        return ListView(
           padding: const EdgeInsets.all(16),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 1.45,
-          ),
-          itemCount: items.length,
-          itemBuilder: (context, index) {
-            final item = items[index];
-            return Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
+          children: items
+              .map((item) => _overviewCard(brand, sections, item))
+              .toList(),
+        );
+      },
+    );
+  }
+
+  Widget _overviewCard(
+    AppBrand brand,
+    List<_AdminSection> sections,
+    _OverviewItem item,
+  ) {
+    final targetIndex =
+        sections.indexWhere((section) => section.key == item.key);
+    final enabled = targetIndex >= 0;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: enabled
+            ? () => DefaultTabController.of(context).animateTo(targetIndex)
+            : null,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: brand.primaryColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(item.icon, color: brand.primaryColor),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(item.$1,
+                    Text(item.title,
                         style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 8),
-                    Text(
-                      '${item.$2 ?? 0}',
-                      style:
-                          Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                color: brand.primaryColor,
-                                fontWeight: FontWeight.bold,
-                              ),
-                    ),
+                    const SizedBox(height: 4),
+                    Text(item.subtitle,
+                        style: Theme.of(context).textTheme.bodySmall),
                   ],
                 ),
               ),
-            );
-          },
-        );
-      },
+              Text(
+                '${item.value ?? 0}',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: brand.primaryColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const SizedBox(width: 4),
+              if (enabled) const Icon(Icons.chevron_right),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -1624,6 +1684,21 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         'description': '反馈 AI 整理模型',
       },
       {
+        'key': 'feedback_ai_auto_enabled',
+        'value': 'false',
+        'description': '每 5 分钟自动整理新反馈',
+      },
+      {
+        'key': 'feedback_ai_auto_reply_enabled',
+        'value': 'false',
+        'description': '自动用 AI 回复草稿回复已整理反馈',
+      },
+      {
+        'key': 'feedback_ai_auto_export_enabled',
+        'value': 'true',
+        'description': '每日自动导出反馈需求排行榜',
+      },
+      {
         'key': 'prompt_ai_base_url',
         'value': '',
         'description': '提示词生成与图片识别 AI 服务地址',
@@ -1695,6 +1770,22 @@ class _AdminSection {
 
   final String key;
   final String label;
+}
+
+class _OverviewItem {
+  const _OverviewItem(
+    this.title,
+    this.value,
+    this.icon,
+    this.key,
+    this.subtitle,
+  );
+
+  final String title;
+  final dynamic value;
+  final IconData icon;
+  final String key;
+  final String subtitle;
 }
 
 class _UsersData {

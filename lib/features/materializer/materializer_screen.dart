@@ -183,11 +183,56 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
       showCenterNotice(context, '当前没有可用候选');
       return;
     }
-    _spellController.text = candidate.trim();
-    _spellController.selection = TextSelection.collapsed(
-      offset: _spellController.text.length,
+    setState(() {
+      _spellController.text = candidate.trim();
+      _spellController.selection = TextSelection.collapsed(
+        offset: _spellController.text.length,
+      );
+      _lastAppliedCandidate = _spellController.text;
+    });
+  }
+
+  Future<void> _openPromptEditor() async {
+    final brand = ref.read(brandProvider);
+    final controller = TextEditingController(text: _spellController.text);
+    final next = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('完整咒文'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: TextField(
+            controller: controller,
+            autofocus: true,
+            minLines: 8,
+            maxLines: 14,
+            textInputAction: TextInputAction.newline,
+            decoration: InputDecoration(hintText: brand.generatePromptHint),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
     );
-    _lastAppliedCandidate = _spellController.text;
+    controller.dispose();
+    if (next == null) return;
+    setState(() {
+      _spellController.text = next;
+      _spellController.selection = TextSelection.collapsed(
+        offset: _spellController.text.length,
+      );
+      if (_spellController.text != (_lastAppliedCandidate ?? '')) {
+        _lastAppliedCandidate = null;
+      }
+    });
   }
 
   @override
@@ -234,12 +279,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
               const SizedBox(height: 12),
               _buildPromptAssist(brand),
               const SizedBox(height: 12),
-              TextField(
-                controller: _spellController,
-                maxLines: 4,
-                textInputAction: TextInputAction.newline,
-                decoration: InputDecoration(hintText: brand.generatePromptHint),
-              ),
+              _buildPromptField(brand),
               if (activeTask == ImageTaskKind.edit) ...[
                 const SizedBox(height: 12),
                 _buildTaskNotice('改图任务正在进行，请等待完成后再开始生图。'),
@@ -565,6 +605,52 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
           ],
           _candidateSwitcher(brand),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPromptField(AppBrand brand) {
+    final prompt = _spellController.text.trim();
+    return Material(
+      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.58),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: _openPromptEditor,
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(minHeight: 104),
+          padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color:
+                  Theme.of(context).colorScheme.outline.withValues(alpha: 0.18),
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  prompt.isEmpty ? brand.generatePromptHint : prompt,
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: prompt.isEmpty
+                            ? Theme.of(context)
+                                .hintColor
+                                .withValues(alpha: 0.82)
+                            : null,
+                        height: 1.38,
+                      ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(Icons.open_in_full, size: 18, color: brand.primaryColor),
+            ],
+          ),
+        ),
       ),
     );
   }
