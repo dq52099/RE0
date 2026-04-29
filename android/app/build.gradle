@@ -38,7 +38,7 @@ def hasReleaseSigning = releaseStoreFile && releaseStorePassword && releaseKeyAl
 
 android {
     namespace 'com.dq52099.re0'
-    compileSdkVersion 34
+    compileSdkVersion 36
     ndkVersion flutter.ndkVersion
 
     compileOptions {
@@ -87,6 +87,6 @@ flutter {
 }
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.24"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:2.1.0"
     implementation "androidx.core:core:1.12.0"
 }
