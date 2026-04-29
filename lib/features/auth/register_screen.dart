@@ -138,6 +138,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final brand = ref.watch(brandProvider);
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(title: const Text('注册新账号')),
       body: BrandBackground(
         child: SafeArea(

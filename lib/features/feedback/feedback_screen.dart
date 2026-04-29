@@ -55,6 +55,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
     final title = TextEditingController();
     final content = TextEditingController();
     var type = 'feedback';
+    var category = 'feature';
     final payload = await showDialog<Map<String, String>>(
       context: context,
       builder: (context) {
@@ -64,58 +65,85 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
               title: const Text('反馈与许愿'),
               content: SizedBox(
                 width: double.maxFinite,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: title,
-                      maxLength: 80,
-                      decoration: const InputDecoration(labelText: '标题'),
-                    ),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        '类型',
-                        style: Theme.of(context).textTheme.bodySmall,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: title,
+                        maxLength: 80,
+                        decoration: const InputDecoration(labelText: '标题'),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: SegmentedButton<String>(
-                        segments: feedbackTypes
-                            .map(
-                              (item) => ButtonSegment<String>(
-                                value: item,
-                                label: Text(feedbackTypeLabel(item)),
-                                icon: Icon(
-                                  item == 'wish'
-                                      ? Icons.auto_awesome_outlined
-                                      : Icons.feedback_outlined,
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '类型',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: SegmentedButton<String>(
+                          segments: feedbackTypes
+                              .map(
+                                (item) => ButtonSegment<String>(
+                                  value: item,
+                                  label: Text(feedbackTypeLabel(item)),
+                                  icon: Icon(
+                                    item == 'wish'
+                                        ? Icons.auto_awesome_outlined
+                                        : Icons.feedback_outlined,
+                                  ),
                                 ),
-                              ),
-                            )
-                            .toList(),
-                        selected: {type},
-                        onSelectionChanged: (values) {
-                          FocusScope.of(context).unfocus();
-                          setDialogState(() => type = values.first);
-                        },
+                              )
+                              .toList(),
+                          selected: {type},
+                          onSelectionChanged: (values) {
+                            FocusScope.of(context).unfocus();
+                            setDialogState(() => type = values.first);
+                          },
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: content,
-                      minLines: 4,
-                      maxLines: 8,
-                      maxLength: 1200,
-                      decoration: const InputDecoration(
-                        labelText: '内容',
-                        hintText: '描述遇到的问题、建议，或想新增的功能、模型、主题、参数',
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '分类',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final item in feedbackCategories)
+                            ChoiceChip(
+                              showCheckmark: false,
+                              label: Text(feedbackCategoryLabel(item)),
+                              selected: category == item,
+                              onSelected: (_) {
+                                FocusScope.of(context).unfocus();
+                                setDialogState(() => category = item);
+                              },
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: content,
+                        minLines: 4,
+                        maxLines: 8,
+                        maxLength: 1200,
+                        decoration: const InputDecoration(
+                          labelText: '内容',
+                          hintText: '描述遇到的问题、建议，或想新增的功能、模型、主题、参数',
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               actions: [
@@ -135,6 +163,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                     }
                     Navigator.pop(context, {
                       'type': type,
+                      'category': category,
                       'title': nextTitle,
                       'content': nextContent,
                     });
@@ -154,6 +183,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
     try {
       await ref.read(gatewayClientProvider).createMyFeedback(
             type: payload['type']!,
+            category: payload['category'],
             title: payload['title']!,
             content: payload['content']!,
           );
@@ -198,6 +228,14 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                 _detailHeader(detail),
                 const SizedBox(height: 14),
                 _section('内容', feedbackText(detail['content'])),
+                if (feedbackText(detail['category'], fallback: '')
+                    .isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _section(
+                    '分类',
+                    feedbackCategoryLabel(detail['category']?.toString()),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 _section(
                   '管理员回复',
@@ -239,7 +277,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                '${feedbackTypeLabel(item['type']?.toString())} · ${feedbackDate(item['created_at'])}',
+                '${feedbackTypeLabel(item['type']?.toString())} · ${feedbackCategoryLabel(item['category']?.toString())} · ${feedbackDate(item['created_at'])}',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
@@ -272,6 +310,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: const Text('反馈与许愿'),
         actions: [
@@ -475,6 +514,11 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                 children: [
                   _metaPill(Icons.category_outlined,
                       feedbackTypeLabel(item['type']?.toString())),
+                  if (feedbackText(item['category'], fallback: '').isNotEmpty)
+                    _metaPill(
+                      Icons.sell_outlined,
+                      feedbackCategoryLabel(item['category']?.toString()),
+                    ),
                   _metaPill(Icons.schedule_outlined,
                       feedbackDate(item['created_at'])),
                   if (feedbackText(item['admin_reply'] ?? item['reply'],

@@ -114,11 +114,6 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       sections.add(const _AdminSection('feedbackAi', '反馈 AI'));
     }
     if (isAdmin ||
-        permissions.contains('feedback.view') ||
-        menus.contains('feedback')) {
-      sections.add(const _AdminSection('feedbackInsights', '需求清单'));
-    }
-    if (isAdmin ||
         permissions.contains('settings.view') ||
         menus.contains('settings')) {
       sections.add(const _AdminSection('settings', '设置'));
@@ -183,13 +178,6 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       case 'feedbackAi':
         return AdminFeedbackPanel(
           mode: AdminFeedbackPanelMode.automation,
-          canManage: _can(user, 'feedback.manage'),
-          canReply: _can(user, 'feedback.reply'),
-          canAi: _can(user, 'feedback.ai'),
-        );
-      case 'feedbackInsights':
-        return AdminFeedbackPanel(
-          mode: AdminFeedbackPanelMode.insights,
           canManage: _can(user, 'feedback.manage'),
           canReply: _can(user, 'feedback.reply'),
           canAi: _can(user, 'feedback.ai'),

@@ -71,6 +71,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     final activeTask = ref.watch(activeImageTaskProvider);
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(title: Text(brand.editTitle)),
       body: BrandBackground(
         child: SingleChildScrollView(

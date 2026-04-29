@@ -43,6 +43,7 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
   bool _isSavingAutomation = false;
   bool _isExportingInsights = false;
   bool _isRunningAutomation = false;
+  bool _isRunningAutoReply = false;
 
   @override
   void initState() {
@@ -52,6 +53,7 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
     }
     if (widget.mode == AdminFeedbackPanelMode.automation) {
       _reloadAutomation();
+      _reloadInsights();
     }
     if (widget.mode == AdminFeedbackPanelMode.insights) {
       _reloadInsights();
@@ -104,6 +106,7 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
       }
       if (widget.mode == AdminFeedbackPanelMode.automation) {
         _reloadAutomation();
+        _reloadInsights();
       }
       if (widget.mode == AdminFeedbackPanelMode.insights) {
         _reloadInsights();
@@ -115,6 +118,9 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
       if (widget.mode == AdminFeedbackPanelMode.automation &&
           _automationFuture != null)
         _automationFuture!,
+      if (widget.mode == AdminFeedbackPanelMode.automation &&
+          _insightsFuture != null)
+        _insightsFuture!,
       if (widget.mode == AdminFeedbackPanelMode.insights &&
           _insightsFuture != null)
         _insightsFuture!,
@@ -209,7 +215,7 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
               ),
               const SizedBox(height: 6),
               Text(
-                '$user · ${feedbackTypeLabel(item['type']?.toString())} · ${feedbackDate(item['created_at'])}',
+                '$user · ${feedbackTypeLabel(item['type']?.toString())} · ${feedbackCategoryLabel(item['category']?.toString())} · ${feedbackDate(item['created_at'])}',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
@@ -439,6 +445,8 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
   Future<void> _saveAutomation(
     Map<String, dynamic> current, {
     bool? autoEnabled,
+    String? automationLimit,
+    int? intervalMinutes,
     bool? autoReplyEnabled,
     bool? autoExportEnabled,
   }) async {
@@ -446,6 +454,9 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
     try {
       await ref.read(gatewayClientProvider).saveAdminFeedbackAutomation(
             autoEnabled: autoEnabled ?? (current['auto_enabled'] == true),
+            automationLimit: automationLimit ?? _automationLimitValue(current),
+            intervalMinutes:
+                intervalMinutes ?? _automationIntervalValue(current),
             autoReplyEnabled:
                 autoReplyEnabled ?? (current['auto_reply_enabled'] == true),
             autoExportEnabled:
@@ -459,6 +470,26 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
       _showError(error, '保存反馈 AI 自动整理设置失败。');
     } finally {
       if (mounted) setState(() => _isSavingAutomation = false);
+    }
+  }
+
+  Future<void> _runAutoReplyNow() async {
+    setState(() => _isRunningAutoReply = true);
+    try {
+      final result =
+          await ref.read(gatewayClientProvider).runAdminFeedbackAutoReply();
+      if (!mounted) return;
+      showCenterNotice(context, '已自动回复 ${result['replied'] ?? 0} 条');
+      setState(() {
+        _reload();
+        _reloadInsights();
+        _reloadAutomation();
+      });
+    } catch (error) {
+      if (!mounted) return;
+      _showError(error, '执行反馈 AI 自动回复失败。');
+    } finally {
+      if (mounted) setState(() => _isRunningAutoReply = false);
     }
   }
 
@@ -505,6 +536,23 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
     }
   }
 
+  String _automationLimitValue(Map<String, dynamic> data) {
+    final value = feedbackText(data['automation_limit']).toLowerCase();
+    return const {'5', '10', '15', 'all'}.contains(value) ? value : '5';
+  }
+
+  String _automationLimitLabel(String value) {
+    if (value == 'all') return '所有';
+    return '$value 条';
+  }
+
+  int _automationIntervalValue(Map<String, dynamic> data) {
+    final raw = data['interval_minutes'];
+    final parsed = raw is num ? raw.toInt() : int.tryParse(feedbackText(raw));
+    if (parsed == null) return 5;
+    return parsed.clamp(1, 1440).toInt();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.mode == AdminFeedbackPanelMode.automation) {
@@ -513,9 +561,11 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            if (widget.canAi)
-              _automationPanel()
-            else
+            if (widget.canAi) ...[
+              _automationPanel(),
+              const SizedBox(height: 12),
+              _insightsPanel(),
+            ] else
               const Padding(
                 padding: EdgeInsets.only(top: 80),
                 child: Center(child: Text('当前账号没有反馈 AI 权限')),
@@ -600,10 +650,73 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
                   ],
                 ),
                 const SizedBox(height: 8),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final fieldWidth = constraints.maxWidth >= 430
+                        ? (constraints.maxWidth - 8) / 2
+                        : constraints.maxWidth;
+                    final interval = _automationIntervalValue(data);
+                    final intervals =
+                        <int>{1, 5, 10, 15, 30, 60, interval}.toList()..sort();
+                    return Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        CompactDropdownField<String>(
+                          label: '单次整理数量',
+                          value: _automationLimitValue(data),
+                          width: fieldWidth,
+                          menuWidth: fieldWidth,
+                          selectedLabels: const ['5 条', '10 条', '15 条', '所有'],
+                          items: [
+                            for (final value in const ['5', '10', '15', 'all'])
+                              CompactDropdownField.centeredItem<String>(
+                                value,
+                                _automationLimitLabel(value),
+                                context,
+                              ),
+                          ],
+                          onChanged: snapshot.hasData && !_isSavingAutomation
+                              ? (value) {
+                                  if (value == null) return;
+                                  _saveAutomation(data, automationLimit: value);
+                                }
+                              : (_) {},
+                        ),
+                        CompactDropdownField<int>(
+                          label: '整理间隔',
+                          value: interval,
+                          width: fieldWidth,
+                          menuWidth: fieldWidth,
+                          selectedLabels: [
+                            for (final value in intervals) '$value 分钟',
+                          ],
+                          items: [
+                            for (final value in intervals)
+                              CompactDropdownField.centeredItem<int>(
+                                value,
+                                '$value 分钟',
+                                context,
+                              ),
+                          ],
+                          onChanged: snapshot.hasData && !_isSavingAutomation
+                              ? (value) {
+                                  if (value == null) return;
+                                  _saveAutomation(data, intervalMinutes: value);
+                                }
+                              : (_) {},
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
                 SwitchListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('每 5 分钟整理新反馈'),
+                  title: Text(
+                      '自动整理新反馈，每次 ${_automationLimitLabel(_automationLimitValue(data))}'),
+                  subtitle: Text('间隔 ${_automationIntervalValue(data)} 分钟'),
                   value: data['auto_enabled'] == true,
                   onChanged: snapshot.hasData && !_isSavingAutomation
                       ? (value) => _saveAutomation(data, autoEnabled: value)
@@ -631,16 +744,38 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
                 ),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: OutlinedButton.icon(
-                    onPressed: _isRunningAutomation ? null : _runAutomationNow,
-                    icon: _isRunningAutomation
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.play_arrow_outlined),
-                    label: const Text('立即整理'),
+                  child: Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed:
+                            _isRunningAutoReply ? null : _runAutoReplyNow,
+                        icon: _isRunningAutoReply
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.reply_all_outlined),
+                        label: const Text('立即回复'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed:
+                            _isRunningAutomation ? null : _runAutomationNow,
+                        icon: _isRunningAutomation
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.play_arrow_outlined),
+                        label: const Text('立即整理'),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -978,6 +1113,11 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
                   _metaPill(Icons.person_outline, user),
                   _metaPill(Icons.category_outlined,
                       feedbackTypeLabel(item['type']?.toString())),
+                  if (feedbackText(item['category'], fallback: '').isNotEmpty)
+                    _metaPill(
+                      Icons.sell_outlined,
+                      feedbackCategoryLabel(item['category']?.toString()),
+                    ),
                   _metaPill(Icons.schedule_outlined,
                       feedbackDate(item['created_at'])),
                   if (aiField(item, ['summary', 'ai_summary']).isNotEmpty)

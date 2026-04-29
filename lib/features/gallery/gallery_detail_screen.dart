@@ -31,6 +31,7 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
   bool _isSubmittingComment = false;
   bool _isRefreshingComments = false;
   bool _isDownloading = false;
+  bool _isCommentComposerExpanded = false;
   String? _replyingToName;
   String? _replyingToCommentId;
   String? _replyingToSnippet;
@@ -198,7 +199,10 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
       _replyingToName = null;
       _replyingToCommentId = null;
       _replyingToSnippet = null;
-      setState(() => _post = updated);
+      setState(() {
+        _post = updated;
+        _isCommentComposerExpanded = false;
+      });
       await _loadComments();
     } catch (error) {
       if (!mounted) return;
@@ -230,6 +234,7 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
       _replyingToName = name;
       _replyingToCommentId = comment['id']?.toString();
       _replyingToSnippet = comment['content']?.toString();
+      _isCommentComposerExpanded = true;
     });
     if (!_commentController.text.startsWith(prefix)) {
       _commentController.text = prefix;
@@ -237,6 +242,20 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
         offset: _commentController.text.length,
       );
     }
+    _commentFocusNode.requestFocus();
+  }
+
+  void _cancelReply() {
+    setState(() {
+      _replyingToName = null;
+      _replyingToCommentId = null;
+      _replyingToSnippet = null;
+    });
+    _commentController.clear();
+  }
+
+  void _openCommentComposer() {
+    setState(() => _isCommentComposerExpanded = true);
     _commentFocusNode.requestFocus();
   }
 
@@ -270,6 +289,9 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
     final canDelete = boolish(_post['can_delete']) || isOwner;
     final liked = boolish(_post['liked']);
     final favorited = boolish(_post['favorited']);
+    final action = _post['action']?.toString() == 'edit' ? 'edit' : 'generate';
+    final actionColor =
+        action == 'edit' ? brand.warningColor : brand.primaryColor;
     return Scaffold(
       appBar: AppBar(
         title: Text(brand.galleryTitle),
@@ -282,11 +304,19 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
             ),
         ],
       ),
+      bottomNavigationBar: _commentComposer(brand),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 132),
         children: [
           Card(
             clipBehavior: Clip.antiAlias,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(
+                color: actionColor.withValues(alpha: 0.45),
+                width: 1.4,
+              ),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -333,11 +363,14 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                               ],
                             ),
                           ),
-                          Text(
-                            _post['action']?.toString() == 'generate'
+                          _actionPill(
+                            label: action == 'generate'
                                 ? brand.generateActionLabel
                                 : brand.editActionLabel,
-                            style: Theme.of(context).textTheme.bodySmall,
+                            color: actionColor,
+                            icon: action == 'generate'
+                                ? Icons.auto_awesome_outlined
+                                : Icons.brush_outlined,
                           ),
                         ],
                       ),
@@ -420,53 +453,6 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  if (_replyingToName != null) ...[
-                    _replyTargetBanner(brand),
-                    const SizedBox(height: 10),
-                  ],
-                  TextField(
-                    controller: _commentController,
-                    focusNode: _commentFocusNode,
-                    maxLines: 2,
-                    decoration: InputDecoration(
-                      labelText: _replyingToName == null
-                          ? '评论'
-                          : '回复 $_replyingToName',
-                      hintText: '发表评论后可查看提示词',
-                      suffixIcon: _replyingToName == null
-                          ? null
-                          : IconButton(
-                              tooltip: '取消回复',
-                              icon: const Icon(Icons.close),
-                              onPressed: () {
-                                setState(() {
-                                  _replyingToName = null;
-                                  _replyingToCommentId = null;
-                                  _replyingToSnippet = null;
-                                });
-                                _commentController.clear();
-                              },
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: _isSubmittingComment ? null : _submitComment,
-                      child: _isSubmittingComment
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text('发表评论'),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
                   if (_comments.isEmpty)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 18),
@@ -488,6 +474,113 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
     final currentUserId = currentUser?['id']?.toString();
     return boolish(item['viewer_has_commented']) ||
         item['user_id']?.toString() == currentUserId;
+  }
+
+  Widget _commentComposer(AppBrand brand) {
+    final surface = Theme.of(context).colorScheme.surface;
+    return SafeArea(
+      top: false,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.fromLTRB(
+          16,
+          10,
+          16,
+          10 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        decoration: BoxDecoration(
+          color: surface.withValues(alpha: 0.96),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 18,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: _isCommentComposerExpanded
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_replyingToName != null) ...[
+                    _replyTargetBanner(brand),
+                    const SizedBox(height: 8),
+                  ],
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _commentController,
+                          focusNode: _commentFocusNode,
+                          minLines: 1,
+                          maxLines: 4,
+                          decoration: InputDecoration(
+                            hintText: _replyingToName == null
+                                ? '发表评论后可查看提示词'
+                                : '回复 $_replyingToName',
+                            isDense: true,
+                            suffixIcon: _replyingToName == null
+                                ? null
+                                : IconButton(
+                                    tooltip: '取消回复',
+                                    icon: const Icon(Icons.close),
+                                    onPressed: _cancelReply,
+                                  ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: _isSubmittingComment ? null : _submitComment,
+                        child: _isSubmittingComment
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text('发送'),
+                      ),
+                    ],
+                  ),
+                ],
+              )
+            : InkWell(
+                borderRadius: BorderRadius.circular(999),
+                onTap: _openCommentComposer,
+                child: Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest
+                        .withValues(alpha: 0.72),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.mode_comment_outlined,
+                          size: 18, color: brand.primaryColor),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '写评论',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                      const Icon(Icons.keyboard_arrow_up),
+                    ],
+                  ),
+                ),
+              ),
+      ),
+    );
   }
 
   Widget _replyTargetBanner(AppBrand brand) {
@@ -747,6 +840,35 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _actionPill({
+    required String label,
+    required Color color,
+    required IconData icon,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ],
       ),
     );
   }

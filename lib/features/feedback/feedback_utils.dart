@@ -10,6 +10,16 @@ const feedbackStatuses = [
 
 const feedbackTypes = ['feedback', 'wish'];
 
+const feedbackCategories = [
+  'gallery',
+  'generate',
+  'edit',
+  'system',
+  'feature',
+  'account',
+  'other',
+];
+
 String feedbackTypeLabel(String? type) {
   switch (type) {
     case 'wish':
@@ -18,6 +28,27 @@ String feedbackTypeLabel(String? type) {
       return '反馈';
     default:
       return '全部类型';
+  }
+}
+
+String feedbackCategoryLabel(String? category) {
+  switch (category) {
+    case 'gallery':
+      return '画廊';
+    case 'generate':
+      return '生图';
+    case 'edit':
+      return '改图';
+    case 'system':
+      return '系统相关';
+    case 'feature':
+      return '功能相关';
+    case 'account':
+      return '账号相关';
+    case 'other':
+      return '其他';
+    default:
+      return '未分类';
   }
 }
 

@@ -375,7 +375,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                     width: fieldWidth,
                     menuWidth: fieldWidth,
                     items: const {
-                      'time': '时间',
+                      'time': '最近时间',
                       'popular': '最受欢迎',
                       'comments': '评论最多',
                       'downloads': '下载最多',
@@ -493,6 +493,8 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
     const buttonPadding = EdgeInsets.symmetric(horizontal: 10, vertical: 8);
     final liked = boolish(item['liked']);
     final favorited = boolish(item['favorited']);
+    final action = item['action']?.toString() == 'edit' ? 'edit' : 'generate';
+    final actionColor = _actionAccent(brand, action);
     final currentUser = ref.read(authStateProvider);
     final isOwner =
         currentUser?['id']?.toString() == item['user_id']?.toString();
@@ -510,6 +512,13 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
         .toList();
     return Card(
       clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: actionColor.withValues(alpha: 0.45),
+          width: 1.4,
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -576,11 +585,14 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                         ],
                       ),
                     ),
-                    Text(
-                      item['action']?.toString() == 'generate'
+                    _actionPill(
+                      label: action == 'generate'
                           ? brand.generateActionLabel
                           : brand.editActionLabel,
-                      style: Theme.of(context).textTheme.bodySmall,
+                      color: actionColor,
+                      icon: action == 'generate'
+                          ? Icons.auto_awesome_outlined
+                          : Icons.brush_outlined,
                     ),
                   ],
                 ),
@@ -727,6 +739,39 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Color _actionAccent(AppBrand brand, String action) {
+    return action == 'edit' ? brand.warningColor : brand.primaryColor;
+  }
+
+  Widget _actionPill({
+    required String label,
+    required Color color,
+    required IconData icon,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ],
       ),
     );
   }

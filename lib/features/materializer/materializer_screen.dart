@@ -83,7 +83,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
         _ideaCandidates = candidates;
         _ideaCandidateIndex = 0;
       });
-      _applyCurrentCandidateIfSafe();
+      showCenterNotice(context, '已生成候选，点击候选可查看完整咒文');
     } catch (error) {
       if (!mounted) return;
       setState(() =>
@@ -125,7 +125,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
         _imageCandidates = candidates;
         _imageCandidateIndex = 0;
       });
-      _applyCurrentCandidateIfSafe();
+      showCenterNotice(context, '已识别候选，点击候选可查看完整咒文');
     } catch (error) {
       if (!mounted) return;
       setState(() =>
@@ -163,18 +163,6 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
         _imageCandidateIndex = next;
       }
     });
-    _applyCurrentCandidateIfSafe();
-  }
-
-  void _applyCurrentCandidateIfSafe() {
-    final candidate = _activeCandidate;
-    if (candidate == null || candidate.trim().isEmpty) return;
-    final current = _spellController.text.trim();
-    if (current.isNotEmpty && current != (_lastAppliedCandidate ?? '')) {
-      showCenterNotice(context, '已生成候选，点击“使用/替换当前咒文”后再填入');
-      return;
-    }
-    _replaceWithCurrentCandidate();
   }
 
   void _replaceWithCurrentCandidate() {
@@ -192,18 +180,18 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     });
   }
 
-  Future<void> _openPromptEditor() async {
+  Future<void> _openCandidatePrompt(String candidate) async {
     final brand = ref.read(brandProvider);
-    final controller = TextEditingController(text: _spellController.text);
+    final controller = TextEditingController(text: candidate);
     final next = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('完整咒文'),
+        title: const Text('AI 候选咒文'),
         content: SizedBox(
           width: double.maxFinite,
           child: TextField(
             controller: controller,
-            autofocus: true,
+            autofocus: false,
             minLines: 8,
             maxLines: 14,
             textInputAction: TextInputAction.newline,
@@ -213,11 +201,11 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
+            child: const Text('关闭'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('保存'),
+            child: const Text('使用/替换当前咒文'),
           ),
         ],
       ),
@@ -230,7 +218,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
         offset: _spellController.text.length,
       );
       if (_spellController.text != (_lastAppliedCandidate ?? '')) {
-        _lastAppliedCandidate = null;
+        _lastAppliedCandidate = _spellController.text;
       }
     });
   }
@@ -261,6 +249,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     final activeTask = ref.watch(activeImageTaskProvider);
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: Text(brand.generateTitle),
       ),
@@ -610,44 +599,54 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
   }
 
   Widget _buildPromptField(AppBrand brand) {
-    final prompt = _spellController.text.trim();
-    return Material(
-      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.58),
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: _openPromptEditor,
-        child: Container(
-          width: double.infinity,
-          constraints: const BoxConstraints(minHeight: 104),
-          padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color:
-                  Theme.of(context).colorScheme.outline.withValues(alpha: 0.18),
-            ),
+    return TextField(
+      controller: _spellController,
+      minLines: 4,
+      maxLines: 8,
+      onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+      onChanged: (value) {
+        if (value.trim() != (_lastAppliedCandidate ?? '')) {
+          _lastAppliedCandidate = null;
+        }
+      },
+      decoration: InputDecoration(
+        hintText: brand.generatePromptHint,
+        fillColor:
+            Theme.of(context).colorScheme.surface.withValues(alpha: 0.58),
+        filled: true,
+        suffixIcon: const Icon(Icons.edit_note_outlined),
+      ),
+      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            height: 1.38,
           ),
+    );
+  }
+
+  Widget _candidateText(String candidate) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => _openCandidatePrompt(candidate),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Text(
-                  prompt.isEmpty ? brand.generatePromptHint : prompt,
+                  candidate,
                   maxLines: 4,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: prompt.isEmpty
-                            ? Theme.of(context)
-                                .hintColor
-                                .withValues(alpha: 0.82)
-                            : null,
-                        height: 1.38,
-                      ),
+                  style: const TextStyle(height: 1.35),
                 ),
               ),
               const SizedBox(width: 8),
-              Icon(Icons.open_in_full, size: 18, color: brand.primaryColor),
+              Icon(
+                Icons.open_in_full,
+                size: 18,
+                color: Theme.of(context).colorScheme.primary,
+              ),
             ],
           ),
         ),
@@ -698,12 +697,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
             ],
           ),
           const SizedBox(height: 6),
-          Text(
-            candidate,
-            maxLines: 4,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(height: 1.35),
-          ),
+          _candidateText(candidate),
           const SizedBox(height: 10),
           Align(
             alignment: Alignment.centerRight,

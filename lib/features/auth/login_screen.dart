@@ -128,6 +128,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final brand = ref.watch(brandProvider);
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       body: BrandBackground(
         child: Center(
           child: SingleChildScrollView(

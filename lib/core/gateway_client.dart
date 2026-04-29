@@ -323,6 +323,7 @@ class GatewayClient {
 
   Future<Map<String, dynamic>> getMyFeedback({
     String? type,
+    String? category,
     String? status,
     String? keyword,
     int page = 1,
@@ -333,6 +334,7 @@ class GatewayClient {
         '/api/me/feedback',
         queryParameters: _feedbackQuery(
           type: type,
+          category: category,
           status: status,
           keyword: keyword,
           page: page,
@@ -345,12 +347,14 @@ class GatewayClient {
 
   Future<Map<String, dynamic>> createMyFeedback({
     required String type,
+    String? category,
     required String title,
     required String content,
   }) async {
     return _guard(() async {
       final res = await _dio.post('/api/me/feedback', data: {
         'type': type,
+        if (category != null && category.isNotEmpty) 'category': category,
         'title': title,
         'content': content,
       });
@@ -364,6 +368,7 @@ class GatewayClient {
 
   Future<Map<String, dynamic>> getAdminFeedback({
     String? type,
+    String? category,
     String? status,
     String? keyword,
     DateTime? startAt,
@@ -374,6 +379,7 @@ class GatewayClient {
     return _guard(() async {
       final query = _feedbackQuery(
         type: type,
+        category: category,
         status: status,
         keyword: keyword,
         page: page,
@@ -430,12 +436,16 @@ class GatewayClient {
 
   Future<Map<String, dynamic>> saveAdminFeedbackAutomation({
     required bool autoEnabled,
+    required String automationLimit,
+    required int intervalMinutes,
     required bool autoReplyEnabled,
     required bool autoExportEnabled,
   }) async {
     return _guard(() async {
       final res = await _dio.post('/api/admin/feedback/automation', data: {
         'auto_enabled': autoEnabled,
+        'automation_limit': automationLimit,
+        'interval_minutes': intervalMinutes,
         'auto_reply_enabled': autoReplyEnabled,
         'auto_export_enabled': autoExportEnabled,
       });
@@ -448,6 +458,13 @@ class GatewayClient {
       final res = await _dio.post('/api/admin/feedback/auto-run');
       return _mapResponse(res.data);
     }, fallback: '执行反馈 AI 自动整理失败。');
+  }
+
+  Future<Map<String, dynamic>> runAdminFeedbackAutoReply() async {
+    return _guard(() async {
+      final res = await _dio.post('/api/admin/feedback/auto-reply');
+      return _mapResponse(res.data);
+    }, fallback: '执行反馈 AI 自动回复失败。');
   }
 
   Future<Map<String, dynamic>> getAdminFeedbackInsights(String period) async {
@@ -732,6 +749,7 @@ class GatewayClient {
 
   Map<String, dynamic> _feedbackQuery({
     String? type,
+    String? category,
     String? status,
     String? keyword,
     required int page,
@@ -741,6 +759,7 @@ class GatewayClient {
       'page': page,
       'page_size': pageSize,
       if (type != null && type.isNotEmpty) 'type': type,
+      if (category != null && category.isNotEmpty) 'category': category,
       if (status != null && status.isNotEmpty) 'status': status,
       if (keyword != null && keyword.trim().isNotEmpty)
         'keyword': keyword.trim(),

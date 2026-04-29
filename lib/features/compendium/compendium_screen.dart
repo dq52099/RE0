@@ -728,12 +728,22 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     final isPublishing = _publishingKeys.contains(key);
     final isRetrying = _retryingKeys.contains(key);
     final isSuccess = _isSuccessful(item);
+    final action = item['action']?.toString() == 'edit' ? 'edit' : 'generate';
+    final actionColor =
+        action == 'edit' ? brand.warningColor : brand.primaryColor;
     final previewItems = _previewItems(_visibleItems, brand);
     final previewIndex =
         previewItems.indexWhere((entry) => entry.url == imageUrl);
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: actionColor.withValues(alpha: 0.45),
+          width: 1.4,
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -784,12 +794,17 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        item['action'] == 'generate'
-                            ? brand.generateActionLabel
-                            : brand.editActionLabel,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: _actionPill(
+                          label: action == 'generate'
+                              ? brand.generateActionLabel
+                              : brand.editActionLabel,
+                          color: actionColor,
+                          icon: action == 'generate'
+                              ? Icons.auto_awesome_outlined
+                              : Icons.brush_outlined,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -1036,6 +1051,35 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
           Icon(icon, size: 14),
           const SizedBox(width: 6),
           Text(text, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ),
+    );
+  }
+
+  Widget _actionPill({
+    required String label,
+    required Color color,
+    required IconData icon,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
         ],
       ),
     );

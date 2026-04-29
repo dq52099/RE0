@@ -520,6 +520,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final systemTargetView = _systemTargetView(user);
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(title: const Text('我的')),
       body: BrandBackground(
         child: ListView(
