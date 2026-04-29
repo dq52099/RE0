@@ -3,11 +3,11 @@ class AppVersion {
 
   static const name = String.fromEnvironment(
     'RE0_VERSION_NAME',
-    defaultValue: '1.1.34',
+    defaultValue: '1.1.35',
   );
 
   static const code = int.fromEnvironment(
     'RE0_VERSION_CODE',
-    defaultValue: 10134,
+    defaultValue: 10135,
   );
 }
