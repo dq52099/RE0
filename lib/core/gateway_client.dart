@@ -572,10 +572,15 @@ class GatewayClient {
 
   Future<Map<String, dynamic>> addGalleryComment(
     String postId,
-    String content,
-  ) async {
+    String content, {
+    String? parentCommentId,
+  }) async {
     return _guard(() async {
-      final formData = FormData.fromMap({'content': content});
+      final formData = FormData.fromMap({
+        'content': content,
+        if (parentCommentId != null && parentCommentId.isNotEmpty)
+          'parent_comment_id': parentCommentId,
+      });
       final res = await _dio.post('/api/gallery/posts/$postId/comments',
           data: formData);
       return Map<String, dynamic>.from(res.data as Map);
@@ -631,6 +636,12 @@ class GatewayClient {
           : await _dio.put('/api/admin/users/$id', data: payload);
       return res.data;
     }, fallback: '保存用户失败。');
+  }
+
+  Future<void> deleteAdminUser(String id) async {
+    await _guard(() async {
+      await _dio.delete('/api/admin/users/$id');
+    }, fallback: '删除用户失败。');
   }
 
   Future<List<dynamic>> adminGroups() async {

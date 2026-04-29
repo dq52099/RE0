@@ -485,7 +485,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
   Widget _galleryCard(AppBrand brand, Map<String, dynamic> item) {
     const imageHeight = 288.0;
     const cardPadding = 12.0;
-    const avatarRadius = 18.0;
+    const avatarRadius = 21.0;
     const nameFontSize = 14.0;
     const actionFontSize = 12.0;
     const actionIconSize = 16.0;

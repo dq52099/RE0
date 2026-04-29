@@ -7,14 +7,18 @@ import '../../core/compact_save_notice.dart';
 import '../../core/providers.dart';
 import 'feedback_utils.dart';
 
+enum AdminFeedbackPanelMode { list, automation, insights }
+
 class AdminFeedbackPanel extends ConsumerStatefulWidget {
   const AdminFeedbackPanel({
     super.key,
+    this.mode = AdminFeedbackPanelMode.list,
     required this.canManage,
     required this.canReply,
     required this.canAi,
   });
 
+  final AdminFeedbackPanelMode mode;
   final bool canManage;
   final bool canReply;
   final bool canAi;
@@ -43,9 +47,15 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
   @override
   void initState() {
     super.initState();
-    _reload();
-    _reloadAutomation();
-    _reloadInsights();
+    if (widget.mode == AdminFeedbackPanelMode.list) {
+      _reload();
+    }
+    if (widget.mode == AdminFeedbackPanelMode.automation) {
+      _reloadAutomation();
+    }
+    if (widget.mode == AdminFeedbackPanelMode.insights) {
+      _reloadInsights();
+    }
   }
 
   @override
@@ -89,14 +99,25 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
 
   Future<void> _refresh() async {
     setState(() {
-      _reload();
-      _reloadAutomation();
-      _reloadInsights();
+      if (widget.mode == AdminFeedbackPanelMode.list) {
+        _reload();
+      }
+      if (widget.mode == AdminFeedbackPanelMode.automation) {
+        _reloadAutomation();
+      }
+      if (widget.mode == AdminFeedbackPanelMode.insights) {
+        _reloadInsights();
+      }
     });
     await Future.wait([
-      if (_future != null) _future!,
-      if (_automationFuture != null) _automationFuture!,
-      if (_insightsFuture != null) _insightsFuture!,
+      if (widget.mode == AdminFeedbackPanelMode.list && _future != null)
+        _future!,
+      if (widget.mode == AdminFeedbackPanelMode.automation &&
+          _automationFuture != null)
+        _automationFuture!,
+      if (widget.mode == AdminFeedbackPanelMode.insights &&
+          _insightsFuture != null)
+        _insightsFuture!,
     ]);
   }
 
@@ -486,6 +507,32 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.mode == AdminFeedbackPanelMode.automation) {
+      return RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            if (widget.canAi)
+              _automationPanel()
+            else
+              const Padding(
+                padding: EdgeInsets.only(top: 80),
+                child: Center(child: Text('当前账号没有反馈 AI 权限')),
+              ),
+          ],
+        ),
+      );
+    }
+    if (widget.mode == AdminFeedbackPanelMode.insights) {
+      return RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [_insightsPanel()],
+        ),
+      );
+    }
     return FutureBuilder<Map<String, dynamic>>(
       future: _future,
       builder: (context, snapshot) {
@@ -495,12 +542,6 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              if (widget.canAi) ...[
-                _automationPanel(),
-                const SizedBox(height: 12),
-              ],
-              _insightsPanel(),
-              const SizedBox(height: 12),
               _filters(),
               const SizedBox(height: 12),
               if (snapshot.connectionState != ConnectionState.done)

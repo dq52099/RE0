@@ -542,7 +542,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     leading: Icon(Icons.calendar_month_outlined,
                         color: brand.successColor),
                     title: const Text('每日签到'),
-                    subtitle: Text(subtitle),
+                    subtitle: _menuSubtitle(subtitle),
                     trailing: _isCheckingIn
                         ? const SizedBox(
                             width: 22,
@@ -569,7 +569,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 leading: Icon(Icons.collections_bookmark_outlined,
                     color: brand.primaryColor),
                 title: const Text('我的画廊'),
-                subtitle: const Text('查看收藏、点赞和自己发布到画廊的作品'),
+                subtitle: _menuSubtitle('查看收藏、点赞和自己发布到画廊的作品'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
@@ -590,7 +590,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     leading: Icon(Icons.notifications_none_outlined,
                         color: brand.primaryColor),
                     title: const Text('通知'),
-                    subtitle: const Text('评论、点赞、收藏和反馈处理进度'),
+                    subtitle: _menuSubtitle('评论、点赞、收藏和反馈处理进度'),
                     trailing: _notificationTrailing(unread),
                     onTap: _openNotifications,
                   ),
@@ -601,7 +601,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               child: ListTile(
                 leading: Icon(Icons.person_outline, color: brand.primaryColor),
                 title: const Text('个人资料'),
-                subtitle: const Text('查看并修改账号资料、密码与额度'),
+                subtitle: _menuSubtitle('查看并修改账号资料、密码与额度'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => _showProfileDetails(brand, user),
               ),
@@ -612,7 +612,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   leading:
                       Icon(Icons.forum_outlined, color: brand.primaryColor),
                   title: const Text('反馈与许愿'),
-                  subtitle: const Text('提交问题、建议，或希望新增的功能、模型、主题和参数'),
+                  subtitle: _menuSubtitle('提交问题、建议，或希望新增的功能、模型、主题和参数'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: _openFeedback,
                 ),
@@ -625,7 +625,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     color: brand.warningColor,
                   ),
                   title: const Text('系统管理'),
-                  subtitle: const Text('原生管理页：用户、密钥、系统设置与审计'),
+                  subtitle: _menuSubtitle('原生管理页：用户、密钥、系统设置与审计'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => _openAdmin(targetView: systemTargetView),
                 ),
@@ -635,7 +635,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 leading:
                     Icon(Icons.palette_outlined, color: brand.primaryColor),
                 title: const Text('主题风格'),
-                subtitle: Text(brand.appTitle),
+                subtitle: _menuSubtitle(brand.appTitle),
                 trailing: SizedBox(
                   width: 126,
                   child: CompactDropdownField<String>(
@@ -667,7 +667,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               child: ListTile(
                 leading: Icon(Icons.system_update, color: brand.primaryColor),
                 title: const Text('检查更新'),
-                subtitle: Text(
+                subtitle: _menuSubtitle(
                     '当前版本 ${ref.read(appUpdateProvider).currentVersionName}'),
                 trailing: _updateTrailing(),
                 onTap: (_isCheckingUpdate || _isDownloadingUpdate)
@@ -682,7 +682,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   child: ListTile(
                     leading: Icon(Icons.cached, color: brand.successColor),
                     title: const Text('图片缓存'),
-                    subtitle: Text('当前缓存 ${_formatBytes(snapshot.data ?? 0)}'),
+                    subtitle: _menuSubtitle(
+                        '当前缓存 ${_formatBytes(snapshot.data ?? 0)}'),
                     trailing: _isClearingCache
                         ? const SizedBox(
                             width: 22,
@@ -895,6 +896,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
       ),
       child: child,
+    );
+  }
+
+  Widget _menuSubtitle(String text) {
+    return Text(
+      text,
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color:
+                Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.58),
+            height: 1.25,
+          ),
     );
   }
 
@@ -1122,7 +1134,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       'api_key.view',
       'audit.view',
       'feedback.view',
-      'gallery.manage',
     }).isNotEmpty) {
       return true;
     }
@@ -1141,7 +1152,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       'apiKeys',
       'audit',
       'feedback',
-      'gallery',
     }).isNotEmpty;
   }
 

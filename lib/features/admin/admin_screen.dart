@@ -5,10 +5,10 @@ import 'package:flutter/services.dart';
 import '../../core/api_error.dart';
 import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
+import '../../core/compact_dropdown_field.dart';
 import '../../core/compact_save_notice.dart';
 import '../../core/providers.dart';
 import '../feedback/admin_feedback_panel.dart';
-import '../gallery/gallery_screen.dart';
 
 class AdminScreen extends ConsumerStatefulWidget {
   const AdminScreen({super.key, this.initialView});
@@ -23,8 +23,13 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   static const _defaultAiBaseUrl = 'https://2c2ch1u11-share-api-0.hf.space/v1';
   static const _feedbackAiModel = 'deepseek-v4-flash';
   static const _promptAiModel = 'gpt-5.4-mini';
+  static const _usersPageSize = 20;
+  static const _invitesPageSize = 30;
 
   int _revision = 0;
+  int _usersPageIndex = 1;
+  int _invitesPageIndex = 1;
+  String _inviteStatusFilter = '';
 
   @override
   Widget build(BuildContext context) {
@@ -46,26 +51,32 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       key: ValueKey(sections.map((item) => item.key).join('|')),
       length: sections.length,
       initialIndex: initialIndex < 0 ? 0 : initialIndex,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('系统管理'),
-          bottom: TabBar(
-            isScrollable: true,
-            tabs: sections.map((item) => Tab(text: item.label)).toList(),
-          ),
-        ),
-        body: BrandBackground(
-          child: TabBarView(
-            children: sections
-                .map(
-                  (item) => KeyedSubtree(
-                    key: ValueKey('${item.key}-$_revision'),
-                    child: _sectionBody(context, brand, item, user, sections),
-                  ),
-                )
-                .toList(),
-          ),
-        ),
+      child: Builder(
+        builder: (tabContext) {
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text('系统管理'),
+              bottom: TabBar(
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                tabs: sections.map((item) => Tab(text: item.label)).toList(),
+              ),
+            ),
+            body: BrandBackground(
+              child: TabBarView(
+                children: sections
+                    .map(
+                      (item) => KeyedSubtree(
+                        key: ValueKey('${item.key}-$_revision'),
+                        child: _sectionBody(
+                            tabContext, brand, item, user, sections),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -99,10 +110,18 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         menus.contains('feedback')) {
       sections.add(const _AdminSection('feedback', '用户反馈'));
     }
+    if (isAdmin || permissions.contains('feedback.ai')) {
+      sections.add(const _AdminSection('feedbackAi', '反馈 AI'));
+    }
     if (isAdmin ||
-        permissions.contains('gallery.manage') ||
-        menus.contains('gallery')) {
-      sections.add(const _AdminSection('gallery', '画廊'));
+        permissions.contains('feedback.view') ||
+        menus.contains('feedback')) {
+      sections.add(const _AdminSection('feedbackInsights', '需求清单'));
+    }
+    if (isAdmin ||
+        permissions.contains('settings.view') ||
+        menus.contains('settings')) {
+      sections.add(const _AdminSection('settings', '设置'));
     }
     if (isAdmin ||
         permissions.contains('group.view') ||
@@ -125,11 +144,6 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       sections.add(const _AdminSection('apiKeys', '密钥'));
     }
     if (isAdmin ||
-        permissions.contains('settings.view') ||
-        menus.contains('settings')) {
-      sections.add(const _AdminSection('settings', '设置'));
-    }
-    if (isAdmin ||
         permissions.contains('audit.view') ||
         menus.contains('audit')) {
       sections.add(const _AdminSection('audit', '审计'));
@@ -146,7 +160,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   ) {
     switch (section.key) {
       case 'overview':
-        return _overviewPage(brand, sections);
+        return _overviewPage(context, brand, sections);
       case 'users':
         return _usersPage(brand, canManage: _can(user, 'user.manage'));
       case 'invites':
@@ -166,10 +180,19 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           canReply: _can(user, 'feedback.reply'),
           canAi: _can(user, 'feedback.ai'),
         );
-      case 'gallery':
-        return const GalleryFeedView(
-          view: 'all',
-          emptyText: '画廊还没有公开作品',
+      case 'feedbackAi':
+        return AdminFeedbackPanel(
+          mode: AdminFeedbackPanelMode.automation,
+          canManage: _can(user, 'feedback.manage'),
+          canReply: _can(user, 'feedback.reply'),
+          canAi: _can(user, 'feedback.ai'),
+        );
+      case 'feedbackInsights':
+        return AdminFeedbackPanel(
+          mode: AdminFeedbackPanelMode.insights,
+          canManage: _can(user, 'feedback.manage'),
+          canReply: _can(user, 'feedback.reply'),
+          canAi: _can(user, 'feedback.ai'),
         );
       case 'settings':
         return _settingsPage(brand, canManage: _can(user, 'settings.manage'));
@@ -180,7 +203,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     }
   }
 
-  Widget _overviewPage(AppBrand brand, List<_AdminSection> sections) {
+  Widget _overviewPage(
+    BuildContext tabContext,
+    AppBrand brand,
+    List<_AdminSection> sections,
+  ) {
     return _futureSection<Map<String, dynamic>>(
       future: ref.read(gatewayClientProvider).adminOverview(),
       builder: (overview) {
@@ -195,25 +222,17 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               Icons.forum_outlined,
               'feedback',
               '未关闭 ${overview['feedback_open_count'] ?? 0} 条'),
-          _OverviewItem(
-              '画廊作品',
-              overview['gallery_post_count'],
-              Icons.photo_library_outlined,
-              'gallery',
-              '评论 ${overview['gallery_comment_count'] ?? 0} 条'),
           _OverviewItem('用户组', overview['group_count'],
               Icons.group_work_outlined, 'groups', '管理默认额度'),
           _OverviewItem('角色', overview['role_count'],
               Icons.admin_panel_settings_outlined, 'roles', '管理权限组合'),
           _OverviewItem('可用密钥', overview['active_api_key_count'],
               Icons.key_outlined, 'apiKeys', '对外调用密钥'),
-          _OverviewItem('画廊点赞', overview['gallery_like_count'],
-              Icons.favorite_border, 'gallery', '作品互动数据'),
         ];
         return ListView(
           padding: const EdgeInsets.all(16),
           children: items
-              .map((item) => _overviewCard(brand, sections, item))
+              .map((item) => _overviewCard(tabContext, brand, sections, item))
               .toList(),
         );
       },
@@ -221,6 +240,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   }
 
   Widget _overviewCard(
+    BuildContext tabContext,
     AppBrand brand,
     List<_AdminSection> sections,
     _OverviewItem item,
@@ -233,7 +253,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: enabled
-            ? () => DefaultTabController.of(context).animateTo(targetIndex)
+            ? () => DefaultTabController.of(tabContext).animateTo(targetIndex)
             : null,
         child: Padding(
           padding: const EdgeInsets.all(14),
@@ -281,6 +301,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     return _futureSection<_UsersData>(
       future: _loadUsersData(),
       builder: (data) {
+        final currentUserId = ref.read(authStateProvider)?['id']?.toString();
+        final totalPages = _pageCount(data.users.length, _usersPageSize);
+        final page = _clampedPage(_usersPageIndex, totalPages);
+        final users = _pageItems(data.users, page, _usersPageSize);
         return _adminList(
           action: canManage
               ? FilledButton.icon(
@@ -289,29 +313,60 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   label: const Text('新增用户'),
                 )
               : null,
-          children: data.users.map((user) {
-            final quota = _map(user['quota_summary']);
-            final retention = _map(user['history_retention_summary']);
-            return _infoCard(
-              title:
-                  '${_text(user['display_name'])} (${_text(user['username'])})',
-              subtitle:
-                  '角色: ${_text(user['role_name'])}  用户组: ${_text(user['group_name'])}',
-              active: user['is_active'] == true,
-              trailing: canManage
-                  ? IconButton(
-                      icon: const Icon(Icons.edit),
-                      onPressed: () => _editUser(user, data),
-                    )
-                  : null,
-              lines: [
-                _quotaLine('生图', _map(quota['generate'])),
-                _quotaLine('改图', _map(quota['edit'])),
-                '生图保留: ${_text(retention['generate'])}',
-                '改图保留: ${_text(retention['edit'])}',
-              ],
-            );
-          }).toList(),
+          children: [
+            ...users.map((user) {
+              final quota = _map(user['quota_summary']);
+              final retention = _map(user['history_retention_summary']);
+              final userId = user['id']?.toString() ?? '';
+              final canDelete =
+                  canManage && userId.isNotEmpty && userId != currentUserId;
+              return _infoCard(
+                title:
+                    '${_text(user['display_name'])} (${_text(user['username'])})',
+                subtitle:
+                    '角色: ${_text(user['role_name'])}  用户组: ${_text(user['group_name'])}',
+                active: user['is_active'] == true,
+                trailing: canManage
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: '编辑用户',
+                            icon: const Icon(Icons.edit),
+                            onPressed: () => _editUser(user, data),
+                          ),
+                          IconButton(
+                            tooltip:
+                                userId == currentUserId ? '不能删除当前登录账号' : '删除用户',
+                            icon: const Icon(Icons.delete_outline),
+                            color: Theme.of(context).colorScheme.error,
+                            onPressed:
+                                canDelete ? () => _deleteUser(user) : null,
+                          ),
+                        ],
+                      )
+                    : null,
+                lines: [
+                  _quotaLine('生图', _map(quota['generate'])),
+                  _quotaLine('改图', _map(quota['edit'])),
+                  '生图保留: ${_text(retention['generate'])}',
+                  '改图保留: ${_text(retention['edit'])}',
+                ],
+              );
+            }),
+            if (data.users.isNotEmpty)
+              _listPager(
+                page: page,
+                totalPages: totalPages,
+                totalItems: data.users.length,
+                onPrevious: page <= 1
+                    ? null
+                    : () => setState(() => _usersPageIndex = page - 1),
+                onNext: page >= totalPages
+                    ? null
+                    : () => setState(() => _usersPageIndex = page + 1),
+              ),
+          ],
         );
       },
     );
@@ -322,6 +377,14 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       future:
           _loadMapList(ref.read(gatewayClientProvider).adminInvitationCodes()),
       builder: (codes) {
+        final filteredCodes = _inviteStatusFilter.isEmpty
+            ? codes
+            : codes
+                .where((item) => _text(item['status']) == _inviteStatusFilter)
+                .toList();
+        final totalPages = _pageCount(filteredCodes.length, _invitesPageSize);
+        final page = _clampedPage(_invitesPageIndex, totalPages);
+        final visibleCodes = _pageItems(filteredCodes, page, _invitesPageSize);
         final unusedCodes = codes
             .where((item) => _text(item['status']) == 'unused')
             .map((item) => _text(item['code']))
@@ -338,6 +401,29 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   icon: const Icon(Icons.add_card),
                   label: const Text('生成邀请码'),
                 ),
+              SizedBox(
+                width: 148,
+                child: CompactDropdownField<String>(
+                  label: '状态',
+                  value: _inviteStatusFilter,
+                  width: 148,
+                  menuWidth: 148,
+                  selectedLabels: const ['全部状态', '未使用', '已使用', '已停用'],
+                  items: const [
+                    DropdownMenuItem(value: '', child: Text('全部状态')),
+                    DropdownMenuItem(value: 'unused', child: Text('未使用')),
+                    DropdownMenuItem(value: 'used', child: Text('已使用')),
+                    DropdownMenuItem(value: 'disabled', child: Text('已停用')),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() {
+                      _inviteStatusFilter = value;
+                      _invitesPageIndex = 1;
+                    });
+                  },
+                ),
+              ),
               OutlinedButton.icon(
                 onPressed: unusedCodes.isEmpty
                     ? null
@@ -347,30 +433,46 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               ),
             ],
           ),
-          children: codes.map((item) {
-            final status = _text(item['status']);
-            final usedBy = _text(
-              item['used_by_display_name'],
-              fallback: _text(item['used_by_username'], fallback: ''),
-            );
-            return _infoCard(
-              title: _text(item['code']),
-              subtitle:
-                  status == 'unused' ? '未使用，复制后发给新用户注册。' : '已使用的邀请码会保留展示，便于追溯。',
-              badge: _text(item['status_label']),
-              trailing: IconButton(
-                tooltip: '复制邀请码',
-                icon: const Icon(Icons.copy),
-                onPressed: () => _copyText(_text(item['code']), '邀请码已复制。'),
+          children: [
+            ...visibleCodes.map((item) {
+              final status = _text(item['status']);
+              final usedBy = _text(
+                item['used_by_display_name'],
+                fallback: _text(item['used_by_username'], fallback: ''),
+              );
+              return _infoCard(
+                title: _text(item['code']),
+                subtitle: status == 'unused'
+                    ? '未使用，复制后发给新用户注册。'
+                    : '已使用的邀请码会保留展示，便于追溯。',
+                badge: _text(item['status_label']),
+                trailing: IconButton(
+                  tooltip: '复制邀请码',
+                  icon: const Icon(Icons.copy),
+                  onPressed: () => _copyText(_text(item['code']), '邀请码已复制。'),
+                ),
+                lines: [
+                  '创建: ${_text(item['created_at'])}',
+                  '创建人: ${_text(item['created_by_display_name'], fallback: _text(item['created_by_username']))}',
+                  if (status != 'unused')
+                    '使用人: ${usedBy.isEmpty ? '-' : usedBy}',
+                  if (status != 'unused') '使用时间: ${_text(item['used_at'])}',
+                ],
+              );
+            }),
+            if (filteredCodes.isNotEmpty)
+              _listPager(
+                page: page,
+                totalPages: totalPages,
+                totalItems: filteredCodes.length,
+                onPrevious: page <= 1
+                    ? null
+                    : () => setState(() => _invitesPageIndex = page - 1),
+                onNext: page >= totalPages
+                    ? null
+                    : () => setState(() => _invitesPageIndex = page + 1),
               ),
-              lines: [
-                '创建: ${_text(item['created_at'])}',
-                '创建人: ${_text(item['created_by_display_name'], fallback: _text(item['created_by_username']))}',
-                if (status != 'unused') '使用人: ${usedBy.isEmpty ? '-' : usedBy}',
-                if (status != 'unused') '使用时间: ${_text(item['used_at'])}',
-              ],
-            );
-          }).toList(),
+          ],
         );
       },
     );
@@ -627,6 +729,56 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
             )
           else
             ...children,
+        ],
+      ),
+    );
+  }
+
+  int _pageCount(int totalItems, int pageSize) {
+    if (totalItems <= 0) return 1;
+    return ((totalItems - 1) ~/ pageSize) + 1;
+  }
+
+  int _clampedPage(int page, int totalPages) {
+    if (page < 1) return 1;
+    if (page > totalPages) return totalPages;
+    return page;
+  }
+
+  List<Map<String, dynamic>> _pageItems(
+    List<Map<String, dynamic>> items,
+    int page,
+    int pageSize,
+  ) {
+    if (items.isEmpty) return const [];
+    final start = (page - 1) * pageSize;
+    if (start >= items.length) return const [];
+    final end =
+        (start + pageSize) > items.length ? items.length : start + pageSize;
+    return items.sublist(start, end);
+  }
+
+  Widget _listPager({
+    required int page,
+    required int totalPages,
+    required int totalItems,
+    required VoidCallback? onPrevious,
+    required VoidCallback? onNext,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          TextButton(onPressed: onPrevious, child: const Text('上一页')),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              '$page / $totalPages，共 $totalItems 条',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          TextButton(onPressed: onNext, child: const Text('下一页')),
         ],
       ),
     );
@@ -935,6 +1087,37 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
             .read(gatewayClientProvider)
             .saveAdminUser(user?['id']?.toString(), payload),
         '用户已保存。');
+  }
+
+  Future<void> _deleteUser(Map<String, dynamic> user) async {
+    final userId = user['id']?.toString() ?? '';
+    if (userId.isEmpty) return;
+    final displayName = _text(
+      user['display_name'],
+      fallback: _text(user['username'], fallback: '该用户'),
+    );
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除用户'),
+        content: Text('确定删除 $displayName 吗？删除后该账号会被停用，不能再登录。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _save(
+      () => ref.read(gatewayClientProvider).deleteAdminUser(userId),
+      '用户已删除。',
+    );
   }
 
   Future<void> _editGroup(Map<String, dynamic>? group) async {

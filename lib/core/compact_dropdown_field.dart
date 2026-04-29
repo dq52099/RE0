@@ -52,49 +52,52 @@ class CompactDropdownField<T> extends StatelessWidget {
 
     return SizedBox(
       width: width,
-      child: PopupMenuButton<T>(
-        initialValue: value,
-        tooltip: '',
-        padding: EdgeInsets.zero,
-        position: PopupMenuPosition.under,
-        offset: Offset(width - resolvedMenuWidth, 4),
-        constraints: BoxConstraints.tightFor(width: resolvedMenuWidth),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        onOpened: () => FocusManager.instance.primaryFocus?.unfocus(),
-        itemBuilder: (context) => items
-            .map(
-              (item) => PopupMenuItem<T>(
-                value: item.value,
-                enabled: item.enabled,
-                height: 42,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: Center(child: item.child),
+      child: Listener(
+        onPointerDown: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+        child: PopupMenuButton<T>(
+          initialValue: value,
+          tooltip: '',
+          padding: EdgeInsets.zero,
+          position: PopupMenuPosition.under,
+          offset: Offset(width - resolvedMenuWidth, 4),
+          constraints: BoxConstraints.tightFor(width: resolvedMenuWidth),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          itemBuilder: (context) => items
+              .map(
+                (item) => PopupMenuItem<T>(
+                  value: item.value,
+                  enabled: item.enabled,
+                  height: 42,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Center(child: item.child),
+                  ),
                 ),
-              ),
-            )
-            .toList(),
-        onSelected: (next) {
-          FocusManager.instance.primaryFocus?.unfocus();
-          onChanged(next);
-        },
-        child: InputDecorator(
-          decoration: decoration,
-          isEmpty: selectedLabel.isEmpty,
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  selectedLabel,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: bodyStyle,
+              )
+              .toList(),
+          onSelected: (next) {
+            FocusManager.instance.primaryFocus?.unfocus();
+            onChanged(next);
+          },
+          child: InputDecorator(
+            decoration: decoration,
+            isEmpty: selectedLabel.isEmpty,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    selectedLabel,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: bodyStyle,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              const Icon(Icons.expand_more, size: 18),
-            ],
+                const SizedBox(width: 8),
+                const Icon(Icons.expand_more, size: 18),
+              ],
+            ),
           ),
         ),
       ),

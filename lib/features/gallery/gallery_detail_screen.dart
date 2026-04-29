@@ -32,6 +32,8 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
   bool _isRefreshingComments = false;
   bool _isDownloading = false;
   String? _replyingToName;
+  String? _replyingToCommentId;
+  String? _replyingToSnippet;
   List<Map<String, dynamic>> _comments = [];
 
   @override
@@ -183,15 +185,19 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
     if (text.isEmpty) return;
     setState(() => _isSubmittingComment = true);
     try {
-      await ref
-          .read(gatewayClientProvider)
-          .addGalleryComment(_post['id'].toString(), text);
+      await ref.read(gatewayClientProvider).addGalleryComment(
+            _post['id'].toString(),
+            text,
+            parentCommentId: _replyingToCommentId,
+          );
       final updated = await ref
           .read(gatewayClientProvider)
           .getGalleryPost(_post['id'].toString());
       if (!mounted) return;
       _commentController.clear();
       _replyingToName = null;
+      _replyingToCommentId = null;
+      _replyingToSnippet = null;
       setState(() => _post = updated);
       await _loadComments();
     } catch (error) {
@@ -215,12 +221,16 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
   }
 
   void _replyToComment(Map<String, dynamic> comment) {
-    final name = comment['display_name']?.toString().trim() ??
-        comment['username']?.toString().trim() ??
-        '';
+    final displayName = comment['display_name']?.toString().trim() ?? '';
+    final username = comment['username']?.toString().trim() ?? '';
+    final name = displayName.isNotEmpty ? displayName : username;
     if (name.isEmpty) return;
     final prefix = '@$name ';
-    setState(() => _replyingToName = name);
+    setState(() {
+      _replyingToName = name;
+      _replyingToCommentId = comment['id']?.toString();
+      _replyingToSnippet = comment['content']?.toString();
+    });
     if (!_commentController.text.startsWith(prefix)) {
       _commentController.text = prefix;
       _commentController.selection = TextSelection.collapsed(
@@ -410,6 +420,10 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
+                  if (_replyingToName != null) ...[
+                    _replyTargetBanner(brand),
+                    const SizedBox(height: 10),
+                  ],
                   TextField(
                     controller: _commentController,
                     focusNode: _commentFocusNode,
@@ -425,7 +439,11 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                               tooltip: '取消回复',
                               icon: const Icon(Icons.close),
                               onPressed: () {
-                                setState(() => _replyingToName = null);
+                                setState(() {
+                                  _replyingToName = null;
+                                  _replyingToCommentId = null;
+                                  _replyingToSnippet = null;
+                                });
                                 _commentController.clear();
                               },
                             ),
@@ -455,85 +473,7 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                       child: Center(child: Text('还没有评论')),
                     )
                   else
-                    ..._comments.map(
-                      (comment) => Padding(
-                        padding: const EdgeInsets.only(bottom: 14),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _authorAvatar(
-                              avatarUrl:
-                                  comment['author_avatar_url']?.toString() ??
-                                      '',
-                              displayName:
-                                  comment['display_name']?.toString() ?? '-',
-                              radius: 20,
-                              fallback: '评',
-                              brand: brand,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        child: Wrap(
-                                          spacing: 6,
-                                          runSpacing: 4,
-                                          crossAxisAlignment:
-                                              WrapCrossAlignment.center,
-                                          children: [
-                                            Text(
-                                              comment['display_name']
-                                                      ?.toString() ??
-                                                  '-',
-                                              style: const TextStyle(
-                                                  fontWeight: FontWeight.w600),
-                                            ),
-                                            _levelBadge(
-                                                comment['level_info'] as Map?),
-                                          ],
-                                        ),
-                                      ),
-                                      Text(
-                                        _formatTime(
-                                            comment['created_at']?.toString()),
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall,
-                                      ),
-                                      if (boolish(comment['can_delete']))
-                                        IconButton(
-                                          visualDensity: VisualDensity.compact,
-                                          tooltip: '删除评论',
-                                          icon: const Icon(Icons.delete_outline,
-                                              size: 18),
-                                          onPressed: () => _deleteComment(
-                                              comment['id'].toString()),
-                                        ),
-                                      IconButton(
-                                        visualDensity: VisualDensity.compact,
-                                        tooltip: '回复',
-                                        icon: const Icon(Icons.reply_outlined,
-                                            size: 18),
-                                        onPressed: () =>
-                                            _replyToComment(comment),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(comment['content']?.toString() ?? ''),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    ..._comments.map((comment) => _commentTile(brand, comment)),
                 ],
               ),
             ),
@@ -548,6 +488,169 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
     final currentUserId = currentUser?['id']?.toString();
     return boolish(item['viewer_has_commented']) ||
         item['user_id']?.toString() == currentUserId;
+  }
+
+  Widget _replyTargetBanner(AppBrand brand) {
+    final snippet = (_replyingToSnippet ?? '').trim();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: brand.primaryColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: brand.primaryColor.withValues(alpha: 0.14)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.reply_outlined, size: 16, color: brand.primaryColor),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              snippet.isEmpty
+                  ? '正在回复 $_replyingToName'
+                  : '正在回复 $_replyingToName：$snippet',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _commentTile(AppBrand brand, Map<String, dynamic> comment) {
+    final replyName = _replyTargetName(comment);
+    final replySnippet = _replyTargetSnippet(comment);
+    final hasReplyTarget = replyName.isNotEmpty || replySnippet.isNotEmpty;
+    return Padding(
+      padding: EdgeInsets.only(
+        left: hasReplyTarget ? 18 : 0,
+        bottom: 14,
+      ),
+      child: Container(
+        decoration: hasReplyTarget
+            ? BoxDecoration(
+                border: Border(
+                  left: BorderSide(
+                    color: brand.primaryColor.withValues(alpha: 0.24),
+                    width: 3,
+                  ),
+                ),
+              )
+            : null,
+        padding: EdgeInsets.only(left: hasReplyTarget ? 10 : 0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _authorAvatar(
+              avatarUrl: comment['author_avatar_url']?.toString() ?? '',
+              displayName: comment['display_name']?.toString() ?? '-',
+              radius: 20,
+              fallback: '评',
+              brand: brand,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              comment['display_name']?.toString() ?? '-',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            _levelBadge(comment['level_info'] as Map?),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        _formatTime(comment['created_at']?.toString()),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      if (boolish(comment['can_delete']))
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          tooltip: '删除评论',
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                          onPressed: () =>
+                              _deleteComment(comment['id'].toString()),
+                        ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        tooltip: '回复',
+                        icon: const Icon(Icons.reply_outlined, size: 18),
+                        onPressed: () => _replyToComment(comment),
+                      ),
+                    ],
+                  ),
+                  if (hasReplyTarget) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surface
+                            .withValues(alpha: 0.46),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        replySnippet.isEmpty
+                            ? '回复 $replyName'
+                            : '回复 $replyName：$replySnippet',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 6),
+                  Text(_visibleCommentContent(comment, replyName)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _replyTargetName(Map<String, dynamic> comment) {
+    final value = comment['parent_display_name']?.toString().trim();
+    if (value != null && value.isNotEmpty) return value;
+    final content = comment['content']?.toString().trim() ?? '';
+    final match = RegExp(r'^@([^\s]+)\s+').firstMatch(content);
+    return match?.group(1) ?? '';
+  }
+
+  String _replyTargetSnippet(Map<String, dynamic> comment) {
+    final value = comment['parent_content']?.toString().trim();
+    return value ?? '';
+  }
+
+  String _visibleCommentContent(
+    Map<String, dynamic> comment,
+    String replyName,
+  ) {
+    final content = comment['content']?.toString() ?? '';
+    if (replyName.isEmpty) return content;
+    final prefix = '@$replyName ';
+    if (content.startsWith(prefix)) {
+      return content.substring(prefix.length);
+    }
+    return content;
   }
 
   Widget _promptPanel(AppBrand brand, String prompt) {

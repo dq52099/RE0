@@ -138,69 +138,121 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final actorName = item['actor_display_name']?.toString().trim();
     final actorAvatar = item['actor_avatar_url']?.toString().trim() ?? '';
     final id = item['id']?.toString() ?? '';
+    final colorScheme = Theme.of(context).colorScheme;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      color: Theme.of(context)
-          .colorScheme
-          .surface
-          .withValues(alpha: unread ? 0.78 : 0.58),
+      elevation: unread ? 1 : 0,
+      color: unread
+          ? colorScheme.primary.withValues(alpha: 0.10)
+          : colorScheme.surface.withValues(alpha: 0.50),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: _busyIds.contains(id) ? null : () => _openNotification(item),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
+        child: IntrinsicHeight(
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundImage:
-                    actorAvatar.isNotEmpty ? NetworkImage(actorAvatar) : null,
-                child: actorAvatar.isEmpty
-                    ? Text(_initial(actorName ?? item['type']?.toString()))
-                    : null,
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: 4,
+                decoration: BoxDecoration(
+                  color: unread ? colorScheme.primary : Colors.transparent,
+                  borderRadius: const BorderRadius.horizontal(
+                    left: Radius.circular(12),
+                  ),
+                ),
               ),
-              const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            item['title']?.toString() ?? '通知',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      CircleAvatar(
+                        radius: 22,
+                        backgroundImage: actorAvatar.isNotEmpty
+                            ? NetworkImage(actorAvatar)
+                            : null,
+                        child: actorAvatar.isEmpty
+                            ? Text(
+                                _initial(actorName ?? item['type']?.toString()))
+                            : null,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    item['title']?.toString() ?? '通知',
+                                    style: TextStyle(
+                                      fontWeight: unread
+                                          ? FontWeight.w800
+                                          : FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                _readStatePill(unread),
+                              ],
                             ),
-                          ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _bodyText(item, actorName),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: unread
+                                        ? null
+                                        : colorScheme.onSurface
+                                            .withValues(alpha: 0.68),
+                                  ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              _formatTime(item['created_at']?.toString()),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: colorScheme.onSurface.withValues(
+                                        alpha: unread ? 0.72 : 0.50),
+                                  ),
+                            ),
+                          ],
                         ),
-                        if (unread)
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.error,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _bodyText(item, actorName),
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _formatTime(item['created_at']?.toString()),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _readStatePill(bool unread) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(left: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: (unread ? colorScheme.primary : colorScheme.outline)
+            .withValues(alpha: unread ? 0.16 : 0.10),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        unread ? '未读' : '已读',
+        style: TextStyle(
+          color: unread
+              ? colorScheme.primary
+              : colorScheme.onSurface.withValues(alpha: 0.54),
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -233,6 +285,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     if (actorName == null || actorName.isEmpty) return body;
     final type = item['type']?.toString();
     if (type == 'gallery_comment') return '$actorName 评论了你：$body';
+    if (type == 'gallery_comment_reply') return '$actorName 回复了你：$body';
     if (type == 'gallery_like') return '$actorName 点赞了你的作品';
     if (type == 'gallery_favorite') return '$actorName 收藏了你的作品';
     return body;
