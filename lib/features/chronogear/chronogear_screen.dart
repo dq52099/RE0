@@ -10,6 +10,7 @@ import '../../core/compact_dropdown_field.dart';
 import '../../core/compact_save_notice.dart';
 import '../../core/image_capabilities.dart';
 import '../../core/providers.dart';
+import '../../core/timezone_reset_hint.dart';
 import '../compendium/image_preview_screen.dart';
 
 class ChronogearScreen extends ConsumerStatefulWidget {
@@ -52,8 +53,10 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
         ImageCapabilities.fallback();
     final options = capabilities.edit;
     final size = _safeValue(_size, options.sizes, options.defaultSize);
-    final quality = _safeValue(_quality, options.qualities, options.defaultQuality);
-    final background = _safeValue(_background, options.backgrounds, options.defaultBackground);
+    final quality =
+        _safeValue(_quality, options.qualities, options.defaultQuality);
+    final background =
+        _safeValue(_background, options.backgrounds, options.defaultBackground);
     final outputFormat = _safeValue(
       _outputFormat,
       capabilities.outputFormats,
@@ -61,7 +64,9 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     );
     final mana = ref.watch(energyProvider);
     final editQuota = mana['edit'];
-    final remain = editQuota['is_unlimited'] == true ? '无限' : '${editQuota['remaining']} / ${editQuota['total']}';
+    final remain = editQuota['is_unlimited'] == true
+        ? '无限'
+        : '${editQuota['remaining']} / ${editQuota['total']}';
     final materializerState = ref.watch(editImagesProvider);
     final activeTask = ref.watch(activeImageTaskProvider);
 
@@ -81,9 +86,10 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                   width: double.infinity,
                   height: 200,
                   decoration: BoxDecoration(
-                    color: brand.panelColor.withOpacity(0.3),
+                    color: brand.panelColor.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: brand.primaryColor.withOpacity(0.5)),
+                    border: Border.all(
+                        color: brand.primaryColor.withValues(alpha: 0.5)),
                   ),
                   child: _imageFile == null
                       ? Column(
@@ -132,13 +138,16 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                           value: _count,
                           width: fieldWidth,
                           menuWidth: menuWidth,
-                          items: List<int>.generate(options.maxImages, (index) => index + 1)
-                              .map((e) => CompactDropdownField.centeredItem<int>(e, '$e张', context))
+                          items: List<int>.generate(
+                                  options.maxImages, (index) => index + 1)
+                              .map((e) =>
+                                  CompactDropdownField.centeredItem<int>(
+                                      e, '$e张', context))
                               .toList(),
-                          selectedLabels:
-                              List<int>.generate(options.maxImages, (index) => index + 1)
-                                  .map((e) => '$e张')
-                                  .toList(),
+                          selectedLabels: List<int>.generate(
+                                  options.maxImages, (index) => index + 1)
+                              .map((e) => '$e张')
+                              .toList(),
                           onChanged: (value) => setState(() => _count = value!),
                         ),
                       ),
@@ -150,7 +159,8 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                           width: fieldWidth,
                           menuWidth: menuWidth,
                           items: _items(options.sizes),
-                          selectedLabels: options.sizes.map((item) => item.label).toList(),
+                          selectedLabels:
+                              options.sizes.map((item) => item.label).toList(),
                           onChanged: (value) => setState(() => _size = value!),
                         ),
                       ),
@@ -172,8 +182,11 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                           width: fieldWidth,
                           menuWidth: menuWidth,
                           items: _items(options.qualities),
-                          selectedLabels: options.qualities.map((item) => item.label).toList(),
-                          onChanged: (value) => setState(() => _quality = value!),
+                          selectedLabels: options.qualities
+                              .map((item) => item.label)
+                              .toList(),
+                          onChanged: (value) =>
+                              setState(() => _quality = value!),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -184,8 +197,11 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                           width: fieldWidth,
                           menuWidth: menuWidth,
                           items: _items(options.backgrounds),
-                          selectedLabels: options.backgrounds.map((item) => item.label).toList(),
-                          onChanged: (value) => setState(() => _background = value!),
+                          selectedLabels: options.backgrounds
+                              .map((item) => item.label)
+                              .toList(),
+                          onChanged: (value) =>
+                              setState(() => _background = value!),
                         ),
                       ),
                     ],
@@ -201,9 +217,11 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                     width: constraints.maxWidth,
                     menuWidth: constraints.maxWidth,
                     items: _items(capabilities.outputFormats),
-                    selectedLabels:
-                        capabilities.outputFormats.map((item) => item.label).toList(),
-                    onChanged: (value) => setState(() => _outputFormat = value!),
+                    selectedLabels: capabilities.outputFormats
+                        .map((item) => item.label)
+                        .toList(),
+                    onChanged: (value) =>
+                        setState(() => _outputFormat = value!),
                   );
                 },
               ),
@@ -211,41 +229,46 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: materializerState.isLoading || _imageFile == null ? null : () async {
-                    final prompt = _spellController.text.trim();
-                    if (prompt.isEmpty) {
-                      showCenterNotice(context, '请先填写改图提示词');
-                      return;
-                    }
-                    final currentTask = ref.read(activeImageTaskProvider);
-                    if (currentTask == ImageTaskKind.generate) {
-                      showCenterNotice(context, '生图任务进行中，请稍后再试');
-                      return;
-                    }
-                    FocusScope.of(context).unfocus();
-                    setState(() => _lastSubmittedPrompt = prompt);
-                    try {
-                      final notice = await ref.read(editImagesProvider.notifier).recall(
-                            prompt,
-                            _imageFile!.path,
-                            _count,
-                            size,
-                            quality,
-                            background,
-                            outputFormat,
-                          );
-                      if (!mounted || notice == null) return;
-                      showCenterNotice(context, notice);
-                    } catch (error) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(friendlyError(error))),
-                      );
-                    }
-                  },
+                  onPressed: materializerState.isLoading || _imageFile == null
+                      ? null
+                      : () async {
+                          final prompt = _spellController.text.trim();
+                          if (prompt.isEmpty) {
+                            showCenterNotice(context, '请先填写改图提示词');
+                            return;
+                          }
+                          final currentTask = ref.read(activeImageTaskProvider);
+                          if (currentTask == ImageTaskKind.generate) {
+                            showCenterNotice(context, '生图任务进行中，请稍后再试');
+                            return;
+                          }
+                          FocusScope.of(context).unfocus();
+                          setState(() => _lastSubmittedPrompt = prompt);
+                          try {
+                            final notice = await ref
+                                .read(editImagesProvider.notifier)
+                                .recall(
+                                  prompt,
+                                  _imageFile!.path,
+                                  _count,
+                                  size,
+                                  quality,
+                                  background,
+                                  outputFormat,
+                                );
+                            if (!mounted || notice == null) return;
+                            showCenterNotice(context, notice);
+                          } catch (error) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(friendlyError(error))),
+                            );
+                          }
+                        },
                   child: materializerState.isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : Text(brand.editButtonLabel, style: const TextStyle(fontSize: 18)),
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : Text(brand.editButtonLabel,
+                          style: const TextStyle(fontSize: 18)),
                 ),
               ),
               const SizedBox(height: 24),
@@ -303,16 +326,27 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: brand.panelColor.withOpacity(0.2),
+        color: brand.panelColor.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.history_toggle_off, color: brand.successColor),
-          const SizedBox(width: 12),
+          Row(
+            children: [
+              Icon(Icons.history_toggle_off, color: brand.successColor),
+              const SizedBox(width: 12),
+              Text(
+                '${brand.editQuotaLabel}: $remain',
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           Text(
-            '${brand.editQuotaLabel}: $remain',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            utcMidnightLocalResetHint(),
+            style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
       ),
@@ -324,7 +358,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withOpacity(0.6),
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(message),
@@ -363,7 +397,8 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     );
   }
 
-  String _safeValue(String current, List<ImageOption> options, String fallback) {
+  String _safeValue(
+      String current, List<ImageOption> options, String fallback) {
     return options.any((item) => item.value == current) ? current : fallback;
   }
 }

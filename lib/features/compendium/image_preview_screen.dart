@@ -90,11 +90,13 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
             Center(
               child: Container(
                 margin: const EdgeInsets.only(right: 12),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.10),
+                  color: Colors.white.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: Colors.white.withOpacity(0.14)),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.14)),
                 ),
                 child: Text(
                   '${_currentIndex + 1}/${widget.items.length}',
@@ -160,8 +162,9 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.86),
-          border: Border(top: BorderSide(color: Colors.white.withOpacity(0.08))),
+          color: Colors.black.withValues(alpha: 0.86),
+          border: Border(
+              top: BorderSide(color: Colors.white.withValues(alpha: 0.08))),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -191,16 +194,16 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
 
   Widget _downloadButton(Color accentColor) {
     return Material(
-      color: Colors.white.withOpacity(0.90),
+      color: Colors.white.withValues(alpha: 0.90),
       elevation: 10,
-      shadowColor: Colors.black.withOpacity(0.28),
+      shadowColor: Colors.black.withValues(alpha: 0.28),
       shape: const CircleBorder(),
       child: Ink(
         width: 48,
         height: 48,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: accentColor.withOpacity(0.26)),
+          border: Border.all(color: accentColor.withValues(alpha: 0.26)),
         ),
         child: IconButton(
           tooltip: '保存到系统相册',
@@ -222,11 +225,13 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
     if (_isSaving || widget.items.isEmpty) return;
     setState(() => _isSaving = true);
     try {
-      await saveImageWithUserFlow(context, ref, widget.items[_currentIndex].url);
+      await saveImageWithUserFlow(
+          context, ref, widget.items[_currentIndex].url);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyError(error, fallback: '图片下载失败，请稍后重试。'))),
+        SnackBar(
+            content: Text(friendlyError(error, fallback: '图片下载失败，请稍后重试。'))),
       );
     } finally {
       if (mounted) {
@@ -234,5 +239,4 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
       }
     }
   }
-
 }

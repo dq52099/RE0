@@ -115,9 +115,9 @@ Future<void> showLevelRewardsSheet(
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: highlight.withOpacity(0.08),
+                  color: highlight.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: highlight.withOpacity(0.18)),
+                  border: Border.all(color: highlight.withValues(alpha: 0.18)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -171,17 +171,19 @@ Widget _rewardTile(
     margin: const EdgeInsets.only(bottom: 8),
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
-      color: reward.badgeColor.withOpacity(isCurrent || isNext ? 0.12 : 0.06),
+      color: reward.badgeColor
+          .withValues(alpha: isCurrent || isNext ? 0.12 : 0.06),
       borderRadius: BorderRadius.circular(14),
       border: Border.all(
-        color: reward.badgeColor.withOpacity(isCurrent || isNext ? 0.38 : 0.14),
+        color: reward.badgeColor
+            .withValues(alpha: isCurrent || isNext ? 0.38 : 0.14),
       ),
     ),
     child: Row(
       children: [
         CircleAvatar(
           radius: 18,
-          backgroundColor: reward.badgeColor.withOpacity(0.16),
+          backgroundColor: reward.badgeColor.withValues(alpha: 0.16),
           child: Text(
             'LV${reward.level}',
             style: TextStyle(
@@ -244,7 +246,7 @@ class _StatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withOpacity(0.74),
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.74),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(

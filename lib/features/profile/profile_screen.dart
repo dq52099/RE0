@@ -12,8 +12,11 @@ import '../../core/compact_save_notice.dart';
 import '../../core/level_rewards_sheet.dart';
 import '../../core/points_sheet.dart';
 import '../../core/providers.dart';
+import '../../core/timezone_reset_hint.dart';
 import '../admin/admin_screen.dart';
 import '../auth/login_screen.dart';
+import '../compendium/image_preview_screen.dart';
+import '../feedback/feedback_screen.dart';
 import '../gallery/gallery_collections_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -36,6 +39,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   double? _updateProgress;
   Future<int>? _cacheSizeFuture;
   Future<Map<String, dynamic>>? _checkInStatusFuture;
+  AppUpdateInfo? _latestUpdateInfo;
+  bool _hasAutoCheckedUpdate = false;
 
   @override
   void initState() {
@@ -48,12 +53,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.refreshToken != widget.refreshToken) {
       setState(_refreshCacheSize);
+      _checkUpdateSilentlyOnce();
     }
   }
 
   void _refreshCacheSize() {
     _cacheSizeFuture = ref.read(imageCacheProvider).cacheSizeBytes();
-    _checkInStatusFuture = ref.read(gatewayClientProvider).getDailyCheckInStatus();
+    _checkInStatusFuture =
+        ref.read(gatewayClientProvider).getDailyCheckInStatus();
   }
 
   Future<void> _clearCache() async {
@@ -97,7 +104,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     if (_isCheckingIn) return;
     setState(() => _isCheckingIn = true);
     try {
-      final result = await ref.read(gatewayClientProvider).performDailyCheckIn();
+      final result =
+          await ref.read(gatewayClientProvider).performDailyCheckIn();
       ref.read(authStateProvider.notifier).state = result['user'];
       ref.read(energyProvider.notifier).state = result['user']['quota_summary'];
       if (!mounted) return;
@@ -175,6 +183,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       final updateService = ref.read(appUpdateProvider);
       final info = await updateService.checkForUpdate();
       if (!mounted) return;
+      setState(() => _latestUpdateInfo = info);
       if (!info.available) {
         showCenterNotice(context, '已是最新版本 ${updateService.currentVersionName}');
         return;
@@ -189,6 +198,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       if (mounted) {
         setState(() => _isCheckingUpdate = false);
       }
+    }
+  }
+
+  Future<void> _checkUpdateSilentlyOnce() async {
+    if (_hasAutoCheckedUpdate || _isCheckingUpdate || _isDownloadingUpdate)
+      return;
+    _hasAutoCheckedUpdate = true;
+    try {
+      final info = await ref.read(appUpdateProvider).checkForUpdate();
+      if (!mounted) return;
+      setState(() => _latestUpdateInfo = info);
+    } catch (_) {
+      // Silent session check should not interrupt the profile page.
     }
   }
 
@@ -266,9 +288,38 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
+  void _openFeedback() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const FeedbackScreen()),
+    );
+  }
+
+  void _openAvatarPreview(Map<String, dynamic>? user) {
+    final avatarUrl = user?['avatar_url']?.toString().trim() ?? '';
+    if (avatarUrl.isEmpty) {
+      showCenterNotice(context, '当前没有头像');
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ImagePreviewScreen(
+          showDownload: false,
+          items: [
+            PreviewImageEntry(
+              url: avatarUrl,
+              title: user?['display_name']?.toString() ?? '头像',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _editProfile(Map<String, dynamic>? user) async {
-    final username = TextEditingController(text: user?['username']?.toString() ?? '');
-    final displayName = TextEditingController(text: user?['display_name']?.toString() ?? '');
+    final username =
+        TextEditingController(text: user?['username']?.toString() ?? '');
+    final displayName =
+        TextEditingController(text: user?['display_name']?.toString() ?? '');
     final canEditUsername = user?['can_edit_username'] != false;
     final payload = await showDialog<Map<String, String>>(
       context: context,
@@ -315,7 +366,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   );
                   return;
                 }
-                if (!RegExp(r'^[a-z][a-z0-9_-]{3,23}$').hasMatch(nextUsername)) {
+                if (!RegExp(r'^[a-z][a-z0-9_-]{3,23}$')
+                    .hasMatch(nextUsername)) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('账号需以小写字母开头，只允许小写字母、数字、下划线和短横线。'),
@@ -464,13 +516,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               builder: (context, snapshot) {
                 final status = snapshot.data ?? const <String, dynamic>{};
                 final signedToday = status['signed_today'] == true;
-                final reward = (status['today_reward'] as Map?) ?? const <String, dynamic>{};
+                final reward = (status['today_reward'] as Map?) ??
+                    const <String, dynamic>{};
                 final subtitle = signedToday
-                    ? '今日已签到，奖励生图 ${reward['generate'] ?? 0} 次，改图 ${reward['edit'] ?? 0} 次'
-                    : '每日可随机获得 5-10 次生图和 2-5 次改图奖励';
+                    ? '今日已签到，奖励生图 ${reward['generate'] ?? 0} 次，改图 ${reward['edit'] ?? 0} 次\n${resetHintFromResponse(status)}'
+                    : '每日可随机获得 5-10 次生图和 2-5 次改图奖励\n${resetHintFromResponse(status)}';
                 return _menuCard(
                   child: ListTile(
-                    leading: Icon(Icons.calendar_month_outlined, color: brand.successColor),
+                    leading: Icon(Icons.calendar_month_outlined,
+                        color: brand.successColor),
                     title: const Text('每日签到'),
                     subtitle: Text(subtitle),
                     trailing: _isCheckingIn
@@ -482,18 +536,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         : Text(
                             signedToday ? '已签到' : '去签到',
                             style: TextStyle(
-                              color: signedToday ? brand.successColor : brand.primaryColor,
+                              color: signedToday
+                                  ? brand.successColor
+                                  : brand.primaryColor,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                    onTap: (_isCheckingIn || signedToday) ? null : _dailyCheckIn,
+                    onTap:
+                        (_isCheckingIn || signedToday) ? null : _dailyCheckIn,
                   ),
                 );
               },
             ),
             _menuCard(
               child: ListTile(
-                leading: Icon(Icons.collections_bookmark_outlined, color: brand.primaryColor),
+                leading: Icon(Icons.collections_bookmark_outlined,
+                    color: brand.primaryColor),
                 title: const Text('我的画廊'),
                 subtitle: const Text('查看收藏、点赞和自己发布到画廊的作品'),
                 trailing: const Icon(Icons.chevron_right),
@@ -513,6 +571,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 onTap: () => _showProfileDetails(brand, user),
               ),
             ),
+            if (!hasSystemManagement)
+              _menuCard(
+                child: ListTile(
+                  leading:
+                      Icon(Icons.forum_outlined, color: brand.primaryColor),
+                  title: const Text('反馈与许愿'),
+                  subtitle: const Text('提交问题、建议，或希望新增的功能、模型、主题和参数'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _openFeedback,
+                ),
+              ),
             if (hasSystemManagement)
               _menuCard(
                 child: ListTile(
@@ -528,7 +597,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
             _menuCard(
               child: ListTile(
-                leading: Icon(Icons.palette_outlined, color: brand.primaryColor),
+                leading:
+                    Icon(Icons.palette_outlined, color: brand.primaryColor),
                 title: const Text('主题风格'),
                 subtitle: Text(brand.appTitle),
                 trailing: SizedBox(
@@ -547,7 +617,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ),
                         )
                         .toList(),
-                    selectedLabels: AppBrands.all.map((item) => item.appTitle).toList(),
+                    selectedLabels:
+                        AppBrands.all.map((item) => item.appTitle).toList(),
                     onChanged: (value) {
                       if (value != null) {
                         ref.read(brandProvider.notifier).setBrand(value);
@@ -561,9 +632,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               child: ListTile(
                 leading: Icon(Icons.system_update, color: brand.primaryColor),
                 title: const Text('检查更新'),
-                subtitle: Text('当前版本 ${ref.read(appUpdateProvider).currentVersionName}'),
+                subtitle: Text(
+                    '当前版本 ${ref.read(appUpdateProvider).currentVersionName}'),
                 trailing: _updateTrailing(),
-                onTap: (_isCheckingUpdate || _isDownloadingUpdate) ? null : _checkUpdate,
+                onTap: (_isCheckingUpdate || _isDownloadingUpdate)
+                    ? null
+                    : _checkUpdate,
               ),
             ),
             FutureBuilder<int>(
@@ -611,8 +685,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     Map<String, dynamic>? user,
     bool hasSystemManagement,
   ) {
-    final role = user?['role'] as Map? ?? {};
-    final group = user?['group'] as Map? ?? {};
     final quota = user?['quota_summary'] as Map? ?? {};
     final levelInfo = user?['level_info'] as Map? ?? {};
     final generateQuota = quota['generate'] as Map? ?? {};
@@ -632,18 +704,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    _avatar(user, brand),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _openAvatarPreview(user),
+                      child: _avatar(user, brand),
+                    ),
                     Positioned(
                       right: -2,
                       bottom: -2,
                       child: Material(
                         color: Theme.of(context).colorScheme.surface,
                         elevation: 4,
-                        shadowColor: Colors.black.withOpacity(0.16),
+                        shadowColor: Colors.black.withValues(alpha: 0.16),
                         shape: const CircleBorder(),
                         child: InkWell(
                           customBorder: const CircleBorder(),
-                          onTap: _isUpdatingAvatar ? null : _pickAndUploadAvatar,
+                          onTap:
+                              _isUpdatingAvatar ? null : _pickAndUploadAvatar,
                           child: SizedBox(
                             width: 30,
                             height: 30,
@@ -652,7 +729,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                   ? const SizedBox(
                                       width: 15,
                                       height: 15,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
                                     )
                                   : Icon(
                                       Icons.edit,
@@ -743,7 +821,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final content = Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        border: Border.all(color: brand.primaryColor.withOpacity(0.6)),
+        border: Border.all(color: brand.primaryColor.withValues(alpha: 0.6)),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -783,7 +861,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       width: 80,
       height: 80,
       decoration: BoxDecoration(
-        color: brand.panelColor.withOpacity(0.18),
+        color: brand.panelColor.withValues(alpha: 0.18),
         border: Border.all(color: brand.primaryColor),
         shape: BoxShape.circle,
       ),
@@ -926,7 +1004,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         child: CircularProgressIndicator(strokeWidth: 2),
       );
     }
-    return const Icon(Icons.chevron_right);
+    final hasUpdate = _latestUpdateInfo?.available == true;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        const Icon(Icons.chevron_right),
+        if (hasUpdate)
+          Positioned(
+            right: -1,
+            top: -1,
+            child: Container(
+              width: 9,
+              height: 9,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.error,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   bool _hasSystemManagement(Map<String, dynamic>? user) {
@@ -947,6 +1044,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       'permission.view',
       'api_key.view',
       'audit.view',
+      'feedback.view',
     }).isNotEmpty) {
       return true;
     }
@@ -964,6 +1062,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       'permissions',
       'apiKeys',
       'audit',
+      'feedback',
     }).isNotEmpty;
   }
 
@@ -980,6 +1079,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       'groups',
       'roles',
       'apiKeys',
+      'feedback',
       'audit',
       'permissions',
     ]) {
@@ -996,6 +1096,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     if (permissions.contains('group.view')) return 'groups';
     if (permissions.contains('role.view')) return 'roles';
     if (permissions.contains('api_key.view')) return 'apiKeys';
+    if (permissions.contains('feedback.view')) return 'feedback';
     if (permissions.contains('audit.view')) return 'audit';
     if (permissions.contains('permission.view')) return 'permissions';
     return null;

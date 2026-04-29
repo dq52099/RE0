@@ -77,7 +77,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   void didUpdateWidget(covariant CompendiumScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.refreshToken != widget.refreshToken) {
-      _refresh();
+      _resetFiltersAndReload();
     }
   }
 
@@ -110,9 +110,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     });
 
     try {
-      final response = await ref
-          .read(gatewayClientProvider)
-          .getHistory(
+      final response = await ref.read(gatewayClientProvider).getHistory(
             _page,
             pageSize: _pageSize,
             keyword: _query,
@@ -123,7 +121,8 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
           .whereType<Map>()
           .map((item) => Map<String, dynamic>.from(item))
           .toList();
-      final totalPages = int.tryParse(response['total_pages']?.toString() ?? '') ?? _page;
+      final totalPages =
+          int.tryParse(response['total_pages']?.toString() ?? '') ?? _page;
       if (!mounted) return;
       setState(() {
         if (reset) _items.clear();
@@ -153,6 +152,26 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   }
 
   Future<void> _refresh() async {
+    await _load(reset: true);
+  }
+
+  Future<void> _resetFiltersAndReload() async {
+    _dismissKeyboard();
+    _searchDebounce?.cancel();
+    setState(() {
+      _query = '';
+      _statusFilter = null;
+      _actionFilter = null;
+      _page = 1;
+      _hasMore = true;
+      _error = null;
+    });
+    if (_searchController.text.isNotEmpty) {
+      _searchController.clear();
+    }
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(0);
+    }
     await _load(reset: true);
   }
 
@@ -290,7 +309,8 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     }
   }
 
-  Future<void> _deleteFailedItems(List<Map<String, dynamic>> failedItems) async {
+  Future<void> _deleteFailedItems(
+      List<Map<String, dynamic>> failedItems) async {
     if (failedItems.isEmpty || _isBulkDeleting) return;
     _dismissKeyboard();
     final confirmed = await showDialog<bool>(
@@ -335,9 +355,10 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     _dismissKeyboard();
     setState(() => _retryingKeys.add(key));
     try {
-      final prompt = item['revised_prompt']?.toString().trim().isNotEmpty == true
-          ? item['revised_prompt'].toString().trim()
-          : item['prompt']?.toString().trim() ?? '';
+      final prompt =
+          item['revised_prompt']?.toString().trim().isNotEmpty == true
+              ? item['revised_prompt'].toString().trim()
+              : item['prompt']?.toString().trim() ?? '';
       if (prompt.isEmpty) {
         throw const GatewayException('这条失败记录没有可重试的提示词。');
       }
@@ -434,10 +455,10 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                       width: double.infinity,
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: brand.primaryColor.withOpacity(0.08),
+                        color: brand.primaryColor.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: brand.primaryColor.withOpacity(0.18),
+                          color: brand.primaryColor.withValues(alpha: 0.18),
                         ),
                       ),
                       child: SingleChildScrollView(
@@ -552,7 +573,8 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                 SliverFillRemaining(
                   hasScrollBody: false,
                   child: Center(
-                    child: Text(_query.isEmpty ? brand.emptyHistoryText : '没有匹配的图片记录'),
+                    child: Text(
+                        _query.isEmpty ? brand.emptyHistoryText : '没有匹配的图片记录'),
                   ),
                 )
               else
@@ -707,7 +729,8 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     final isRetrying = _retryingKeys.contains(key);
     final isSuccess = _isSuccessful(item);
     final previewItems = _previewItems(_visibleItems, brand);
-    final previewIndex = previewItems.indexWhere((entry) => entry.url == imageUrl);
+    final previewIndex =
+        previewItems.indexWhere((entry) => entry.url == imageUrl);
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       clipBehavior: Clip.antiAlias,
@@ -746,14 +769,17 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: isSuccess ? brand.successColor : brand.warningColor,
+                        color:
+                            isSuccess ? brand.successColor : brand.warningColor,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         isSuccess ? '成功' : '失败',
-                        style: const TextStyle(fontSize: 12, color: Colors.white),
+                        style:
+                            const TextStyle(fontSize: 12, color: Colors.white),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -778,11 +804,13 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                             ? const SizedBox(
                                 width: 18,
                                 height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               )
                             : const Icon(Icons.publish_outlined),
                         color: brand.primaryColor,
-                        onPressed: isPublishing ? null : () => _publishToGallery(item),
+                        onPressed:
+                            isPublishing ? null : () => _publishToGallery(item),
                       ),
                     IconButton(
                       tooltip: '删除',
@@ -794,7 +822,8 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                             )
                           : const Icon(Icons.delete_outline),
                       color: brand.warningColor,
-                      onPressed: isDeleting ? null : () => _deleteHistoryItem(item),
+                      onPressed:
+                          isDeleting ? null : () => _deleteHistoryItem(item),
                     ),
                   ],
                 ),
@@ -822,10 +851,10 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: brand.warningColor.withOpacity(0.12),
+                      color: brand.warningColor.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: brand.warningColor.withOpacity(0.26),
+                        color: brand.warningColor.withValues(alpha: 0.26),
                       ),
                     ),
                     child: Row(
@@ -930,9 +959,10 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: brand.primaryColor.withOpacity(0.08),
+              color: brand.primaryColor.withValues(alpha: 0.08),
               borderRadius: radius,
-              border: Border.all(color: brand.primaryColor.withOpacity(0.18)),
+              border:
+                  Border.all(color: brand.primaryColor.withValues(alpha: 0.18)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -961,9 +991,8 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                         height: 28,
                       ),
                       padding: EdgeInsets.zero,
-                      onPressed: prompt.isEmpty
-                          ? null
-                          : () => _copyPromptText(prompt),
+                      onPressed:
+                          prompt.isEmpty ? null : () => _copyPromptText(prompt),
                       icon: const Icon(Icons.content_copy_outlined, size: 16),
                       color: brand.primaryColor,
                     ),
@@ -992,7 +1021,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withOpacity(0.55),
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(

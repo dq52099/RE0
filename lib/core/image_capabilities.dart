@@ -87,7 +87,8 @@ class ImageCapabilities {
 
   factory ImageCapabilities.fromJson(Map<String, dynamic> json) {
     final profile = _map(json['profile']);
-    final maxImages = int.tryParse(json['max_images_per_request']?.toString() ?? '') ?? 6;
+    final maxImages =
+        int.tryParse(json['max_images_per_request']?.toString() ?? '') ?? 6;
     return ImageCapabilities(
       generate: _actionOptions(_map(profile['generate']), maxImages),
       edit: _actionOptions(_map(profile['edit']), maxImages),
@@ -99,7 +100,8 @@ class ImageCapabilities {
     );
   }
 
-  static ImageActionOptions _actionOptions(Map<String, dynamic> json, int maxImages) {
+  static ImageActionOptions _actionOptions(
+      Map<String, dynamic> json, int maxImages) {
     return ImageActionOptions(
       sizes: _options(json['sizes']),
       qualities: _plainOptions(json['qualities'], {
@@ -136,12 +138,16 @@ class ImageCapabilities {
         .toList();
   }
 
-  static List<ImageOption> _plainOptions(dynamic values, Map<String, String> labels) {
+  static List<ImageOption> _plainOptions(
+      dynamic values, Map<String, String> labels) {
     final parsed = _options(values)
-        .map((item) => ImageOption(value: item.value, label: labels[item.value] ?? item.label))
+        .map((item) => ImageOption(
+            value: item.value, label: labels[item.value] ?? item.label))
         .toList();
     return parsed.isEmpty
-        ? labels.entries.map((item) => ImageOption(value: item.key, label: item.value)).toList()
+        ? labels.entries
+            .map((item) => ImageOption(value: item.key, label: item.value))
+            .toList()
         : parsed;
   }
 

@@ -7,6 +7,7 @@ import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
 import '../../core/compact_save_notice.dart';
 import '../../core/providers.dart';
+import '../feedback/admin_feedback_panel.dart';
 
 class AdminScreen extends ConsumerStatefulWidget {
   const AdminScreen({super.key, this.initialView});
@@ -18,6 +19,10 @@ class AdminScreen extends ConsumerStatefulWidget {
 }
 
 class _AdminScreenState extends ConsumerState<AdminScreen> {
+  static const _defaultAiBaseUrl = 'https://2c2ch1u11-share-api-0.hf.space/v1';
+  static const _feedbackAiModel = 'deepseek-v4-flash';
+  static const _promptAiModel = 'gpt-5.4-mini';
+
   int _revision = 0;
 
   @override
@@ -34,7 +39,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       );
     }
 
-    final initialIndex = sections.indexWhere((item) => item.key == widget.initialView);
+    final initialIndex =
+        sections.indexWhere((item) => item.key == widget.initialView);
     return DefaultTabController(
       key: ValueKey(sections.map((item) => item.key).join('|')),
       length: sections.length,
@@ -72,31 +78,54 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         .whereType<String>()
         .toSet();
     final sections = <_AdminSection>[];
-    if (isAdmin || permissions.contains('settings.view') || menus.contains('settings')) {
+    if (isAdmin ||
+        permissions.contains('settings.view') ||
+        menus.contains('settings')) {
       sections.add(const _AdminSection('overview', '概览'));
     }
-    if (isAdmin || permissions.contains('user.view') || menus.contains('users')) {
+    if (isAdmin ||
+        permissions.contains('user.view') ||
+        menus.contains('users')) {
       sections.add(const _AdminSection('users', '用户'));
     }
-    if (isAdmin || permissions.contains('invite.view') || menus.contains('invites')) {
+    if (isAdmin ||
+        permissions.contains('invite.view') ||
+        menus.contains('invites')) {
       sections.add(const _AdminSection('invites', '邀请码'));
     }
-    if (isAdmin || permissions.contains('group.view') || menus.contains('groups')) {
+    if (isAdmin ||
+        permissions.contains('group.view') ||
+        menus.contains('groups')) {
       sections.add(const _AdminSection('groups', '用户组'));
     }
-    if (isAdmin || permissions.contains('role.view') || menus.contains('roles')) {
+    if (isAdmin ||
+        permissions.contains('role.view') ||
+        menus.contains('roles')) {
       sections.add(const _AdminSection('roles', '角色'));
     }
-    if (isAdmin || permissions.contains('permission.view') || menus.contains('permissions')) {
+    if (isAdmin ||
+        permissions.contains('permission.view') ||
+        menus.contains('permissions')) {
       sections.add(const _AdminSection('permissions', '权限'));
     }
-    if (isAdmin || permissions.contains('api_key.view') || menus.contains('apiKeys')) {
+    if (isAdmin ||
+        permissions.contains('api_key.view') ||
+        menus.contains('apiKeys')) {
       sections.add(const _AdminSection('apiKeys', '密钥'));
     }
-    if (isAdmin || permissions.contains('settings.view') || menus.contains('settings')) {
+    if (isAdmin ||
+        permissions.contains('feedback.view') ||
+        menus.contains('feedback')) {
+      sections.add(const _AdminSection('feedback', '用户反馈'));
+    }
+    if (isAdmin ||
+        permissions.contains('settings.view') ||
+        menus.contains('settings')) {
       sections.add(const _AdminSection('settings', '设置'));
     }
-    if (isAdmin || permissions.contains('audit.view') || menus.contains('audit')) {
+    if (isAdmin ||
+        permissions.contains('audit.view') ||
+        menus.contains('audit')) {
       sections.add(const _AdminSection('audit', '审计'));
     }
     return sections;
@@ -114,7 +143,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       case 'users':
         return _usersPage(brand, canManage: _can(user, 'user.manage'));
       case 'invites':
-        return _invitationCodesPage(brand, canManage: _can(user, 'invite.manage'));
+        return _invitationCodesPage(brand,
+            canManage: _can(user, 'invite.manage'));
       case 'groups':
         return _groupsPage(brand, canManage: _can(user, 'group.manage'));
       case 'roles':
@@ -123,6 +153,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         return _permissionsPage(brand);
       case 'apiKeys':
         return _apiKeysPage(brand, canManage: _can(user, 'api_key.manage'));
+      case 'feedback':
+        return AdminFeedbackPanel(
+          canManage: _can(user, 'feedback.manage'),
+          canReply: _can(user, 'feedback.reply'),
+          canAi: _can(user, 'feedback.ai'),
+        );
       case 'settings':
         return _settingsPage(brand, canManage: _can(user, 'settings.manage'));
       case 'audit':
@@ -160,14 +196,16 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(item.$1, style: Theme.of(context).textTheme.titleMedium),
+                    Text(item.$1,
+                        style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8),
                     Text(
                       '${item.$2 ?? 0}',
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            color: brand.primaryColor,
-                            fontWeight: FontWeight.bold,
-                          ),
+                      style:
+                          Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                color: brand.primaryColor,
+                                fontWeight: FontWeight.bold,
+                              ),
                     ),
                   ],
                 ),
@@ -195,8 +233,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
             final quota = _map(user['quota_summary']);
             final retention = _map(user['history_retention_summary']);
             return _infoCard(
-              title: '${_text(user['display_name'])} (${_text(user['username'])})',
-              subtitle: '角色: ${_text(user['role_name'])}  用户组: ${_text(user['group_name'])}',
+              title:
+                  '${_text(user['display_name'])} (${_text(user['username'])})',
+              subtitle:
+                  '角色: ${_text(user['role_name'])}  用户组: ${_text(user['group_name'])}',
               active: user['is_active'] == true,
               trailing: canManage
                   ? IconButton(
@@ -219,7 +259,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 
   Widget _invitationCodesPage(AppBrand brand, {required bool canManage}) {
     return _futureSection<List<Map<String, dynamic>>>(
-      future: _loadMapList(ref.read(gatewayClientProvider).adminInvitationCodes()),
+      future:
+          _loadMapList(ref.read(gatewayClientProvider).adminInvitationCodes()),
       builder: (codes) {
         final unusedCodes = codes
             .where((item) => _text(item['status']) == 'unused')
@@ -254,9 +295,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
             );
             return _infoCard(
               title: _text(item['code']),
-              subtitle: status == 'unused'
-                  ? '未使用，复制后发给新用户注册。'
-                  : '已使用的邀请码会保留展示，便于追溯。',
+              subtitle:
+                  status == 'unused' ? '未使用，复制后发给新用户注册。' : '已使用的邀请码会保留展示，便于追溯。',
               badge: _text(item['status_label']),
               trailing: IconButton(
                 tooltip: '复制邀请码',
@@ -404,7 +444,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     return _futureSection<Map<String, dynamic>>(
       future: ref.read(gatewayClientProvider).adminSystemSettings(),
       builder: (data) {
-        final settings = _mapList(data['settings']);
+        final settings = _settingsWithAiDefaults(_mapList(data['settings']));
         final runtime = _map(data['runtime_status']);
         return _adminList(
           action: canManage
@@ -437,7 +477,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               return _infoCard(
                 title: _text(setting['key']),
                 subtitle: _text(setting['description']),
-                lines: ['当前值: ${_text(setting['value'], fallback: '未设置')}'],
+                lines: ['当前值: ${_displaySettingValue(setting)}'],
               );
             }),
           ],
@@ -454,7 +494,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           children: logs.map((log) {
             return _infoCard(
               title: _text(log['action']),
-              subtitle: '${_text(log['actor_username'], fallback: '系统')}  ${_text(log['created_at'])}',
+              subtitle:
+                  '${_text(log['actor_username'], fallback: '系统')}  ${_text(log['created_at'])}',
               lines: [
                 '资源: ${_text(log['resource_type'])} ${_text(log['resource_id'])}',
                 if (log['detail'] != null) '详情: ${_text(log['detail'])}',
@@ -485,7 +526,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     return _RolesData(values[0], values[1]);
   }
 
-  Future<List<Map<String, dynamic>>> _loadMapList(Future<List<dynamic>> future) async {
+  Future<List<Map<String, dynamic>>> _loadMapList(
+      Future<List<dynamic>> future) async {
     final items = await future;
     return _mapList(items);
   }
@@ -550,7 +592,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 Expanded(
                   child: Text(
                     title,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                 ),
                 if (badge != null) _pill(badge),
@@ -583,7 +626,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withOpacity(0.55),
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(text, style: Theme.of(context).textTheme.bodySmall),
@@ -595,7 +638,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       margin: const EdgeInsets.only(left: 8),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: ref.read(brandProvider).primaryColor.withOpacity(0.16),
+        color: ref.read(brandProvider).primaryColor.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(text, style: const TextStyle(fontSize: 12)),
@@ -651,7 +694,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     width: 38,
                     height: 38,
                     decoration: BoxDecoration(
-                      color: brand.primaryColor.withOpacity(0.14),
+                      color: brand.primaryColor.withValues(alpha: 0.14),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(icon, color: brand.primaryColor),
@@ -688,8 +731,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   }
 
   Future<void> _editUser(Map<String, dynamic>? user, _UsersData data) async {
-    final username = TextEditingController(text: _text(user?['username'], fallback: ''));
-    final displayName = TextEditingController(text: _text(user?['display_name'], fallback: ''));
+    final username =
+        TextEditingController(text: _text(user?['username'], fallback: ''));
+    final displayName =
+        TextEditingController(text: _text(user?['display_name'], fallback: ''));
     final password = TextEditingController();
     final generateQuota = TextEditingController(
       text: user?['generate_quota_total_override']?.toString() ?? '',
@@ -724,14 +769,19 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: username, decoration: const InputDecoration(labelText: '用户名')),
+                TextField(
+                    controller: username,
+                    decoration: const InputDecoration(labelText: '用户名')),
                 const SizedBox(height: 12),
-                TextField(controller: displayName, decoration: const InputDecoration(labelText: '显示名称')),
+                TextField(
+                    controller: displayName,
+                    decoration: const InputDecoration(labelText: '显示名称')),
                 const SizedBox(height: 12),
                 TextField(
                   controller: password,
                   obscureText: true,
-                  decoration: InputDecoration(labelText: user == null ? '初始密码' : '密码留空不修改'),
+                  decoration: InputDecoration(
+                      labelText: user == null ? '初始密码' : '密码留空不修改'),
                 ),
                 const SizedBox(height: 12),
                 _dropdown(
@@ -774,18 +824,22 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 const SizedBox(height: 8),
                 CheckboxListTile(
                   value: active,
-                  onChanged: (value) => setDialogState(() => active = value ?? true),
+                  onChanged: (value) =>
+                      setDialogState(() => active = value ?? true),
                   title: const Text('启用账号'),
                 ),
                 CheckboxListTile(
                   value: canEditUsername,
-                  onChanged: (value) => setDialogState(() => canEditUsername = value ?? true),
+                  onChanged: (value) =>
+                      setDialogState(() => canEditUsername = value ?? true),
                   title: const Text('允许修改用户名'),
                 ),
               ],
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('取消')),
               FilledButton(
                 onPressed: () {
                   final body = {
@@ -795,7 +849,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     'group_id': groupId,
                     'is_active': active,
                     'can_edit_username': canEditUsername,
-                    'generate_quota_total_override': _nullableInt(generateQuota.text),
+                    'generate_quota_total_override':
+                        _nullableInt(generateQuota.text),
                     'edit_quota_total_override': _nullableInt(editQuota.text),
                     'generate_history_retention_override':
                         _nullableInt(generateHistoryRetention.text),
@@ -815,14 +870,22 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       ),
     );
     if (payload == null) return;
-    await _save(() => ref.read(gatewayClientProvider).saveAdminUser(user?['id']?.toString(), payload), '用户已保存。');
+    await _save(
+        () => ref
+            .read(gatewayClientProvider)
+            .saveAdminUser(user?['id']?.toString(), payload),
+        '用户已保存。');
   }
 
   Future<void> _editGroup(Map<String, dynamic>? group) async {
-    final name = TextEditingController(text: _text(group?['name'], fallback: ''));
-    final description = TextEditingController(text: _text(group?['description'], fallback: ''));
-    final generateQuota = TextEditingController(text: _text(group?['default_generate_quota'], fallback: '10'));
-    final editQuota = TextEditingController(text: _text(group?['default_edit_quota'], fallback: '5'));
+    final name =
+        TextEditingController(text: _text(group?['name'], fallback: ''));
+    final description =
+        TextEditingController(text: _text(group?['description'], fallback: ''));
+    final generateQuota = TextEditingController(
+        text: _text(group?['default_generate_quota'], fallback: '10'));
+    final editQuota = TextEditingController(
+        text: _text(group?['default_edit_quota'], fallback: '5'));
     final generateHistoryRetention = TextEditingController(
       text: _text(group?['default_generate_history_retention'], fallback: '5'),
     );
@@ -871,13 +934,21 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       },
     );
     if (payload == null) return;
-    await _save(() => ref.read(gatewayClientProvider).saveAdminGroup(group?['id']?.toString(), payload), '用户组已保存。');
+    await _save(
+        () => ref
+            .read(gatewayClientProvider)
+            .saveAdminGroup(group?['id']?.toString(), payload),
+        '用户组已保存。');
   }
 
   Future<void> _editRole(Map<String, dynamic>? role, _RolesData data) async {
-    final name = TextEditingController(text: _text(role?['name'], fallback: ''));
-    final description = TextEditingController(text: _text(role?['description'], fallback: ''));
-    final selected = (role?['permissions'] as List? ?? []).map((item) => item.toString()).toSet();
+    final name =
+        TextEditingController(text: _text(role?['name'], fallback: ''));
+    final description =
+        TextEditingController(text: _text(role?['description'], fallback: ''));
+    final selected = (role?['permissions'] as List? ?? [])
+        .map((item) => item.toString())
+        .toSet();
     var active = role?['is_active'] != false;
 
     final payload = await showDialog<Map<String, dynamic>>(
@@ -892,13 +963,18 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(controller: name, decoration: const InputDecoration(labelText: '名称')),
+                  TextField(
+                      controller: name,
+                      decoration: const InputDecoration(labelText: '名称')),
                   const SizedBox(height: 12),
-                  TextField(controller: description, decoration: const InputDecoration(labelText: '描述')),
+                  TextField(
+                      controller: description,
+                      decoration: const InputDecoration(labelText: '描述')),
                   const SizedBox(height: 8),
                   CheckboxListTile(
                     value: active,
-                    onChanged: (value) => setDialogState(() => active = value ?? true),
+                    onChanged: (value) =>
+                        setDialogState(() => active = value ?? true),
                     title: const Text('启用角色'),
                   ),
                   const Divider(),
@@ -924,7 +1000,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('取消')),
               FilledButton(
                 onPressed: () => Navigator.pop(context, {
                   'name': name.text.trim(),
@@ -940,12 +1018,18 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       ),
     );
     if (payload == null) return;
-    await _save(() => ref.read(gatewayClientProvider).saveAdminRole(role?['id']?.toString(), payload), '角色已保存。');
+    await _save(
+        () => ref
+            .read(gatewayClientProvider)
+            .saveAdminRole(role?['id']?.toString(), payload),
+        '角色已保存。');
   }
 
   Future<void> _editApiKey(Map<String, dynamic>? item) async {
-    final name = TextEditingController(text: _text(item?['name'], fallback: ''));
-    final description = TextEditingController(text: _text(item?['description'], fallback: ''));
+    final name =
+        TextEditingController(text: _text(item?['name'], fallback: ''));
+    final description =
+        TextEditingController(text: _text(item?['description'], fallback: ''));
     final rawKey = TextEditingController();
     var active = item?['is_active'] != false;
     final payload = await _basicEntityDialog(
@@ -955,7 +1039,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       extraFields: [
         TextField(
           controller: rawKey,
-          decoration: InputDecoration(labelText: item == null ? 'Key 值' : '新 Key，留空不轮换'),
+          decoration: InputDecoration(
+              labelText: item == null ? 'Key 值' : '新 Key，留空不轮换'),
         ),
       ],
       active: active,
@@ -965,15 +1050,20 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         'description': description.text.trim(),
         'is_active': active,
         if (item == null) 'raw_key': rawKey.text.trim(),
-        if (item != null && rawKey.text.trim().isNotEmpty) '_rotate_to': rawKey.text.trim(),
+        if (item != null && rawKey.text.trim().isNotEmpty)
+          '_rotate_to': rawKey.text.trim(),
       },
     );
     if (payload == null) return;
     final rotateTo = payload.remove('_rotate_to')?.toString();
     await _save(() async {
-      await ref.read(gatewayClientProvider).saveAdminApiKey(item?['id']?.toString(), payload);
+      await ref
+          .read(gatewayClientProvider)
+          .saveAdminApiKey(item?['id']?.toString(), payload);
       if (item != null && rotateTo != null && rotateTo.isNotEmpty) {
-        final result = await ref.read(gatewayClientProvider).rotateAdminApiKey(_text(item['id']), rotateTo);
+        final result = await ref
+            .read(gatewayClientProvider)
+            .rotateAdminApiKey(_text(item['id']), rotateTo);
         if (mounted) _showMessage('密钥已轮换，请立即保存: ${_text(result['raw_key'])}');
       }
     }, '密钥已保存。');
@@ -981,27 +1071,74 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 
   Future<void> _editSettings(Map<String, dynamic> data) async {
     final byKey = {
-      for (final item in _mapList(data['settings'])) _text(item['key']): item,
+      for (final item in _settingsWithAiDefaults(_mapList(data['settings'])))
+        _text(item['key']): item,
     };
-    final uiTitle = TextEditingController(text: _settingValue(byKey, 'ui_title'));
-    final externalBase = TextEditingController(text: _settingValue(byKey, 'external_access_base_url'));
-    final providerBase = TextEditingController(text: _settingValue(byKey, 'provider_base_url'));
+    final uiTitle =
+        TextEditingController(text: _settingValue(byKey, 'ui_title'));
+    final externalBase = TextEditingController(
+        text: _settingValue(byKey, 'external_access_base_url'));
+    final providerBase =
+        TextEditingController(text: _settingValue(byKey, 'provider_base_url'));
     final providerKey = TextEditingController();
-    final providerModel = TextEditingController(text: _settingValue(byKey, 'provider_model'));
-    final providerTimeout = TextEditingController(text: _settingValue(byKey, 'provider_timeout_seconds'));
-    final instructions = TextEditingController(text: _settingValue(byKey, 'provider_instructions'));
+    final providerModel =
+        TextEditingController(text: _settingValue(byKey, 'provider_model'));
+    final providerTimeout = TextEditingController(
+        text: _settingValue(byKey, 'provider_timeout_seconds'));
+    final instructions = TextEditingController(
+        text: _settingValue(byKey, 'provider_instructions'));
+    final feedbackAiBase = TextEditingController(
+      text: _settingValue(
+        byKey,
+        'feedback_ai_base_url',
+        fallback: _defaultAiBaseUrl,
+      ),
+    );
+    final feedbackAiKey = TextEditingController();
+    final feedbackAiModel = TextEditingController(
+      text: _settingValue(
+        byKey,
+        'feedback_ai_model',
+        fallback: _feedbackAiModel,
+      ),
+    );
+    final promptAiBase = TextEditingController(
+      text: _settingValue(
+        byKey,
+        'prompt_ai_base_url',
+        fallback: '',
+      ),
+    );
+    final promptAiKey = TextEditingController();
+    final promptAiModel = TextEditingController(
+      text: _settingValue(
+        byKey,
+        'prompt_ai_model',
+        fallback: _promptAiModel,
+      ),
+    );
     final generateCheckinMultiplier = TextEditingController(
-      text: _settingValue(byKey, 'daily_checkin_generate_multiplier', fallback: '1'),
+      text: _settingValue(byKey, 'daily_checkin_generate_multiplier',
+          fallback: '1'),
     );
     final editCheckinMultiplier = TextEditingController(
-      text: _settingValue(byKey, 'daily_checkin_edit_multiplier', fallback: '1'),
+      text:
+          _settingValue(byKey, 'daily_checkin_edit_multiplier', fallback: '1'),
     );
-    var profile = _settingValue(byKey, 'provider_image_profile', fallback: 'gpt-image-2');
-    var responseFormat = _settingValue(byKey, 'default_response_format', fallback: 'url');
-    var quality = _settingValue(byKey, 'default_image_quality', fallback: 'high');
-    var background = _settingValue(byKey, 'default_image_background', fallback: 'auto');
-    var outputFormat = _settingValue(byKey, 'default_image_output_format', fallback: 'png');
-    var allowRegistration = _settingValue(byKey, 'allow_public_registration', fallback: 'true').toLowerCase() == 'true';
+    var profile =
+        _settingValue(byKey, 'provider_image_profile', fallback: 'gpt-image-2');
+    var responseFormat =
+        _settingValue(byKey, 'default_response_format', fallback: 'url');
+    var quality =
+        _settingValue(byKey, 'default_image_quality', fallback: 'high');
+    var background =
+        _settingValue(byKey, 'default_image_background', fallback: 'auto');
+    var outputFormat =
+        _settingValue(byKey, 'default_image_output_format', fallback: 'png');
+    var allowRegistration =
+        _settingValue(byKey, 'allow_public_registration', fallback: 'true')
+                .toLowerCase() ==
+            'true';
 
     final payload = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -1013,51 +1150,145 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: uiTitle, decoration: const InputDecoration(labelText: '界面标题')),
+                TextField(
+                    controller: uiTitle,
+                    decoration: const InputDecoration(labelText: '界面标题')),
                 const SizedBox(height: 12),
-                TextField(controller: externalBase, decoration: const InputDecoration(labelText: '外部访问地址')),
+                TextField(
+                    controller: externalBase,
+                    decoration: const InputDecoration(labelText: '外部访问地址')),
                 const SizedBox(height: 12),
-                TextField(controller: providerBase, decoration: const InputDecoration(labelText: '上游地址')),
+                TextField(
+                    controller: providerBase,
+                    decoration: const InputDecoration(labelText: '上游地址')),
                 const SizedBox(height: 12),
-                TextField(controller: providerKey, decoration: const InputDecoration(labelText: '上游 Key，留空不修改')),
+                TextField(
+                    controller: providerKey,
+                    decoration:
+                        const InputDecoration(labelText: '上游 Key，留空不修改')),
                 const SizedBox(height: 12),
-                TextField(controller: providerModel, decoration: const InputDecoration(labelText: '模型')),
+                TextField(
+                    controller: providerModel,
+                    decoration: const InputDecoration(labelText: '模型')),
                 const SizedBox(height: 12),
-                _stringDropdown('图片档位', profile, const ['gpt-image-2', 'gpt-image-1'], (value) => setDialogState(() => profile = value)),
+                _stringDropdown(
+                    '图片档位',
+                    profile,
+                    const ['gpt-image-2', 'gpt-image-1'],
+                    (value) => setDialogState(() => profile = value)),
                 const SizedBox(height: 12),
-                TextField(controller: providerTimeout, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '超时时间秒')),
+                TextField(
+                    controller: providerTimeout,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: '超时时间秒')),
                 const SizedBox(height: 12),
-                _stringDropdown('响应格式', responseFormat, const ['url', 'b64_json'], (value) => setDialogState(() => responseFormat = value)),
+                _stringDropdown(
+                    '响应格式',
+                    responseFormat,
+                    const ['url', 'b64_json'],
+                    (value) => setDialogState(() => responseFormat = value)),
                 const SizedBox(height: 12),
-                _stringDropdown('默认质量', quality, const ['auto', 'low', 'medium', 'high'], (value) => setDialogState(() => quality = value)),
+                _stringDropdown(
+                    '默认质量',
+                    quality,
+                    const ['auto', 'low', 'medium', 'high'],
+                    (value) => setDialogState(() => quality = value)),
                 const SizedBox(height: 12),
-                _stringDropdown('默认背景', background, const ['auto', 'opaque', 'transparent'], (value) => setDialogState(() => background = value)),
+                _stringDropdown(
+                    '默认背景',
+                    background,
+                    const ['auto', 'opaque', 'transparent'],
+                    (value) => setDialogState(() => background = value)),
                 const SizedBox(height: 12),
-                _stringDropdown('输出格式', outputFormat, const ['png', 'jpeg', 'webp'], (value) => setDialogState(() => outputFormat = value)),
+                _stringDropdown(
+                    '输出格式',
+                    outputFormat,
+                    const ['png', 'jpeg', 'webp'],
+                    (value) => setDialogState(() => outputFormat = value)),
                 const SizedBox(height: 12),
                 TextField(
                   controller: generateCheckinMultiplier,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(labelText: '签到生图倍率'),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: editCheckinMultiplier,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(labelText: '签到改图倍率'),
                 ),
                 const SizedBox(height: 12),
-                TextField(controller: instructions, maxLines: 3, decoration: const InputDecoration(labelText: '上游指令')),
+                TextField(
+                    controller: instructions,
+                    maxLines: 3,
+                    decoration: const InputDecoration(labelText: '上游指令')),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 8),
+                Text(
+                  '反馈 AI 整理',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: feedbackAiBase,
+                  decoration: const InputDecoration(labelText: 'base_url'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: feedbackAiKey,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'api_key，留空不修改',
+                    helperText: '展示时会打码；请求应由后端代理执行',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: feedbackAiModel,
+                  decoration: const InputDecoration(labelText: 'model'),
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 8),
+                Text(
+                  '提示词 AI / 图片识别 AI',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: promptAiBase,
+                  decoration: const InputDecoration(labelText: 'base_url'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: promptAiKey,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'api_key，留空不修改',
+                    helperText: '与反馈 AI 分开保存，避免混淆',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: promptAiModel,
+                  decoration: const InputDecoration(labelText: 'model'),
+                ),
                 const SizedBox(height: 8),
                 CheckboxListTile(
                   value: allowRegistration,
-                  onChanged: (value) => setDialogState(() => allowRegistration = value ?? true),
+                  onChanged: (value) =>
+                      setDialogState(() => allowRegistration = value ?? true),
                   title: const Text('允许公开注册'),
                 ),
               ],
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('取消')),
               FilledButton(
                 onPressed: () => Navigator.pop(context, {
                   'ui_title': uiTitle.text.trim(),
@@ -1066,11 +1297,28 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   'provider_api_key': providerKey.text.trim(),
                   'provider_model': providerModel.text.trim(),
                   'provider_image_profile': profile,
-                  'provider_timeout_seconds': int.tryParse(providerTimeout.text),
+                  'provider_timeout_seconds':
+                      int.tryParse(providerTimeout.text),
                   'default_response_format': responseFormat,
                   'default_image_quality': quality,
                   'default_image_background': background,
                   'default_image_output_format': outputFormat,
+                  'feedback_ai_base_url': feedbackAiBase.text.trim().isEmpty
+                      ? _defaultAiBaseUrl
+                      : feedbackAiBase.text.trim(),
+                  if (feedbackAiKey.text.trim().isNotEmpty)
+                    'feedback_ai_api_key': feedbackAiKey.text.trim(),
+                  'feedback_ai_model': feedbackAiModel.text.trim().isEmpty
+                      ? _feedbackAiModel
+                      : feedbackAiModel.text.trim(),
+                  'prompt_ai_base_url': promptAiBase.text.trim().isEmpty
+                      ? null
+                      : promptAiBase.text.trim(),
+                  if (promptAiKey.text.trim().isNotEmpty)
+                    'prompt_ai_api_key': promptAiKey.text.trim(),
+                  'prompt_ai_model': promptAiModel.text.trim().isEmpty
+                      ? _promptAiModel
+                      : promptAiModel.text.trim(),
                   'daily_checkin_generate_multiplier':
                       double.tryParse(generateCheckinMultiplier.text),
                   'daily_checkin_edit_multiplier':
@@ -1086,7 +1334,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       ),
     );
     if (payload == null) return;
-    await _save(() => ref.read(gatewayClientProvider).saveAdminSystemSettings(payload), '系统设置已保存。');
+    await _save(
+        () => ref.read(gatewayClientProvider).saveAdminSystemSettings(payload),
+        '系统设置已保存。');
   }
 
   Future<void> _createInvitationCodes() async {
@@ -1203,11 +1453,16 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: name, decoration: const InputDecoration(labelText: '名称')),
+                TextField(
+                    controller: name,
+                    decoration: const InputDecoration(labelText: '名称')),
                 const SizedBox(height: 12),
-                TextField(controller: description, decoration: const InputDecoration(labelText: '描述')),
+                TextField(
+                    controller: description,
+                    decoration: const InputDecoration(labelText: '描述')),
                 const SizedBox(height: 12),
-                ...extraFields.expand((field) => [field, const SizedBox(height: 12)]),
+                ...extraFields
+                    .expand((field) => [field, const SizedBox(height: 12)]),
                 CheckboxListTile(
                   value: isActive,
                   onChanged: (value) {
@@ -1219,8 +1474,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               ],
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
-              FilledButton(onPressed: () => Navigator.pop(context, payloadBuilder()), child: const Text('保存')),
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('取消')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(context, payloadBuilder()),
+                  child: const Text('保存')),
             ],
           );
         },
@@ -1235,7 +1494,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     required void Function(String value) onChanged,
   }) {
     return DropdownButtonFormField<String>(
-      value: value.isEmpty ? null : value,
+      initialValue: value.isEmpty ? null : value,
       decoration: InputDecoration(labelText: label),
       items: items
           .map(
@@ -1259,10 +1518,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   ) {
     final safeValue = items.contains(value) ? value : items.first;
     return DropdownButtonFormField<String>(
-      value: safeValue,
+      initialValue: safeValue,
       decoration: InputDecoration(labelText: label),
       items: items
-          .map((item) => DropdownMenuItem<String>(value: item, child: Text(item)))
+          .map((item) =>
+              DropdownMenuItem<String>(value: item, child: Text(item)))
           .toList(),
       onChanged: (value) {
         if (value != null) onChanged(value);
@@ -1341,6 +1601,64 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final text = value.trim();
     if (text.isEmpty) return null;
     return int.tryParse(text);
+  }
+
+  List<Map<String, dynamic>> _settingsWithAiDefaults(
+    List<Map<String, dynamic>> settings,
+  ) {
+    final byKey = {for (final item in settings) _text(item['key']): item};
+    final additions = <Map<String, dynamic>>[
+      {
+        'key': 'feedback_ai_base_url',
+        'value': _defaultAiBaseUrl,
+        'description': '反馈 AI 整理服务地址',
+      },
+      {
+        'key': 'feedback_ai_api_key',
+        'value': 'xxx',
+        'description': '反馈 AI 整理 API Key',
+      },
+      {
+        'key': 'feedback_ai_model',
+        'value': _feedbackAiModel,
+        'description': '反馈 AI 整理模型',
+      },
+      {
+        'key': 'prompt_ai_base_url',
+        'value': '',
+        'description': '提示词生成与图片识别 AI 服务地址',
+      },
+      {
+        'key': 'prompt_ai_api_key',
+        'value': 'xxx',
+        'description': '提示词生成与图片识别 AI API Key',
+      },
+      {
+        'key': 'prompt_ai_model',
+        'value': _promptAiModel,
+        'description': '提示词生成与图片识别 AI 模型',
+      },
+    ];
+    return [
+      ...settings,
+      ...additions.where((item) => !byKey.containsKey(_text(item['key']))),
+    ];
+  }
+
+  String _displaySettingValue(Map<String, dynamic> setting) {
+    final key = _text(setting['key'], fallback: '');
+    final value = _text(setting['value'], fallback: '未设置');
+    if (key.contains('api_key') || key.endsWith('_key')) {
+      return _maskSecret(value);
+    }
+    return value;
+  }
+
+  String _maskSecret(String value) {
+    final text = value.trim();
+    if (text.isEmpty || text == '未设置') return '未设置';
+    if (text.length <= 6) return '***';
+    return '${text.substring(0, 2)}***${text.substring(text.length - 2)}';
   }
 
   String _settingValue(

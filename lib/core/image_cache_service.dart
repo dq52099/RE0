@@ -25,8 +25,7 @@ class ImageCacheService {
           ),
         );
 
-  static const MethodChannel _downloadsChannel =
-      MethodChannel('re0/downloads');
+  static const MethodChannel _downloadsChannel = MethodChannel('re0/downloads');
 
   final Dio _dio;
 

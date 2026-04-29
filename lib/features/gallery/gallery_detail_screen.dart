@@ -21,7 +21,8 @@ class GalleryDetailScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> initialPost;
 
   @override
-  ConsumerState<GalleryDetailScreen> createState() => _GalleryDetailScreenState();
+  ConsumerState<GalleryDetailScreen> createState() =>
+      _GalleryDetailScreenState();
 }
 
 class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
@@ -129,7 +130,8 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
       if (!mounted) return;
       await _loadComments();
       setState(() {
-        final next = (int.tryParse(_post['comment_count']?.toString() ?? '1') ?? 1) - 1;
+        final next =
+            (int.tryParse(_post['comment_count']?.toString() ?? '1') ?? 1) - 1;
         _post['comment_count'] = next < 0 ? 0 : next;
       });
     } catch (error) {
@@ -160,7 +162,9 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
     );
     if (confirmed != true) return;
     try {
-      await ref.read(gatewayClientProvider).deleteGalleryPost(_post['id'].toString());
+      await ref
+          .read(gatewayClientProvider)
+          .deleteGalleryPost(_post['id'].toString());
       if (!mounted) return;
       showCenterNotice(context, '作品已删除');
       Navigator.pop(context, true);
@@ -232,7 +236,8 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
     final brand = ref.watch(brandProvider);
     final canViewPrompt = _canViewPrompt(_post);
     final currentUser = ref.read(authStateProvider);
-    final isOwner = currentUser?['id']?.toString() == _post['user_id']?.toString();
+    final isOwner =
+        currentUser?['id']?.toString() == _post['user_id']?.toString();
     final canDelete = boolish(_post['can_delete']) || isOwner;
     final liked = boolish(_post['liked']);
     final favorited = boolish(_post['favorited']);
@@ -282,7 +287,8 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                               children: [
                                 Text(
                                   _post['display_name']?.toString() ?? '-',
-                                  style: Theme.of(context).textTheme.titleMedium,
+                                  style:
+                                      Theme.of(context).textTheme.titleMedium,
                                 ),
                                 _levelBadge(_post['level_info'] as Map?),
                               ],
@@ -312,13 +318,16 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                         runSpacing: 8,
                         children: [
                           _actionButton(
-                            icon: liked ? Icons.favorite : Icons.favorite_border,
+                            icon:
+                                liked ? Icons.favorite : Icons.favorite_border,
                             label: '${_post['like_count'] ?? 0}',
                             color: liked ? brand.warningColor : null,
                             onTap: _toggleLike,
                           ),
                           _actionButton(
-                            icon: favorited ? Icons.bookmark : Icons.bookmark_border,
+                            icon: favorited
+                                ? Icons.bookmark
+                                : Icons.bookmark_border,
                             label: '${_post['favorite_count'] ?? 0}',
                             color: favorited ? brand.primaryColor : null,
                             onTap: _toggleFavorite,
@@ -412,15 +421,25 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                           children: [
                             CircleAvatar(
                               radius: 18,
-                              backgroundColor: brand.primaryColor.withOpacity(0.14),
-                              backgroundImage:
-                                  (comment['author_avatar_url']?.toString() ?? '').isNotEmpty
-                                      ? NetworkImage(comment['author_avatar_url'].toString())
-                                      : null,
-                              child: (comment['author_avatar_url']?.toString() ?? '').isEmpty
+                              backgroundColor:
+                                  brand.primaryColor.withValues(alpha: 0.14),
+                              backgroundImage: (comment['author_avatar_url']
+                                              ?.toString() ??
+                                          '')
+                                      .isNotEmpty
+                                  ? NetworkImage(
+                                      comment['author_avatar_url'].toString())
+                                  : null,
+                              child: (comment['author_avatar_url']
+                                              ?.toString() ??
+                                          '')
+                                      .isEmpty
                                   ? Text(
-                                      (comment['display_name']?.toString() ?? '评').substring(0, 1),
-                                      style: Theme.of(context).textTheme.bodySmall,
+                                      (comment['display_name']?.toString() ??
+                                              '评')
+                                          .substring(0, 1),
+                                      style:
+                                          Theme.of(context).textTheme.bodySmall,
                                     )
                                   : null,
                             ),
@@ -430,32 +449,43 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Expanded(
                                         child: Wrap(
                                           spacing: 6,
                                           runSpacing: 4,
-                                          crossAxisAlignment: WrapCrossAlignment.center,
+                                          crossAxisAlignment:
+                                              WrapCrossAlignment.center,
                                           children: [
                                             Text(
-                                              comment['display_name']?.toString() ?? '-',
-                                              style: const TextStyle(fontWeight: FontWeight.w600),
+                                              comment['display_name']
+                                                      ?.toString() ??
+                                                  '-',
+                                              style: const TextStyle(
+                                                  fontWeight: FontWeight.w600),
                                             ),
-                                            _levelBadge(comment['level_info'] as Map?),
+                                            _levelBadge(
+                                                comment['level_info'] as Map?),
                                           ],
                                         ),
                                       ),
                                       Text(
-                                        _formatTime(comment['created_at']?.toString()),
-                                        style: Theme.of(context).textTheme.bodySmall,
+                                        _formatTime(
+                                            comment['created_at']?.toString()),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall,
                                       ),
                                       if (boolish(comment['can_delete']))
                                         IconButton(
                                           visualDensity: VisualDensity.compact,
                                           tooltip: '删除评论',
-                                          icon: const Icon(Icons.delete_outline, size: 18),
-                                          onPressed: () => _deleteComment(comment['id'].toString()),
+                                          icon: const Icon(Icons.delete_outline,
+                                              size: 18),
+                                          onPressed: () => _deleteComment(
+                                              comment['id'].toString()),
                                         ),
                                     ],
                                   ),
@@ -489,9 +519,9 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: brand.primaryColor.withOpacity(0.08),
+        color: brand.primaryColor.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: brand.primaryColor.withOpacity(0.18)),
+        border: Border.all(color: brand.primaryColor.withValues(alpha: 0.18)),
       ),
       child: Text(
         prompt,
@@ -505,9 +535,9 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: brand.warningColor.withOpacity(0.10),
+        color: brand.warningColor.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: brand.warningColor.withOpacity(0.20)),
+        border: Border.all(color: brand.warningColor.withValues(alpha: 0.20)),
       ),
       child: Text(
         '发表评论后可查看并复制提示词。',
@@ -536,17 +566,15 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
         decoration: BoxDecoration(
           color: activeColor != null
               ? activeColor
-              : surface.withOpacity(0.5),
+              : surface.withValues(alpha: 0.5),
           border: Border.all(
-            color: activeColor != null
-                ? activeColor
-                : Colors.transparent,
+            color: activeColor != null ? activeColor : Colors.transparent,
           ),
           borderRadius: BorderRadius.circular(999),
           boxShadow: activeColor != null
               ? [
                   BoxShadow(
-                    color: activeColor.withOpacity(0.16),
+                    color: activeColor.withValues(alpha: 0.16),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -592,11 +620,12 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
     final color = _badgeColor(levelInfo?['badge_color']?.toString());
     return InkWell(
       borderRadius: BorderRadius.circular(999),
-      onTap: () => showLevelRewardsSheet(context, levelInfo, accentColor: color),
+      onTap: () =>
+          showLevelRewardsSheet(context, levelInfo, accentColor: color),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.14),
+          color: color.withValues(alpha: 0.14),
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(

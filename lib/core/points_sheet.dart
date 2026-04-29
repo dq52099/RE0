@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'timezone_reset_hint.dart';
+
 Future<void> showPointsSheet(
   BuildContext context,
   Future<Map<String, dynamic>> summaryFuture, {
@@ -60,6 +62,10 @@ class _PointsSheetContent extends StatelessWidget {
     final todayDelta = _intValue(data['today_delta']);
     final rules = _maps(data['rules']);
     final events = _maps(data['today_events']);
+    final resetHint = resetHintFromResponse(data);
+    final timezoneMode = data['timezone_mode']?.toString().toLowerCase();
+    final todayTitle =
+        timezoneMode == 'local' ? '今日变化（按本地日历日）' : '今日变化（按服务器时区）';
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       children: [
@@ -75,9 +81,9 @@ class _PointsSheetContent extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: highlight.withOpacity(0.08),
+            color: highlight.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: highlight.withOpacity(0.18)),
+            border: Border.all(color: highlight.withValues(alpha: 0.18)),
           ),
           child: Row(
             children: [
@@ -91,7 +97,7 @@ class _PointsSheetContent extends StatelessWidget {
               Container(
                 width: 1,
                 height: 36,
-                color: highlight.withOpacity(0.2),
+                color: highlight.withValues(alpha: 0.2),
               ),
               Expanded(
                 child: _metric(
@@ -107,13 +113,15 @@ class _PointsSheetContent extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        Text('今日变化', style: theme.textTheme.titleSmall),
+        Text(todayTitle, style: theme.textTheme.titleSmall),
+        const SizedBox(height: 6),
+        Text(resetHint, style: theme.textTheme.bodySmall),
         const SizedBox(height: 8),
         if (events.isEmpty)
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surface.withOpacity(0.5),
+              color: theme.colorScheme.surface.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Text(
@@ -162,15 +170,15 @@ class _PointsSheetContent extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: highlight.withOpacity(0.06),
+        color: highlight.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: highlight.withOpacity(0.14)),
+        border: Border.all(color: highlight.withValues(alpha: 0.14)),
       ),
       child: Row(
         children: [
           CircleAvatar(
             radius: 17,
-            backgroundColor: highlight.withOpacity(0.14),
+            backgroundColor: highlight.withValues(alpha: 0.14),
             child: Icon(Icons.add, size: 17, color: highlight),
           ),
           const SizedBox(width: 12),
@@ -213,9 +221,9 @@ class _PointsSheetContent extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.06),
+        color: color.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.14)),
+        border: Border.all(color: color.withValues(alpha: 0.14)),
       ),
       child: Row(
         children: [

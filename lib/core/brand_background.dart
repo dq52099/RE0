@@ -25,8 +25,8 @@ class BrandBackground extends ConsumerWidget {
           ),
         ),
         ColoredBox(
-          color: brand.backgroundOverlay.withOpacity(
-            brand.backgroundOverlayOpacity,
+          color: brand.backgroundOverlay.withValues(
+            alpha: brand.backgroundOverlayOpacity,
           ),
         ),
         child,

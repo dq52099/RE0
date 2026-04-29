@@ -98,10 +98,11 @@ class _CenterNoticeState extends State<_CenterNotice>
                 decoration: BoxDecoration(
                   color: const Color(0xEDE8E8E8),
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: Colors.white.withOpacity(0.72)),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.72)),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.18),
+                      color: Colors.black.withValues(alpha: 0.18),
                       blurRadius: 22,
                       offset: const Offset(0, 10),
                     ),

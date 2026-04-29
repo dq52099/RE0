@@ -45,8 +45,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final bootstrap = await client.bootstrap();
       if (!mounted) return;
       setState(() {
-        _allowRegistration =
-            bootstrap['allow_public_registration'] != false;
+        _allowRegistration = bootstrap['allow_public_registration'] != false;
       });
     } catch (_) {
       // Fall back to showing registration entry.
@@ -62,7 +61,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ref.read(authStateProvider.notifier).state = auth;
       ref.read(energyProvider.notifier).state = auth['quota_summary'];
       if (mounted) {
-        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
+        Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const HomeScreen()));
       }
     } catch (e) {
       // Not logged in or server unreachable
@@ -103,7 +103,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ref.read(energyProvider.notifier).state = res['user']['quota_summary'];
 
       if (mounted) {
-        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
+        Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const HomeScreen()));
       }
     } catch (e) {
       if (mounted) {
@@ -139,10 +140,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   height: 104,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: brand.primaryColor.withOpacity(0.7), width: 2),
+                    border: Border.all(
+                        color: brand.primaryColor.withValues(alpha: 0.7),
+                        width: 2),
                     boxShadow: [
                       BoxShadow(
-                        color: brand.primaryColor.withOpacity(0.22),
+                        color: brand.primaryColor.withValues(alpha: 0.22),
                         blurRadius: 28,
                         spreadRadius: 2,
                       ),
@@ -155,7 +158,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 Text(
                   brand.loginTitle,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -232,9 +236,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: brand.panelColor.withOpacity(0.36),
+        color: brand.panelColor.withValues(alpha: 0.36),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: brand.primaryColor.withOpacity(0.32)),
+        border: Border.all(color: brand.primaryColor.withValues(alpha: 0.32)),
       ),
       child: Text(text, style: Theme.of(context).textTheme.bodySmall),
     );

@@ -35,9 +35,9 @@ class CompactDropdownField<T> extends StatelessWidget {
             : value.toString();
     final theme = Theme.of(context);
     final bodyStyle = theme.textTheme.bodyMedium?.copyWith(
-          fontWeight: FontWeight.w400,
-          height: 1.3,
-        );
+      fontWeight: FontWeight.w400,
+      height: 1.3,
+    );
     final labelStyle = theme.textTheme.bodyMedium?.copyWith(
       fontSize: 15,
       fontWeight: FontWeight.w400,

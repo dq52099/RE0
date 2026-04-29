@@ -563,8 +563,8 @@ final ThemeData _botwTheme = ThemeData(
     mutedColor: Colors.white54,
     headingColor: const Color(0xFF7DEBFF),
   ),
-  cardTheme: CardTheme(
-    color: const Color(0xFF2A2A2A).withOpacity(0.8),
+  cardTheme: CardThemeData(
+    color: const Color(0xFF2A2A2A).withValues(alpha: 0.8),
     elevation: 0,
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(4),
@@ -573,7 +573,7 @@ final ThemeData _botwTheme = ThemeData(
   ),
   inputDecorationTheme: InputDecorationTheme(
     filled: true,
-    fillColor: Colors.black.withOpacity(0.58),
+    fillColor: Colors.black.withValues(alpha: 0.58),
     border: const OutlineInputBorder(
       borderSide: BorderSide(color: Color(0xFF00D2FF)),
     ),
@@ -584,7 +584,7 @@ final ThemeData _botwTheme = ThemeData(
       borderSide: BorderSide(color: Color(0xFF00D2FF), width: 2),
     ),
     hintStyle: TextStyle(
-      color: const Color(0xFF00D2FF).withOpacity(0.4),
+      color: const Color(0xFF00D2FF).withValues(alpha: 0.4),
       fontSize: 14,
     ),
   ),
@@ -628,37 +628,37 @@ ThemeData _lightTheme({
       error: error,
     ),
     scaffoldBackgroundColor: background,
-    cardTheme: CardTheme(
-      color: surface.withOpacity(0.92),
+    cardTheme: CardThemeData(
+      color: surface.withValues(alpha: 0.92),
       elevation: 2,
-      shadowColor: primary.withOpacity(0.14),
+      shadowColor: primary.withValues(alpha: 0.14),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: primary.withOpacity(0.14)),
+        side: BorderSide(color: primary.withValues(alpha: 0.14)),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: surface.withOpacity(0.96),
+      fillColor: surface.withValues(alpha: 0.96),
       hintStyle: TextStyle(
         fontFamily: _cnFontFamily,
         fontFamilyFallback: _cnFontFallback,
         fontSize: 13,
         fontWeight: FontWeight.w400,
         height: 1.4,
-        color: primary.withOpacity(0.55),
+        color: primary.withValues(alpha: 0.55),
       ),
       labelStyle: TextStyle(
         fontFamily: _cnFontFamily,
         fontFamilyFallback: _cnFontFallback,
         fontSize: 13,
         fontWeight: FontWeight.w400,
-        color: primary.withOpacity(0.82),
+        color: primary.withValues(alpha: 0.82),
       ),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: primary.withOpacity(0.36)),
+        borderSide: BorderSide(color: primary.withValues(alpha: 0.36)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
@@ -715,36 +715,36 @@ ThemeData _darkTheme({
       error: error,
     ),
     scaffoldBackgroundColor: background,
-    cardTheme: CardTheme(
-      color: surface.withOpacity(0.9),
+    cardTheme: CardThemeData(
+      color: surface.withValues(alpha: 0.9),
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: primary.withOpacity(0.24)),
+        side: BorderSide(color: primary.withValues(alpha: 0.24)),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: Colors.black.withOpacity(0.64),
+      fillColor: Colors.black.withValues(alpha: 0.64),
       hintStyle: TextStyle(
         fontFamily: _cnFontFamily,
         fontFamilyFallback: _cnFontFallback,
         fontSize: 13,
         fontWeight: FontWeight.w400,
         height: 1.4,
-        color: Colors.white.withOpacity(0.58),
+        color: Colors.white.withValues(alpha: 0.58),
       ),
       labelStyle: TextStyle(
         fontFamily: _cnFontFamily,
         fontFamilyFallback: _cnFontFallback,
         fontSize: 13,
         fontWeight: FontWeight.w400,
-        color: Colors.white.withOpacity(0.86),
+        color: Colors.white.withValues(alpha: 0.86),
       ),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: primary.withOpacity(0.42)),
+        borderSide: BorderSide(color: primary.withValues(alpha: 0.42)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
@@ -828,28 +828,29 @@ final ThemeData _re0Theme = ThemeData(
     error: Color(0xFFA23535),
   ),
   scaffoldBackgroundColor: const Color(0xFFFDFDFD),
-  cardTheme: CardTheme(
-    color: Colors.white.withOpacity(0.9),
+  cardTheme: CardThemeData(
+    color: Colors.white.withValues(alpha: 0.9),
     elevation: 8,
-    shadowColor: const Color(0xFF4682B4).withOpacity(0.2),
+    shadowColor: const Color(0xFF4682B4).withValues(alpha: 0.2),
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(22),
       side: BorderSide(
-        color: const Color(0xFFE6E6FA).withOpacity(0.5),
+        color: const Color(0xFFE6E6FA).withValues(alpha: 0.5),
         width: 1.5,
       ),
     ),
   ),
   inputDecorationTheme: InputDecorationTheme(
     filled: true,
-    fillColor: Colors.white.withOpacity(0.96),
+    fillColor: Colors.white.withValues(alpha: 0.96),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(16),
       borderSide: const BorderSide(color: Color(0xFFE6E6FA)),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(16),
-      borderSide: BorderSide(color: const Color(0xFF4682B4).withOpacity(0.34)),
+      borderSide:
+          BorderSide(color: const Color(0xFF4682B4).withValues(alpha: 0.34)),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(16),
@@ -858,7 +859,7 @@ final ThemeData _re0Theme = ThemeData(
     hintStyle: TextStyle(
       fontFamily: _cnFontFamily,
       fontFamilyFallback: _cnFontFallback,
-      color: const Color(0xFF52657B).withOpacity(0.78),
+      color: const Color(0xFF52657B).withValues(alpha: 0.78),
       fontSize: 13,
       fontWeight: FontWeight.w400,
       height: 1.4,

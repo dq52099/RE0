@@ -54,9 +54,9 @@ class BrandNotifier extends StateNotifier<AppBrand> {
 final authStateProvider = StateProvider<Map<String, dynamic>?>((ref) => null);
 
 final energyProvider = StateProvider<Map<String, dynamic>>((ref) => {
-  'generate': {'remaining': 0, 'total': 0, 'used': 0},
-  'edit': {'remaining': 0, 'total': 0, 'used': 0},
-});
+      'generate': {'remaining': 0, 'total': 0, 'used': 0},
+      'edit': {'remaining': 0, 'total': 0, 'used': 0},
+    });
 
 enum ImageTaskKind {
   generate,
@@ -65,14 +65,16 @@ enum ImageTaskKind {
 
 final activeImageTaskProvider = StateProvider<ImageTaskKind?>((ref) => null);
 
-final imageCapabilitiesProvider = FutureProvider<ImageCapabilities>((ref) async {
+final imageCapabilitiesProvider =
+    FutureProvider<ImageCapabilities>((ref) async {
   final client = ref.read(gatewayClientProvider);
   final data = await client.imageCapabilities();
   return ImageCapabilities.fromJson(data);
 });
 
 final generateImagesProvider =
-    AsyncNotifierProvider<GenerateImagesNotifier, List<Map<String, dynamic>>>(() {
+    AsyncNotifierProvider<GenerateImagesNotifier, List<Map<String, dynamic>>>(
+        () {
   return GenerateImagesNotifier();
 });
 
@@ -95,6 +97,7 @@ class GenerateImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
   ) async {
     _ensureTaskAvailable(ref, ImageTaskKind.generate);
     ref.read(activeImageTaskProvider.notifier).state = ImageTaskKind.generate;
+    final previous = state.valueOrNull ?? const <Map<String, dynamic>>[];
     state = const AsyncValue.loading();
     try {
       final client = ref.read(gatewayClientProvider);
@@ -108,7 +111,10 @@ class GenerateImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
       );
       ref.read(energyProvider.notifier).state =
           _quotaSummary(res['quota_summary']);
-      final items = _resultItems(res['data']);
+      final items = _resultItems(res['data'] ?? res);
+      if (items.isEmpty) {
+        throw GatewayException(_imageFailureMessage(res, '图片生成失败。'));
+      }
       state = AsyncValue.data(items);
       return _partialSuccessMessage(
         actionLabel: '生图',
@@ -116,8 +122,10 @@ class GenerateImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
         errors: res['errors'],
       );
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
-      return null;
+      state = previous.isEmpty
+          ? AsyncValue.error(e, st)
+          : AsyncValue.data(previous);
+      return previous.isEmpty ? null : friendlyError(e, fallback: '图片生成失败。');
     } finally {
       if (ref.read(activeImageTaskProvider) == ImageTaskKind.generate) {
         ref.read(activeImageTaskProvider.notifier).state = null;
@@ -145,6 +153,7 @@ class EditImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
   ) async {
     _ensureTaskAvailable(ref, ImageTaskKind.edit);
     ref.read(activeImageTaskProvider.notifier).state = ImageTaskKind.edit;
+    final previous = state.valueOrNull ?? const <Map<String, dynamic>>[];
     state = const AsyncValue.loading();
     try {
       final client = ref.read(gatewayClientProvider);
@@ -159,7 +168,10 @@ class EditImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
       );
       ref.read(energyProvider.notifier).state =
           _quotaSummary(res['quota_summary']);
-      final items = _resultItems(res['data']);
+      final items = _resultItems(res['data'] ?? res);
+      if (items.isEmpty) {
+        throw GatewayException(_imageFailureMessage(res, '图片修改失败。'));
+      }
       state = AsyncValue.data(items);
       return _partialSuccessMessage(
         actionLabel: '改图',
@@ -167,8 +179,10 @@ class EditImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
         errors: res['errors'],
       );
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
-      return null;
+      state = previous.isEmpty
+          ? AsyncValue.error(e, st)
+          : AsyncValue.data(previous);
+      return previous.isEmpty ? null : friendlyError(e, fallback: '图片修改失败。');
     } finally {
       if (ref.read(activeImageTaskProvider) == ImageTaskKind.edit) {
         ref.read(activeImageTaskProvider.notifier).state = null;
@@ -204,10 +218,73 @@ Map<String, dynamic> _quotaSummary(dynamic value) {
 }
 
 List<Map<String, dynamic>> _resultItems(dynamic value) {
-  return (value as List? ?? [])
-      .whereType<Map>()
-      .map((item) => Map<String, dynamic>.from(item))
+  final items = <Map<String, dynamic>>[];
+
+  void collect(dynamic raw) {
+    if (raw == null) return;
+    if (raw is List) {
+      for (final item in raw) {
+        collect(item);
+      }
+      return;
+    }
+    if (raw is! Map) return;
+    final item = Map<String, dynamic>.from(raw);
+    final imageUrl = _imageUrl(item);
+    if (imageUrl.isNotEmpty) {
+      items.add({
+        ...item,
+        'url': imageUrl,
+      });
+      return;
+    }
+    for (final key in ['data', 'images', 'items', 'results', 'output']) {
+      collect(item[key]);
+    }
+  }
+
+  collect(value);
+  return items;
+}
+
+String _imageUrl(Map<String, dynamic> item) {
+  for (final key in ['url', 'src', 'b64_json']) {
+    final raw = item[key]?.toString().trim() ?? '';
+    if (raw.isNotEmpty) {
+      return key == 'b64_json' && !raw.startsWith('data:')
+          ? 'data:image/png;base64,$raw'
+          : raw;
+    }
+  }
+  final imageUrl = item['image_url'];
+  if (imageUrl is String && imageUrl.trim().isNotEmpty) {
+    return imageUrl.trim();
+  }
+  if (imageUrl is Map) {
+    final nested = imageUrl['url']?.toString().trim() ?? '';
+    if (nested.isNotEmpty) return nested;
+  }
+  final image = item['image'];
+  if (image is Map) {
+    final nested = _imageUrl(Map<String, dynamic>.from(image));
+    if (nested.isNotEmpty) return nested;
+  }
+  return '';
+}
+
+String _imageFailureMessage(Map<String, dynamic> response, String fallback) {
+  final errors = (response['errors'] as List? ?? [])
+      .map((item) => item?.toString().trim() ?? '')
+      .where((item) => item.isNotEmpty)
       .toList();
+  if (errors.isNotEmpty) {
+    return errors.first;
+  }
+  for (final key in ['detail', 'message', 'error']) {
+    final text = response[key]?.toString().trim() ?? '';
+    if (text.isNotEmpty) return text;
+  }
+  return '$fallback 未返回可用图片。';
 }
 
 String? _partialSuccessMessage({

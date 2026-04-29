@@ -25,7 +25,8 @@ class GatewayClient {
     _dio.options.baseUrl = url;
     final dir = await getApplicationDocumentsDirectory();
     cookieJar = PersistCookieJar(storage: FileStorage('${dir.path}/.cookies/'));
-    _dio.interceptors.removeWhere((interceptor) => interceptor is CookieManager);
+    _dio.interceptors
+        .removeWhere((interceptor) => interceptor is CookieManager);
     _dio.interceptors.add(CookieManager(cookieJar!));
   }
 
@@ -137,7 +138,7 @@ class GatewayClient {
     String background,
     String outputFormat,
   ) async {
-    return _guard(() async {
+    try {
       final res = await _dio.post(
         '/api/images/generate',
         data: {
@@ -155,7 +156,13 @@ class GatewayClient {
         ),
       );
       return Map<String, dynamic>.from(res.data as Map);
-    }, fallback: '图片生成失败。');
+    } on DioException catch (error) {
+      final partial = _partialImageResponse(error.response?.data);
+      if (partial != null) return partial;
+      throw gatewayException(error, fallback: '图片生成失败。');
+    } catch (error) {
+      throw gatewayException(error, fallback: '图片生成失败。');
+    }
   }
 
   Future<Map<String, dynamic>> recall(
@@ -167,7 +174,7 @@ class GatewayClient {
     String background,
     String outputFormat,
   ) async {
-    return _guard(() async {
+    try {
       final formData = FormData.fromMap({
         'prompt': runes,
         'n': count,
@@ -187,7 +194,40 @@ class GatewayClient {
         ),
       );
       return Map<String, dynamic>.from(res.data as Map);
-    }, fallback: '图片修改失败。');
+    } on DioException catch (error) {
+      final partial = _partialImageResponse(error.response?.data);
+      if (partial != null) return partial;
+      throw gatewayException(error, fallback: '图片修改失败。');
+    } catch (error) {
+      throw gatewayException(error, fallback: '图片修改失败。');
+    }
+  }
+
+  Future<List<String>> generatePromptCandidates(String idea) async {
+    return _guard(() async {
+      final res = await _dio.post(
+        '/api/ai/prompt-candidates',
+        data: {
+          'idea': idea,
+          'count': 3,
+        },
+      );
+      return _promptCandidates(res.data);
+    }, fallback: 'AI 生成咒文失败。');
+  }
+
+  Future<List<String>> identifyImagePromptCandidates(String imagePath) async {
+    return _guard(() async {
+      final formData = FormData.fromMap({
+        'count': 3,
+        'image': await MultipartFile.fromFile(imagePath),
+      });
+      final res = await _dio.post(
+        '/api/ai/image-prompt-candidates',
+        data: formData,
+      );
+      return _promptCandidates(res.data);
+    }, fallback: '图片识别咒文失败。');
   }
 
   Future<Map<String, dynamic>> getHistory(
@@ -253,23 +293,134 @@ class GatewayClient {
 
   Future<Map<String, dynamic>> getDailyCheckInStatus() async {
     return _guard(() async {
-      final res = await _dio.get('/api/me/check-in');
+      final res = await _dio.get(
+        '/api/me/check-in',
+        queryParameters: _timezoneParameters(),
+      );
       return Map<String, dynamic>.from(res.data as Map);
     }, fallback: '读取签到状态失败。');
   }
 
   Future<Map<String, dynamic>> performDailyCheckIn() async {
     return _guard(() async {
-      final res = await _dio.post('/api/me/check-in');
+      final res = await _dio.post(
+        '/api/me/check-in',
+        data: _timezoneParameters(),
+      );
       return Map<String, dynamic>.from(res.data as Map);
     }, fallback: '签到失败，请稍后重试。');
   }
 
   Future<Map<String, dynamic>> getPointsSummary() async {
     return _guard(() async {
-      final res = await _dio.get('/api/me/points');
+      final res = await _dio.get(
+        '/api/me/points',
+        queryParameters: _timezoneParameters(),
+      );
       return Map<String, dynamic>.from(res.data as Map);
     }, fallback: '读取积分明细失败。');
+  }
+
+  Future<Map<String, dynamic>> getMyFeedback({
+    String? type,
+    String? status,
+    String? keyword,
+    int page = 1,
+    int pageSize = 30,
+  }) async {
+    return _guard(() async {
+      final res = await _dio.get(
+        '/api/me/feedback',
+        queryParameters: _feedbackQuery(
+          type: type,
+          status: status,
+          keyword: keyword,
+          page: page,
+          pageSize: pageSize,
+        ),
+      );
+      return _mapResponse(res.data);
+    }, fallback: '读取反馈列表失败。');
+  }
+
+  Future<Map<String, dynamic>> createMyFeedback({
+    required String type,
+    required String title,
+    required String content,
+  }) async {
+    return _guard(() async {
+      final res = await _dio.post('/api/me/feedback', data: {
+        'type': type,
+        'title': title,
+        'content': content,
+      });
+      return _mapResponse(res.data);
+    }, fallback: '提交反馈失败。');
+  }
+
+  Future<Map<String, dynamic>> getMyFeedbackDetail(String id) async {
+    return _getMap('/api/me/feedback/$id', fallback: '读取反馈详情失败。');
+  }
+
+  Future<Map<String, dynamic>> getAdminFeedback({
+    String? type,
+    String? status,
+    String? keyword,
+    DateTime? startAt,
+    DateTime? endAt,
+    int page = 1,
+    int pageSize = 30,
+  }) async {
+    return _guard(() async {
+      final query = _feedbackQuery(
+        type: type,
+        status: status,
+        keyword: keyword,
+        page: page,
+        pageSize: pageSize,
+      );
+      if (startAt != null) query['start_at'] = startAt.toIso8601String();
+      if (endAt != null) query['end_at'] = endAt.toIso8601String();
+      final res = await _dio.get('/api/admin/feedback', queryParameters: query);
+      return _mapResponse(res.data);
+    }, fallback: '读取用户反馈失败。');
+  }
+
+  Future<Map<String, dynamic>> getAdminFeedbackDetail(String id) async {
+    return _getMap('/api/admin/feedback/$id', fallback: '读取反馈详情失败。');
+  }
+
+  Future<Map<String, dynamic>> updateAdminFeedbackStatus(
+    String id,
+    String status, {
+    String? note,
+  }) async {
+    return _guard(() async {
+      final res = await _dio.post('/api/admin/feedback/$id/status', data: {
+        'status': status,
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      });
+      return _mapResponse(res.data);
+    }, fallback: '更新反馈状态失败。');
+  }
+
+  Future<Map<String, dynamic>> replyAdminFeedback(
+    String id,
+    String reply,
+  ) async {
+    return _guard(() async {
+      final res = await _dio.post('/api/admin/feedback/$id/reply', data: {
+        'reply': reply,
+      });
+      return _mapResponse(res.data);
+    }, fallback: '回复反馈失败。');
+  }
+
+  Future<Map<String, dynamic>> summarizeAdminFeedback(String id) async {
+    return _guard(() async {
+      final res = await _dio.post('/api/admin/feedback/$id/ai-summary');
+      return _mapResponse(res.data);
+    }, fallback: 'AI 整理反馈失败。');
   }
 
   Future<Map<String, dynamic>> getGalleryPosts({
@@ -285,7 +436,8 @@ class GatewayClient {
         '/api/gallery/posts',
         queryParameters: {
           'view': view,
-          if (keyword != null && keyword.trim().isNotEmpty) 'keyword': keyword.trim(),
+          if (keyword != null && keyword.trim().isNotEmpty)
+            'keyword': keyword.trim(),
           if (action != null && action.isNotEmpty) 'action': action,
           'sort': sort,
           'page': page,
@@ -352,7 +504,8 @@ class GatewayClient {
   ) async {
     return _guard(() async {
       final formData = FormData.fromMap({'content': content});
-      final res = await _dio.post('/api/gallery/posts/$postId/comments', data: formData);
+      final res = await _dio.post('/api/gallery/posts/$postId/comments',
+          data: formData);
       return Map<String, dynamic>.from(res.data as Map);
     }, fallback: '发表评论失败。');
   }
@@ -398,7 +551,8 @@ class GatewayClient {
     }, fallback: '生成邀请码失败。');
   }
 
-  Future<dynamic> saveAdminUser(String? id, Map<String, dynamic> payload) async {
+  Future<dynamic> saveAdminUser(
+      String? id, Map<String, dynamic> payload) async {
     return _guard(() async {
       final res = id == null
           ? await _dio.post('/api/admin/users', data: payload)
@@ -411,7 +565,8 @@ class GatewayClient {
     return _getList('/api/admin/groups', fallback: '读取用户组失败。');
   }
 
-  Future<dynamic> saveAdminGroup(String? id, Map<String, dynamic> payload) async {
+  Future<dynamic> saveAdminGroup(
+      String? id, Map<String, dynamic> payload) async {
     return _guard(() async {
       final res = id == null
           ? await _dio.post('/api/admin/groups', data: payload)
@@ -424,7 +579,8 @@ class GatewayClient {
     return _getList('/api/admin/roles', fallback: '读取角色失败。');
   }
 
-  Future<dynamic> saveAdminRole(String? id, Map<String, dynamic> payload) async {
+  Future<dynamic> saveAdminRole(
+      String? id, Map<String, dynamic> payload) async {
     return _guard(() async {
       final res = id == null
           ? await _dio.post('/api/admin/roles', data: payload)
@@ -464,7 +620,8 @@ class GatewayClient {
     return _getList('/api/admin/api-keys', fallback: '读取 API Key 失败。');
   }
 
-  Future<dynamic> saveAdminApiKey(String? id, Map<String, dynamic> payload) async {
+  Future<dynamic> saveAdminApiKey(
+      String? id, Map<String, dynamic> payload) async {
     return _guard(() async {
       final res = id == null
           ? await _dio.post('/api/admin/api-keys', data: payload)
@@ -488,6 +645,142 @@ class GatewayClient {
 
   Future<List<dynamic>> adminAuditLogs() async {
     return _getList('/api/admin/audit-logs', fallback: '读取审计日志失败。');
+  }
+
+  Map<String, dynamic> _feedbackQuery({
+    String? type,
+    String? status,
+    String? keyword,
+    required int page,
+    required int pageSize,
+  }) {
+    return {
+      'page': page,
+      'page_size': pageSize,
+      if (type != null && type.isNotEmpty) 'type': type,
+      if (status != null && status.isNotEmpty) 'status': status,
+      if (keyword != null && keyword.trim().isNotEmpty)
+        'keyword': keyword.trim(),
+    };
+  }
+
+  Map<String, dynamic> _timezoneParameters() {
+    final now = DateTime.now();
+    return {
+      'timezone': now.timeZoneName,
+      'timezone_offset_minutes': now.timeZoneOffset.inMinutes,
+    };
+  }
+
+  Map<String, dynamic>? _partialImageResponse(dynamic data) {
+    if (data is! Map) return null;
+    final map = Map<String, dynamic>.from(data);
+    if (!_hasUsableImage(map)) return null;
+    final errors = <dynamic>[
+      ...(map['errors'] as List? ?? const []),
+      if (map['detail'] != null) map['detail'],
+      if (map['message'] != null) map['message'],
+      if (map['error'] != null) map['error'],
+    ];
+    map['errors'] = errors
+        .map((item) => item?.toString().trim() ?? '')
+        .where((item) => item.isNotEmpty)
+        .toSet()
+        .toList();
+    map['partial_success'] = true;
+    return map;
+  }
+
+  bool _hasUsableImage(dynamic value) {
+    if (value is List) {
+      return value.any(_hasUsableImage);
+    }
+    if (value is! Map) return false;
+    final map = Map<dynamic, dynamic>.from(value);
+    for (final key in ['url', 'image_url', 'b64_json', 'image', 'src']) {
+      final raw = map[key];
+      if (raw is String && raw.trim().isNotEmpty) {
+        return true;
+      }
+      if (raw is Map && _hasUsableImage(raw)) {
+        return true;
+      }
+    }
+    for (final key in ['data', 'images', 'items', 'results', 'output']) {
+      final raw = map[key];
+      if (_hasUsableImage(raw)) return true;
+    }
+    return false;
+  }
+
+  Map<String, dynamic> _mapResponse(dynamic data) {
+    if (data is Map) return Map<String, dynamic>.from(data);
+    if (data is List) return {'items': data};
+    return <String, dynamic>{};
+  }
+
+  List<String> _promptCandidates(dynamic data) {
+    final values = <String>[];
+
+    void collect(dynamic value) {
+      if (value == null) return;
+      if (value is String) {
+        values.addAll(_splitCandidateText(value));
+        return;
+      }
+      if (value is List) {
+        for (final item in value) {
+          collect(item);
+        }
+        return;
+      }
+      if (value is Map) {
+        for (final key in [
+          'prompt',
+          'text',
+          'content',
+          'message',
+          'candidates',
+          'prompts',
+          'data',
+          'items',
+          'results',
+          'choices',
+        ]) {
+          final raw = value[key];
+          if (raw == null) continue;
+          if (key == 'message' && raw is Map) {
+            collect(raw['content']);
+          } else {
+            collect(raw);
+          }
+        }
+      }
+    }
+
+    collect(data);
+    final seen = <String>{};
+    return values
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .where((item) => seen.add(item))
+        .take(3)
+        .toList();
+  }
+
+  List<String> _splitCandidateText(String text) {
+    final normalized = text.trim();
+    if (normalized.isEmpty) return const [];
+    final lines = normalized
+        .split(RegExp(r'\n+'))
+        .map((line) =>
+            line.replaceFirst(RegExp(r'^\s*(?:[-*]|\d+[.)、])\s*'), '').trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+    if (lines.length >= 3) {
+      return lines.take(3).toList();
+    }
+    return [normalized];
   }
 
   Future<Map<String, dynamic>> _getMap(

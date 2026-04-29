@@ -140,7 +140,9 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
         .read(gatewayClientProvider)
         .toggleGalleryFavorite(item['id'].toString());
     _replaceItem(updated);
-    if (widget.view == 'favorites' && !boolish(updated['favorited']) && mounted) {
+    if (widget.view == 'favorites' &&
+        !boolish(updated['favorited']) &&
+        mounted) {
       setState(() {
         _items.removeWhere((entry) => entry['id'] == updated['id']);
       });
@@ -167,10 +169,13 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
     );
     if (confirmed != true) return;
     try {
-      await ref.read(gatewayClientProvider).deleteGalleryPost(item['id'].toString());
+      await ref
+          .read(gatewayClientProvider)
+          .deleteGalleryPost(item['id'].toString());
       if (!mounted) return;
       setState(() {
-        _items.removeWhere((entry) => entry['id']?.toString() == item['id']?.toString());
+        _items.removeWhere(
+            (entry) => entry['id']?.toString() == item['id']?.toString());
       });
       showCenterNotice(context, '作品已删除');
     } catch (error) {
@@ -181,6 +186,8 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
     }
   }
 
+  // Kept for the detail/comment sheet flow when re-enabled from card actions.
+  // ignore: unused_element
   Future<void> _openComments(Map<String, dynamic> item) async {
     final controller = TextEditingController();
     final comments = await ref
@@ -208,15 +215,19 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                       ? const Center(child: Text('还没有评论'))
                       : ListView.separated(
                           itemCount: comments.length,
-                          separatorBuilder: (_, __) => const Divider(height: 16),
+                          separatorBuilder: (_, __) =>
+                              const Divider(height: 16),
                           itemBuilder: (context, index) {
                             final comment = comments[index];
                             return ListTile(
                               contentPadding: EdgeInsets.zero,
-                              title: Text(comment['display_name']?.toString() ?? '-'),
-                              subtitle: Text(comment['content']?.toString() ?? ''),
+                              title: Text(
+                                  comment['display_name']?.toString() ?? '-'),
+                              subtitle:
+                                  Text(comment['content']?.toString() ?? ''),
                               trailing: Text(
-                                _formatGalleryTime(comment['created_at']?.toString()),
+                                _formatGalleryTime(
+                                    comment['created_at']?.toString()),
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
                             );
@@ -268,8 +279,8 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
   void _replaceItem(Map<String, dynamic> updated) {
     if (!mounted) return;
     setState(() {
-      final index =
-          _items.indexWhere((item) => item['id']?.toString() == updated['id']?.toString());
+      final index = _items.indexWhere(
+          (item) => item['id']?.toString() == updated['id']?.toString());
       if (index >= 0) {
         _items[index] = updated;
       }
@@ -484,7 +495,8 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
     final liked = boolish(item['liked']);
     final favorited = boolish(item['favorited']);
     final currentUser = ref.read(authStateProvider);
-    final isOwner = currentUser?['id']?.toString() == item['user_id']?.toString();
+    final isOwner =
+        currentUser?['id']?.toString() == item['user_id']?.toString();
     final canDelete = boolish(item['can_delete']) || isOwner;
     final imageUrl = item['image_url']?.toString() ?? '';
     final previewItems = _items
@@ -534,16 +546,21 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                   children: [
                     CircleAvatar(
                       radius: avatarRadius,
-                      backgroundColor: brand.primaryColor.withOpacity(0.14),
-                      backgroundImage: (item['author_avatar_url']?.toString() ?? '').isNotEmpty
+                      backgroundColor:
+                          brand.primaryColor.withValues(alpha: 0.14),
+                      backgroundImage: (item['author_avatar_url']?.toString() ??
+                                  '')
+                              .isNotEmpty
                           ? NetworkImage(item['author_avatar_url'].toString())
                           : null,
-                      child: (item['author_avatar_url']?.toString() ?? '').isEmpty
-                          ? Text(
-                              (item['display_name']?.toString() ?? '画').substring(0, 1),
-                              style: TextStyle(fontSize: nameFontSize),
-                            )
-                          : null,
+                      child:
+                          (item['author_avatar_url']?.toString() ?? '').isEmpty
+                              ? Text(
+                                  (item['display_name']?.toString() ?? '画')
+                                      .substring(0, 1),
+                                  style: TextStyle(fontSize: nameFontSize),
+                                )
+                              : null,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -690,17 +707,15 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
         decoration: BoxDecoration(
           color: activeColor != null
               ? activeColor
-              : surface.withOpacity(0.5),
+              : surface.withValues(alpha: 0.5),
           border: Border.all(
-            color: activeColor != null
-                ? activeColor
-                : Colors.transparent,
+            color: activeColor != null ? activeColor : Colors.transparent,
           ),
           borderRadius: BorderRadius.circular(999),
           boxShadow: activeColor != null
               ? [
                   BoxShadow(
-                    color: activeColor.withOpacity(0.16),
+                    color: activeColor.withValues(alpha: 0.16),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -737,11 +752,12 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
     final color = _badgeColor(levelInfo?['badge_color']?.toString());
     return InkWell(
       borderRadius: BorderRadius.circular(999),
-      onTap: () => showLevelRewardsSheet(context, levelInfo, accentColor: color),
+      onTap: () =>
+          showLevelRewardsSheet(context, levelInfo, accentColor: color),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.14),
+          color: color.withValues(alpha: 0.14),
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(

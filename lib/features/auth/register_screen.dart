@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_error.dart';
-import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
 import '../../core/providers.dart';
 import '../home/home_screen.dart';
@@ -210,7 +209,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           controller: _passwordController,
                           obscureText: true,
                           onChanged: (_) {
-                            if (_passwordError != null || _confirmPasswordError != null) {
+                            if (_passwordError != null ||
+                                _confirmPasswordError != null) {
                               setState(() {
                                 _passwordError = null;
                                 _confirmPasswordError = null;

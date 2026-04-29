@@ -49,8 +49,7 @@ class AppUpdateService {
           ),
         );
 
-  static const MethodChannel _channel =
-      MethodChannel('re0/downloads');
+  static const MethodChannel _channel = MethodChannel('re0/downloads');
 
   final Dio _dio;
   final String repository;
@@ -66,7 +65,8 @@ class AppUpdateService {
       'https://api.github.com/repos/$repository/releases/latest',
     );
     final data = Map<String, dynamic>.from(response.data as Map);
-    final latestVersionName = _normalizeVersion(data['tag_name']?.toString() ?? '');
+    final latestVersionName =
+        _normalizeVersion(data['tag_name']?.toString() ?? '');
     final asset = _selectApkAsset(data['assets'] as List? ?? []);
     final releaseNotes = data['body']?.toString().trim();
 
@@ -126,10 +126,9 @@ class AppUpdateService {
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
         .where((item) {
-          final name = item['name']?.toString().toLowerCase() ?? '';
-          return name.endsWith('.apk');
-        })
-        .toList();
+      final name = item['name']?.toString().toLowerCase() ?? '';
+      return name.endsWith('.apk');
+    }).toList();
     if (typedAssets.isEmpty) {
       throw StateError('Release 中没有 APK 安装包。');
     }
