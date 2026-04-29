@@ -8,7 +8,7 @@ String utcMidnightLocalResetHint() {
   final local = nextUtcMidnight.toLocal();
   final hour = local.hour.toString().padLeft(2, '0');
   final minute = local.minute.toString().padLeft(2, '0');
-  return '今日按 UTC 00:00 重置，本地约 $hour:$minute';
+  return '按 UTC 00:00 重置，本地约 $hour:$minute';
 }
 
 String timezoneRequestHint() {
@@ -38,7 +38,7 @@ String resetHintFromResponse(Map<String, dynamic> data) {
   }
   final mode = data['timezone_mode']?.toString().toLowerCase() ?? '';
   if (mode == 'local') {
-    return '今日按本地日历日统计，${timezoneRequestHint()}';
+    return '按本地日历日统计，${timezoneRequestHint()}';
   }
   return '${utcMidnightLocalResetHint()}，${timezoneRequestHint()}';
 }

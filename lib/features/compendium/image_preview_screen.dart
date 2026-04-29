@@ -194,28 +194,44 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
 
   Widget _downloadButton(Color accentColor) {
     return Material(
-      color: Colors.white.withValues(alpha: 0.90),
+      color: Colors.white.withValues(alpha: 0.92),
       elevation: 10,
       shadowColor: Colors.black.withValues(alpha: 0.28),
-      shape: const CircleBorder(),
-      child: Ink(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: accentColor.withValues(alpha: 0.26)),
-        ),
-        child: IconButton(
-          tooltip: '保存到系统相册',
-          onPressed: _isSaving ? null : _saveCurrentImage,
-          color: accentColor,
-          icon: _isSaving
-              ? const SizedBox(
-                  width: 19,
-                  height: 19,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: _isSaving ? null : _saveCurrentImage,
+        child: Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: accentColor.withValues(alpha: 0.26)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_isSaving)
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: accentColor,
+                  ),
                 )
-              : const Icon(Icons.download_rounded),
+              else
+                Icon(Icons.download_rounded, color: accentColor),
+              const SizedBox(width: 6),
+              Text(
+                _isSaving ? '保存中' : '保存',
+                style: TextStyle(
+                  color: accentColor,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

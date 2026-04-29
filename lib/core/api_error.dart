@@ -59,6 +59,12 @@ String _messageFromDio(DioException error, {required String fallback}) {
 
   final statusCode = error.response?.statusCode;
   final detail = _extractDetail(error.response?.data);
+  if (statusCode == 404 &&
+      (detail == null ||
+          detail.trim().isEmpty ||
+          detail.trim().toLowerCase() == 'not found')) {
+    return '接口或资源不存在，请确认后端已部署最新版本。';
+  }
   if (detail != null && detail.isNotEmpty) {
     return _polishMessage(detail, fallback);
   }
@@ -131,8 +137,11 @@ String _polishMessage(String message, String fallback) {
   if (normalized.contains('已经发布到画廊')) {
     return '这张图片已经发布到画廊了。';
   }
-  if (normalized.contains('今日已签到')) {
-    return '今天已经签到过了，明天再来。';
+  if (normalized.contains('今日已签到') || normalized.contains('already signed')) {
+    return '已经签到过了，明天再来。';
+  }
+  if (normalized == 'not found') {
+    return '接口或资源不存在，请确认后端已部署最新版本。';
   }
   if (normalized.contains('timed out') || normalized.contains('timeout')) {
     return '请求超时，请稍后重试。';

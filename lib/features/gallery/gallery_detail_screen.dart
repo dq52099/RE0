@@ -7,7 +7,6 @@ import '../../core/app_brand.dart';
 import '../../core/cached_gateway_image.dart';
 import '../../core/compact_save_notice.dart';
 import '../../core/image_save_flow.dart';
-import '../../core/level_rewards_sheet.dart';
 import '../../core/providers.dart';
 import '../../core/value_parsers.dart';
 import '../compendium/image_preview_screen.dart';
@@ -279,6 +278,16 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                     children: [
                       Row(
                         children: [
+                          _authorAvatar(
+                            avatarUrl:
+                                _post['author_avatar_url']?.toString() ?? '',
+                            displayName:
+                                _post['display_name']?.toString() ?? '-',
+                            radius: 18,
+                            fallback: '画',
+                            brand: brand,
+                          ),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: Wrap(
                               spacing: 8,
@@ -419,29 +428,15 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            CircleAvatar(
+                            _authorAvatar(
+                              avatarUrl:
+                                  comment['author_avatar_url']?.toString() ??
+                                      '',
+                              displayName:
+                                  comment['display_name']?.toString() ?? '-',
                               radius: 18,
-                              backgroundColor:
-                                  brand.primaryColor.withValues(alpha: 0.14),
-                              backgroundImage: (comment['author_avatar_url']
-                                              ?.toString() ??
-                                          '')
-                                      .isNotEmpty
-                                  ? NetworkImage(
-                                      comment['author_avatar_url'].toString())
-                                  : null,
-                              child: (comment['author_avatar_url']
-                                              ?.toString() ??
-                                          '')
-                                      .isEmpty
-                                  ? Text(
-                                      (comment['display_name']?.toString() ??
-                                              '评')
-                                          .substring(0, 1),
-                                      style:
-                                          Theme.of(context).textTheme.bodySmall,
-                                    )
-                                  : null,
+                              fallback: '评',
+                              brand: brand,
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -618,23 +613,65 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
       return const SizedBox.shrink();
     }
     final color = _badgeColor(levelInfo?['badge_color']?.toString());
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
-      onTap: () =>
-          showLevelRewardsSheet(context, levelInfo, accentColor: color),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.14),
-          borderRadius: BorderRadius.circular(999),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          color: color,
+          fontWeight: FontWeight.w600,
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            color: color,
-            fontWeight: FontWeight.w600,
-          ),
+      ),
+    );
+  }
+
+  Widget _authorAvatar({
+    required String avatarUrl,
+    required String displayName,
+    required double radius,
+    required String fallback,
+    required AppBrand brand,
+  }) {
+    final normalizedUrl = avatarUrl.trim();
+    final normalizedName = displayName.trim();
+    final avatar = CircleAvatar(
+      radius: radius,
+      backgroundColor: brand.primaryColor.withValues(alpha: 0.14),
+      backgroundImage:
+          normalizedUrl.isNotEmpty ? NetworkImage(normalizedUrl) : null,
+      child: normalizedUrl.isEmpty
+          ? Text(
+              normalizedName.isEmpty
+                  ? fallback
+                  : normalizedName.substring(0, 1),
+              style: Theme.of(context).textTheme.bodySmall,
+            )
+          : null,
+    );
+    if (normalizedUrl.isEmpty) return avatar;
+    return InkWell(
+      customBorder: const CircleBorder(),
+      onTap: () => _openAvatarPreview(normalizedUrl, normalizedName),
+      child: avatar,
+    );
+  }
+
+  void _openAvatarPreview(String avatarUrl, String title) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ImagePreviewScreen(
+          showDownload: false,
+          items: [
+            PreviewImageEntry(
+              url: avatarUrl,
+              title: title.isEmpty ? '头像' : '$title 的头像',
+            ),
+          ],
         ),
       ),
     );

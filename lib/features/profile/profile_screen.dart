@@ -53,7 +53,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.refreshToken != widget.refreshToken) {
       setState(_refreshCacheSize);
-      _checkUpdateSilentlyOnce();
+      _checkUpdateSilently(force: true);
     }
   }
 
@@ -201,9 +201,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
-  Future<void> _checkUpdateSilentlyOnce() async {
-    if (_hasAutoCheckedUpdate || _isCheckingUpdate || _isDownloadingUpdate)
+  Future<void> _checkUpdateSilently({bool force = false}) async {
+    if ((!force && _hasAutoCheckedUpdate) ||
+        _isCheckingUpdate ||
+        _isDownloadingUpdate) {
       return;
+    }
     _hasAutoCheckedUpdate = true;
     try {
       final info = await ref.read(appUpdateProvider).checkForUpdate();
@@ -519,7 +522,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 final reward = (status['today_reward'] as Map?) ??
                     const <String, dynamic>{};
                 final subtitle = signedToday
-                    ? '今日已签到，奖励生图 ${reward['generate'] ?? 0} 次，改图 ${reward['edit'] ?? 0} 次\n${resetHintFromResponse(status)}'
+                    ? '已签到，奖励生图 ${reward['generate'] ?? 0} 次，改图 ${reward['edit'] ?? 0} 次\n${resetHintFromResponse(status)}'
                     : '每日可随机获得 5-10 次生图和 2-5 次改图奖励\n${resetHintFromResponse(status)}';
                 return _menuCard(
                   child: ListTile(

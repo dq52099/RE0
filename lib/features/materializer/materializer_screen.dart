@@ -483,10 +483,14 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                   child: TextField(
                     controller: _ideaController,
                     minLines: 1,
-                    maxLines: 3,
+                    maxLines: 2,
+                    style: const TextStyle(fontSize: 13, height: 1.28),
                     decoration: const InputDecoration(
                       labelText: '简单想法',
                       hintText: '一个银发少女站在雪山上，二次元风格',
+                      isDense: true,
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     ),
                   ),
                 ),

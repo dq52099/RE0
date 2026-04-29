@@ -949,69 +949,75 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     final radius = BorderRadius.circular(14);
     return SizedBox(
       height: 118,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: brand.primaryColor.withValues(alpha: 0.08),
           borderRadius: radius,
-          onTap: () => _showPromptDetails(item),
-          onLongPress: prompt.isEmpty ? null : () => _copyPromptText(prompt),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: brand.primaryColor.withValues(alpha: 0.08),
-              borderRadius: radius,
-              border:
-                  Border.all(color: brand.primaryColor.withValues(alpha: 0.18)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          border: Border.all(color: brand.primaryColor.withValues(alpha: 0.18)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.notes_outlined,
-                      size: 16,
-                      color: brand.primaryColor,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        '提示词',
-                        style: TextStyle(
-                          color: brand.primaryColor,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: '复制提示词',
-                      constraints: const BoxConstraints.tightFor(
-                        width: 28,
-                        height: 28,
-                      ),
-                      padding: EdgeInsets.zero,
-                      onPressed:
-                          prompt.isEmpty ? null : () => _copyPromptText(prompt),
-                      icon: const Icon(Icons.content_copy_outlined, size: 16),
-                      color: brand.primaryColor,
-                    ),
-                  ],
+                Icon(
+                  Icons.notes_outlined,
+                  size: 16,
+                  color: brand.primaryColor,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  prompt.isEmpty ? '未记录提示词' : prompt,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    height: 1.35,
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '提示词',
+                    style: TextStyle(
+                      color: brand.primaryColor,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
+                ),
+                IconButton(
+                  tooltip: '复制提示词',
+                  constraints: const BoxConstraints.tightFor(
+                    width: 28,
+                    height: 28,
+                  ),
+                  padding: EdgeInsets.zero,
+                  onPressed:
+                      prompt.isEmpty ? null : () => _copyPromptText(prompt),
+                  icon: const Icon(Icons.content_copy_outlined, size: 16),
+                  color: brand.primaryColor,
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: prompt.isEmpty ? null : () => _showPromptDetails(item),
+                  onLongPress:
+                      prompt.isEmpty ? null : () => _copyPromptText(prompt),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Text(
+                      prompt.isEmpty ? '未记录提示词' : prompt,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

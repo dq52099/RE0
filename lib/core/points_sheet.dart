@@ -65,7 +65,7 @@ class _PointsSheetContent extends StatelessWidget {
     final resetHint = resetHintFromResponse(data);
     final timezoneMode = data['timezone_mode']?.toString().toLowerCase();
     final todayTitle =
-        timezoneMode == 'local' ? '今日变化（按本地日历日）' : '今日变化（按服务器时区）';
+        timezoneMode == 'local' ? '当日变化（按本地日历日）' : '当日变化（按服务器时区）';
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       children: [
@@ -102,7 +102,7 @@ class _PointsSheetContent extends StatelessWidget {
               Expanded(
                 child: _metric(
                   context,
-                  label: '今日变化',
+                  label: '当日变化',
                   value: _signed(todayDelta),
                   color: todayDelta >= 0
                       ? Theme.of(context).colorScheme.primary
@@ -125,7 +125,7 @@ class _PointsSheetContent extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
             ),
             child: Text(
-              '今天还没有积分变化',
+              '当日还没有积分变化',
               style: theme.textTheme.bodyMedium,
             ),
           )

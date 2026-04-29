@@ -7,7 +7,6 @@ import '../../core/brand_background.dart';
 import '../../core/cached_gateway_image.dart';
 import '../../core/compact_dropdown_field.dart';
 import '../../core/compact_save_notice.dart';
-import '../../core/level_rewards_sheet.dart';
 import '../../core/providers.dart';
 import '../../core/value_parsers.dart';
 import '../compendium/image_preview_screen.dart';
@@ -544,23 +543,11 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
               children: [
                 Row(
                   children: [
-                    CircleAvatar(
+                    _authorAvatar(
+                      brand: brand,
+                      item: item,
                       radius: avatarRadius,
-                      backgroundColor:
-                          brand.primaryColor.withValues(alpha: 0.14),
-                      backgroundImage: (item['author_avatar_url']?.toString() ??
-                                  '')
-                              .isNotEmpty
-                          ? NetworkImage(item['author_avatar_url'].toString())
-                          : null,
-                      child:
-                          (item['author_avatar_url']?.toString() ?? '').isEmpty
-                              ? Text(
-                                  (item['display_name']?.toString() ?? '画')
-                                      .substring(0, 1),
-                                  style: TextStyle(fontSize: nameFontSize),
-                                )
-                              : null,
+                      fontSize: nameFontSize,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -750,23 +737,61 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
       return const SizedBox.shrink();
     }
     final color = _badgeColor(levelInfo?['badge_color']?.toString());
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
-      onTap: () =>
-          showLevelRewardsSheet(context, levelInfo, accentColor: color),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.14),
-          borderRadius: BorderRadius.circular(999),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          color: color,
+          fontWeight: FontWeight.w600,
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            color: color,
-            fontWeight: FontWeight.w600,
-          ),
+      ),
+    );
+  }
+
+  Widget _authorAvatar({
+    required AppBrand brand,
+    required Map<String, dynamic> item,
+    required double radius,
+    required double fontSize,
+  }) {
+    final avatarUrl = item['author_avatar_url']?.toString().trim() ?? '';
+    final displayName = item['display_name']?.toString() ?? '画';
+    final avatar = CircleAvatar(
+      radius: radius,
+      backgroundColor: brand.primaryColor.withValues(alpha: 0.14),
+      backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+      child: avatarUrl.isEmpty
+          ? Text(
+              displayName.isEmpty ? '画' : displayName.substring(0, 1),
+              style: TextStyle(fontSize: fontSize),
+            )
+          : null,
+    );
+    if (avatarUrl.isEmpty) return avatar;
+    return InkWell(
+      customBorder: const CircleBorder(),
+      onTap: () => _openAvatarPreview(avatarUrl, displayName),
+      child: avatar,
+    );
+  }
+
+  void _openAvatarPreview(String avatarUrl, String title) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ImagePreviewScreen(
+          showDownload: false,
+          items: [
+            PreviewImageEntry(
+              url: avatarUrl,
+              title: title.isEmpty ? '头像' : '$title 的头像',
+            ),
+          ],
         ),
       ),
     );
