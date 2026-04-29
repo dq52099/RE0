@@ -29,6 +29,7 @@ final appUpdateProvider = Provider<AppUpdateService>((ref) {
     packageName: 'com.dq52099.re0',
     currentVersionName: AppVersion.name,
     currentVersionCode: AppVersion.code,
+    currentReleaseTag: AppVersion.releaseTag,
   );
 });
 

@@ -41,6 +41,7 @@ class AppUpdateService {
     required this.packageName,
     required this.currentVersionName,
     required this.currentVersionCode,
+    required this.currentReleaseTag,
   }) : _dio = Dio(
           BaseOptions(
             connectTimeout: const Duration(seconds: 30),
@@ -59,14 +60,15 @@ class AppUpdateService {
   final String packageName;
   final String currentVersionName;
   final int currentVersionCode;
+  final String currentReleaseTag;
 
   Future<AppUpdateInfo> checkForUpdate() async {
     final response = await _dio.get(
       'https://api.github.com/repos/$repository/releases/latest',
     );
     final data = Map<String, dynamic>.from(response.data as Map);
-    final latestVersionName =
-        _normalizeVersion(data['tag_name']?.toString() ?? '');
+    final latestReleaseTag = data['tag_name']?.toString() ?? '';
+    final latestVersionName = _normalizeVersion(latestReleaseTag);
     final asset = _selectApkAsset(data['assets'] as List? ?? []);
     final releaseNotes = data['body']?.toString().trim();
 
@@ -76,7 +78,7 @@ class AppUpdateService {
       latestVersionName: latestVersionName,
       latestVersionCode: _versionToCode(latestVersionName),
       currentVersionCode: currentVersionCode,
-      available: _compareVersions(latestVersionName, currentVersionName) > 0,
+      available: _isUpdateAvailable(latestReleaseTag),
       downloadUrl: asset['browser_download_url']?.toString() ?? '',
       fileSize: _asInt(asset['size']),
       sha256: '',
@@ -143,10 +145,20 @@ class AppUpdateService {
     return normalized.startsWith('v') ? normalized.substring(1) : normalized;
   }
 
+  bool _isUpdateAvailable(String latestReleaseTag) {
+    final latest = _normalizeVersion(latestReleaseTag);
+    final currentTag = _normalizeVersion(currentReleaseTag);
+    if (latest.isEmpty) return false;
+    if (latest == currentTag) return false;
+    return _compareVersions(
+            latest, currentTag.isEmpty ? currentVersionName : currentTag) >
+        0;
+  }
+
   int _compareVersions(String left, String right) {
     final leftParts = _versionParts(left);
     final rightParts = _versionParts(right);
-    for (var index = 0; index < 3; index += 1) {
+    for (var index = 0; index < leftParts.length; index += 1) {
       final diff = leftParts[index] - rightParts[index];
       if (diff != 0) return diff;
     }
@@ -155,16 +167,30 @@ class AppUpdateService {
 
   List<int> _versionParts(String value) {
     final normalized = _normalizeVersion(value).split('+').first;
-    final parts = normalized.split('.');
-    return List<int>.generate(3, (index) {
+    final base = normalized.split(RegExp(r'[-_]')).first;
+    final parts = base.split('.');
+    final version = List<int>.generate(3, (index) {
       if (index >= parts.length) return 0;
       return int.tryParse(parts[index].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
     });
+    return [...version, _hotfixPart(normalized)];
+  }
+
+  int _hotfixPart(String value) {
+    final match = RegExp(
+      r'(?:hotfix|patch|fix|build)[.-]?(\d+)',
+      caseSensitive: false,
+    ).firstMatch(value);
+    if (match == null) return 0;
+    return int.tryParse(match.group(1) ?? '') ?? 0;
   }
 
   int _versionToCode(String value) {
     final parts = _versionParts(value);
-    return (parts[0] * 10000) + (parts[1] * 100) + parts[2];
+    return (parts[0] * 1000000) +
+        (parts[1] * 10000) +
+        (parts[2] * 100) +
+        parts[3];
   }
 
   int _asInt(dynamic value) {

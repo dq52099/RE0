@@ -10,4 +10,9 @@ class AppVersion {
     'RE0_VERSION_CODE',
     defaultValue: 10135,
   );
+
+  static const releaseTag = String.fromEnvironment(
+    'RE0_RELEASE_TAG',
+    defaultValue: 'v1.1.35-hotfix2',
+  );
 }

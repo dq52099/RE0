@@ -40,7 +40,7 @@ GitHub Actions 位于 `.github/workflows/build-apk.yml`。
 - 推送 `v*` tag 时会生成 `RE0-<tag>.apk` 并同步到 GitHub Release。
 - App 内更新源配置在 `lib/core/providers.dart`，默认读取 `dq52099/RE0` 的 latest release。
 - Release APK 使用 GitHub Secrets 中的固定 release keystore 签名。需要配置 `RE0_KEYSTORE_BASE64`、`RE0_KEYSTORE_PASSWORD`、`RE0_KEY_ALIAS`、`RE0_KEY_PASSWORD`。
-- 当前底层 hotfix 按要求不改 `pubspec.yaml` 版本号；同版本 hotfix 不会让已安装 `1.1.35` 的设备显示新版本，只能通过 Release 页面手动安装 hotfix APK。
+- 当前底层 hotfix 按要求不改 `pubspec.yaml` 版本号；发布 tag 使用 `v1.1.35-hotfix2` 这类旧包也能识别的格式，避免已安装 `1.1.35` 的设备误判“已是最新版本”。
 
 ## 构建
 

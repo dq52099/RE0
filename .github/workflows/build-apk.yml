@@ -68,7 +68,7 @@ jobs:
           chmod 600 "${RE0_KEYSTORE_PATH}"
 
       - name: Build APK
-        run: flutter build apk --release --dart-define=RE0_VERSION_NAME=${{ steps.app_version.outputs.name }} --dart-define=RE0_VERSION_CODE=${{ steps.app_version.outputs.code }}
+        run: flutter build apk --release --dart-define=RE0_VERSION_NAME=${{ steps.app_version.outputs.name }} --dart-define=RE0_VERSION_CODE=${{ steps.app_version.outputs.code }} --dart-define=RE0_RELEASE_TAG=${{ github.ref_name }}
 
       - name: Prepare APK
         shell: bash
