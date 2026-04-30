@@ -340,6 +340,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   '$generateQuota · $editQuota',
                   '保留 生图 ${_text(retention['generate'])} / 改图 ${_text(retention['edit'])}',
                 ],
+                lineBreaks: false,
               );
             }),
             if (data.users.isNotEmpty)
@@ -779,6 +780,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     bool? active,
     String? badge,
     Widget? trailing,
+    bool lineBreaks = true,
   }) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -807,14 +809,28 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
             ],
             if (lines.isNotEmpty) ...[
               const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: lines
-                    .where((item) => item.trim().isNotEmpty)
-                    .map((item) => _lineChip(item))
-                    .toList(),
-              ),
+              if (!lineBreaks)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: lines
+                      .where((item) => item.trim().isNotEmpty)
+                      .map(
+                        (item) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _lineChip(item),
+                        ),
+                      )
+                      .toList(),
+                )
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: lines
+                      .where((item) => item.trim().isNotEmpty)
+                      .map((item) => _lineChip(item))
+                      .toList(),
+                ),
             ],
           ],
         ),
@@ -829,7 +845,13 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(text, style: Theme.of(context).textTheme.bodySmall),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.visible,
+        softWrap: false,
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
     );
   }
 

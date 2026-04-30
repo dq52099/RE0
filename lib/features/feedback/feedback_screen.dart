@@ -58,122 +58,177 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
     var category = 'feature';
     final payload = await showDialog<Map<String, String>>(
       context: context,
+      useSafeArea: false,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('反馈与许愿'),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final dropdownWidth = constraints.maxWidth.isFinite &&
-                            constraints.maxWidth > 0
-                        ? constraints.maxWidth
-                        : 280.0;
-                    return SingleChildScrollView(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          TextField(
-                            controller: title,
-                            maxLength: 80,
-                            decoration: const InputDecoration(labelText: '标题'),
-                          ),
-                          const SizedBox(height: 8),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              '类型',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            width: double.infinity,
-                            child: SegmentedButton<String>(
-                              segments: feedbackTypes
-                                  .map(
-                                    (item) => ButtonSegment<String>(
-                                      value: item,
-                                      label: Text(feedbackTypeLabel(item)),
-                                      icon: Icon(
-                                        item == 'wish'
-                                            ? Icons.auto_awesome_outlined
-                                            : Icons.feedback_outlined,
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                              selected: {type},
-                              onSelectionChanged: (values) {
-                                FocusScope.of(context).unfocus();
-                                setDialogState(() => type = values.first);
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          CompactDropdownField<String>(
-                            label: '分类',
-                            value: category,
-                            width: dropdownWidth,
-                            menuWidth: dropdownWidth,
-                            selectedLabels: feedbackCategories
-                                .map(feedbackCategoryLabel)
-                                .toList(),
-                            items: [
-                              for (final item in feedbackCategories)
-                                CompactDropdownField.centeredItem<String>(
-                                  item,
-                                  feedbackCategoryLabel(item),
-                                  context,
+            final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+            final availableHeight =
+                MediaQuery.sizeOf(context).height - keyboard - 96;
+            return MediaQuery.removeViewInsets(
+              context: context,
+              removeBottom: true,
+              child: Dialog(
+                insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: availableHeight.clamp(360.0, 620.0),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+                        child: Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                '反馈与许愿',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
                                 ),
-                            ],
-                            onChanged: (value) {
-                              if (value == null) return;
-                              setDialogState(() => category = value);
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: content,
-                            minLines: 4,
-                            maxLines: 8,
-                            maxLength: 1200,
-                            decoration: const InputDecoration(
-                              labelText: '内容',
-                              hintText: '描述遇到的问题、建议，或想新增的功能、模型、主题、参数',
+                              ),
                             ),
-                          ),
-                        ],
+                            IconButton(
+                              tooltip: '关闭',
+                              onPressed: () => Navigator.pop(context),
+                              icon: const Icon(Icons.close),
+                            ),
+                          ],
+                        ),
                       ),
-                    );
-                  },
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final dropdownWidth =
+                                constraints.maxWidth.isFinite &&
+                                        constraints.maxWidth > 48
+                                    ? constraints.maxWidth - 48
+                                    : 280.0;
+                            return SingleChildScrollView(
+                              padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                              keyboardDismissBehavior:
+                                  ScrollViewKeyboardDismissBehavior.onDrag,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  TextField(
+                                    controller: title,
+                                    maxLength: 80,
+                                    decoration:
+                                        const InputDecoration(labelText: '标题'),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      '类型',
+                                      style:
+                                          Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: SegmentedButton<String>(
+                                      segments: feedbackTypes
+                                          .map(
+                                            (item) => ButtonSegment<String>(
+                                              value: item,
+                                              label:
+                                                  Text(feedbackTypeLabel(item)),
+                                              icon: Icon(
+                                                item == 'wish'
+                                                    ? Icons
+                                                        .auto_awesome_outlined
+                                                    : Icons.feedback_outlined,
+                                              ),
+                                            ),
+                                          )
+                                          .toList(),
+                                      selected: {type},
+                                      onSelectionChanged: (values) {
+                                        FocusScope.of(context).unfocus();
+                                        setDialogState(
+                                            () => type = values.first);
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  CompactDropdownField<String>(
+                                    label: '分类',
+                                    value: category,
+                                    width: dropdownWidth,
+                                    menuWidth: dropdownWidth,
+                                    selectedLabels: feedbackCategories
+                                        .map(feedbackCategoryLabel)
+                                        .toList(),
+                                    items: [
+                                      for (final item in feedbackCategories)
+                                        CompactDropdownField.centeredItem<
+                                            String>(
+                                          item,
+                                          feedbackCategoryLabel(item),
+                                          context,
+                                        ),
+                                    ],
+                                    onChanged: (value) {
+                                      if (value == null) return;
+                                      setDialogState(() => category = value);
+                                    },
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextField(
+                                    controller: content,
+                                    minLines: 4,
+                                    maxLines: 8,
+                                    maxLength: 1200,
+                                    decoration: const InputDecoration(
+                                      labelText: '内容',
+                                      hintText: '描述遇到的问题、建议，或想新增的功能、模型、主题、参数',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('取消'),
+                            ),
+                            const SizedBox(width: 8),
+                            FilledButton(
+                              onPressed: () {
+                                final nextTitle = title.text.trim();
+                                final nextContent = content.text.trim();
+                                if (nextTitle.isEmpty || nextContent.isEmpty) {
+                                  showCenterNotice(context, '请填写标题和内容。');
+                                  return;
+                                }
+                                Navigator.pop(context, {
+                                  'type': type,
+                                  'category': category,
+                                  'title': nextTitle,
+                                  'content': nextContent,
+                                });
+                              },
+                              child: const Text('提交'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    final nextTitle = title.text.trim();
-                    final nextContent = content.text.trim();
-                    if (nextTitle.isEmpty || nextContent.isEmpty) {
-                      showCenterNotice(context, '请填写标题和内容。');
-                      return;
-                    }
-                    Navigator.pop(context, {
-                      'type': type,
-                      'category': category,
-                      'title': nextTitle,
-                      'content': nextContent,
-                    });
-                  },
-                  child: const Text('提交'),
-                ),
-              ],
             );
           },
         );

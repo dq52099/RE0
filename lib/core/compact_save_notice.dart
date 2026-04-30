@@ -11,10 +11,14 @@ void showCenterNotice(BuildContext context, String message) {
   if (overlay == null) return;
 
   _activeNotice?.remove();
+  final anchor = MediaQuery.viewInsetsOf(context).bottom > 0
+      ? _NoticeAnchor.top
+      : _NoticeAnchor.center;
   late final OverlayEntry entry;
   entry = OverlayEntry(
     builder: (_) => _CenterNotice(
       message: message,
+      anchor: anchor,
       onDismissed: () {
         if (_activeNotice == entry) {
           _activeNotice = null;
@@ -32,10 +36,12 @@ void showCenterNotice(BuildContext context, String message) {
 class _CenterNotice extends StatefulWidget {
   const _CenterNotice({
     required this.message,
+    required this.anchor,
     required this.onDismissed,
   });
 
   final String message;
+  final _NoticeAnchor anchor;
   final VoidCallback onDismissed;
 
   @override
@@ -79,45 +85,54 @@ class _CenterNoticeState extends State<_CenterNotice>
 
   @override
   Widget build(BuildContext context) {
+    final topAligned = widget.anchor == _NoticeAnchor.top;
     return IgnorePointer(
       child: SafeArea(
-        child: Center(
-          child: FadeTransition(
-            opacity: _fade,
-            child: ScaleTransition(
-              scale: _scale,
-              child: Container(
-                constraints: const BoxConstraints(
-                  minWidth: 132,
-                  maxWidth: 230,
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xEDE8E8E8),
-                  borderRadius: BorderRadius.circular(999),
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.72)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.18),
-                      blurRadius: 22,
-                      offset: const Offset(0, 10),
+        child: Align(
+          alignment: topAligned ? Alignment.topCenter : Alignment.center,
+          child: Padding(
+            padding: EdgeInsets.only(
+              top: topAligned ? 18 : 0,
+              left: 24,
+              right: 24,
+            ),
+            child: FadeTransition(
+              opacity: _fade,
+              child: ScaleTransition(
+                scale: _scale,
+                child: Container(
+                  constraints: BoxConstraints(
+                    minWidth: 132,
+                    maxWidth: topAligned ? 320 : 280,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xF2E8E8E8),
+                    borderRadius: BorderRadius.circular(18),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.72)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.18),
+                        blurRadius: 22,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    widget.message,
+                    textAlign: TextAlign.center,
+                    maxLines: topAligned ? 3 : 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xDD111111),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.none,
                     ),
-                  ],
-                ),
-                child: Text(
-                  widget.message,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xDD111111),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    decoration: TextDecoration.none,
                   ),
                 ),
               ),
@@ -128,3 +143,5 @@ class _CenterNoticeState extends State<_CenterNotice>
     );
   }
 }
+
+enum _NoticeAnchor { center, top }
