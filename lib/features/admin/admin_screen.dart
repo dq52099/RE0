@@ -1320,10 +1320,20 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final providerBase =
         TextEditingController(text: _settingValue(byKey, 'provider_base_url'));
     final providerKey = TextEditingController();
+    final providerBackupBase = TextEditingController(
+        text: _settingValue(byKey, 'provider_backup_base_url'));
+    final providerBackupKey = TextEditingController();
     final providerModel =
         TextEditingController(text: _settingValue(byKey, 'provider_model'));
     final providerTimeout = TextEditingController(
         text: _settingValue(byKey, 'provider_timeout_seconds'));
+    final providerHealthcheckInterval = TextEditingController(
+      text: _settingValue(
+        byKey,
+        'provider_healthcheck_interval_minutes',
+        fallback: '60',
+      ),
+    );
     final instructions = TextEditingController(
         text: _settingValue(byKey, 'provider_instructions'));
     final feedbackAiBase = TextEditingController(
@@ -1378,6 +1388,17 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         _settingValue(byKey, 'allow_public_registration', fallback: 'true')
                 .toLowerCase() ==
             'true';
+    var activeProviderSlot =
+        _settingValue(byKey, 'provider_active_slot', fallback: 'primary');
+    if (!const ['primary', 'backup'].contains(activeProviderSlot)) {
+      activeProviderSlot = 'primary';
+    }
+    var providerHealthcheckEnabled = _settingValue(
+          byKey,
+          'provider_healthcheck_enabled',
+          fallback: 'true',
+        ).toLowerCase() ==
+        'true';
 
     final payload = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -1399,16 +1420,46 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 const SizedBox(height: 12),
                 TextField(
                     controller: providerBase,
-                    decoration: const InputDecoration(labelText: '上游地址')),
+                    decoration:
+                        const InputDecoration(labelText: '主用上游 base_url')),
                 const SizedBox(height: 12),
                 TextField(
                     controller: providerKey,
                     decoration:
-                        const InputDecoration(labelText: '上游 Key，留空不修改')),
+                        const InputDecoration(labelText: '主用上游 Key，留空不修改')),
+                const SizedBox(height: 12),
+                TextField(
+                    controller: providerBackupBase,
+                    decoration:
+                        const InputDecoration(labelText: '备用上游 base_url')),
+                const SizedBox(height: 12),
+                TextField(
+                    controller: providerBackupKey,
+                    decoration:
+                        const InputDecoration(labelText: '备用上游 Key，留空不修改')),
                 const SizedBox(height: 12),
                 TextField(
                     controller: providerModel,
                     decoration: const InputDecoration(labelText: '模型')),
+                const SizedBox(height: 12),
+                _stringDropdown(
+                    '当前线路',
+                    activeProviderSlot,
+                    const ['primary', 'backup'],
+                    (value) =>
+                        setDialogState(() => activeProviderSlot = value)),
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  value: providerHealthcheckEnabled,
+                  onChanged: (value) =>
+                      setDialogState(() => providerHealthcheckEnabled = value),
+                  title: const Text('每小时探活并自动切换主备'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                    controller: providerHealthcheckInterval,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: '探活间隔分钟')),
                 const SizedBox(height: 12),
                 _stringDropdown(
                     '图片档位',
@@ -1534,6 +1585,13 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   'external_access_base_url': externalBase.text.trim(),
                   'provider_base_url': providerBase.text.trim(),
                   'provider_api_key': providerKey.text.trim(),
+                  'provider_backup_base_url': providerBackupBase.text.trim(),
+                  if (providerBackupKey.text.trim().isNotEmpty)
+                    'provider_backup_api_key': providerBackupKey.text.trim(),
+                  'provider_active_slot': activeProviderSlot,
+                  'provider_healthcheck_enabled': providerHealthcheckEnabled,
+                  'provider_healthcheck_interval_minutes':
+                      int.tryParse(providerHealthcheckInterval.text),
                   'provider_model': providerModel.text.trim(),
                   'provider_image_profile': profile,
                   'provider_timeout_seconds':
@@ -1851,6 +1909,31 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         'key': 'feedback_ai_base_url',
         'value': _defaultAiBaseUrl,
         'description': '反馈 AI 整理服务地址',
+      },
+      {
+        'key': 'provider_backup_base_url',
+        'value': '',
+        'description': '备用上游服务地址',
+      },
+      {
+        'key': 'provider_backup_api_key',
+        'value': 'xxx',
+        'description': '备用上游 API Key',
+      },
+      {
+        'key': 'provider_active_slot',
+        'value': 'primary',
+        'description': '当前启用的上游线路',
+      },
+      {
+        'key': 'provider_healthcheck_enabled',
+        'value': 'true',
+        'description': '是否定时探活并自动切换主备',
+      },
+      {
+        'key': 'provider_healthcheck_interval_minutes',
+        'value': '60',
+        'description': '上游文本探活间隔分钟',
       },
       {
         'key': 'feedback_ai_api_key',

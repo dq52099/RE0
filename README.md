@@ -11,6 +11,7 @@
 - 记忆回廊支持分页加载、下拉刷新和点击图片全屏预览。
 - 生图页支持根据简单想法生成咒文，也支持选择图片反推咒文；点击咒文可查看和编辑完整内容。
 - 反馈与许愿支持用户提交预置分类、查看状态和管理员回复，管理员可在系统管理里筛选、回复、按数量/间隔自动 AI 整理并导出反馈清单。
+- 系统设置支持主用/备用上游 `base_url` 和 Key、当前线路、文本探活开关与探活间隔；后端每小时探活失败会自动切换主备并通知管理员。
 - 画廊支持公开作品、点赞、收藏、下载、层级评论和回复，相关互动会进入用户通知。
 - “我的”页面支持每日签到、通知、反馈、查看/清理图片缓存、检查更新、退出登录。
 - 根据登录用户的角色、权限或菜单识别管理员，显示“系统管理”入口。
@@ -40,7 +41,7 @@ GitHub Actions 位于 `.github/workflows/build-apk.yml`。
 - 推送 `v*` tag 时会生成 `RE0-<tag>.apk` 并同步到 GitHub Release。
 - App 内更新源配置在 `lib/core/providers.dart`，默认读取 `dq52099/RE0` 的 latest release。
 - Release APK 使用 GitHub Secrets 中的固定 release keystore 签名。需要配置 `RE0_KEYSTORE_BASE64`、`RE0_KEYSTORE_PASSWORD`、`RE0_KEY_ALIAS`、`RE0_KEY_PASSWORD`。
-- 当前底层 hotfix 按要求不改 `pubspec.yaml` 版本号；发布 tag 使用 `v1.1.35-hotfix5` 这类旧包也能识别的格式，避免已安装 `1.1.35` 的设备误判“已是最新版本”。
+- 当前底层 hotfix 按要求不改 `pubspec.yaml` 版本号；发布 tag 使用 `v1.1.35-hotfix6` 这类旧包也能识别的格式，避免已安装 `1.1.35` 的设备误判“已是最新版本”。
 
 ## 构建
 
