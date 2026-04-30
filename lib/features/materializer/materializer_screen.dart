@@ -55,6 +55,15 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     super.dispose();
   }
 
+  void _dismissPromptAssistFocus([BuildContext? focusContext]) {
+    FocusManager.instance.primaryFocus?.unfocus(
+      disposition: UnfocusDisposition.scope,
+    );
+    FocusScope.of(focusContext ?? context).unfocus(
+      disposition: UnfocusDisposition.scope,
+    );
+  }
+
   Future<void> _generatePromptFromIdea() async {
     final idea = _ideaController.text.trim();
     if (idea.isEmpty) {
@@ -171,6 +180,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
       showCenterNotice(context, '当前没有可用候选');
       return;
     }
+    _dismissPromptAssistFocus();
     setState(() {
       _spellController.text = candidate.trim();
       _spellController.selection = TextSelection.collapsed(
@@ -178,9 +188,13 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
       );
       _lastAppliedCandidate = _spellController.text;
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _dismissPromptAssistFocus();
+    });
   }
 
   Future<void> _openCandidatePrompt(String candidate) async {
+    _dismissPromptAssistFocus();
     final brand = ref.read(brandProvider);
     final controller = TextEditingController(text: candidate);
     final next = await showDialog<String>(
@@ -204,14 +218,21 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
             child: const Text('关闭'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            onPressed: () {
+              _dismissPromptAssistFocus(context);
+              Navigator.pop(context, controller.text.trim());
+            },
             child: const Text('使用/替换当前咒文'),
           ),
         ],
       ),
     );
     controller.dispose();
-    if (next == null) return;
+    if (next == null) {
+      _dismissPromptAssistFocus();
+      return;
+    }
+    _dismissPromptAssistFocus();
     setState(() {
       _spellController.text = next;
       _spellController.selection = TextSelection.collapsed(
@@ -220,6 +241,9 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
       if (_spellController.text != (_lastAppliedCandidate ?? '')) {
         _lastAppliedCandidate = _spellController.text;
       }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _dismissPromptAssistFocus();
     });
   }
 

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_error.dart';
+import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
-import '../../core/compact_dropdown_field.dart';
 import '../../core/compact_save_notice.dart';
 import '../../core/providers.dart';
 import 'feedback_utils.dart';
@@ -51,213 +51,27 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
     await _future;
   }
 
-  Future<void> _submitFeedback() async {
-    final title = TextEditingController();
-    final content = TextEditingController();
-    var type = 'feedback';
-    var category = 'feature';
-    final payload = await showDialog<Map<String, String>>(
-      context: context,
-      useSafeArea: false,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            final keyboard = MediaQuery.viewInsetsOf(context).bottom;
-            final availableHeight =
-                MediaQuery.sizeOf(context).height - keyboard - 96;
-            return MediaQuery.removeViewInsets(
-              context: context,
-              removeBottom: true,
-              child: Dialog(
-                insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: availableHeight.clamp(360.0, 620.0),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
-                        child: Row(
-                          children: [
-                            const Expanded(
-                              child: Text(
-                                '反馈与许愿',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                            IconButton(
-                              tooltip: '关闭',
-                              onPressed: () => Navigator.pop(context),
-                              icon: const Icon(Icons.close),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final dropdownWidth =
-                                constraints.maxWidth.isFinite &&
-                                        constraints.maxWidth > 48
-                                    ? constraints.maxWidth - 48
-                                    : 280.0;
-                            return SingleChildScrollView(
-                              padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-                              keyboardDismissBehavior:
-                                  ScrollViewKeyboardDismissBehavior.onDrag,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  TextField(
-                                    controller: title,
-                                    maxLength: 80,
-                                    decoration:
-                                        const InputDecoration(labelText: '标题'),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Text(
-                                      '类型',
-                                      style:
-                                          Theme.of(context).textTheme.bodySmall,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: SegmentedButton<String>(
-                                      segments: feedbackTypes
-                                          .map(
-                                            (item) => ButtonSegment<String>(
-                                              value: item,
-                                              label:
-                                                  Text(feedbackTypeLabel(item)),
-                                              icon: Icon(
-                                                item == 'wish'
-                                                    ? Icons
-                                                        .auto_awesome_outlined
-                                                    : Icons.feedback_outlined,
-                                              ),
-                                            ),
-                                          )
-                                          .toList(),
-                                      selected: {type},
-                                      onSelectionChanged: (values) {
-                                        FocusScope.of(context).unfocus();
-                                        setDialogState(
-                                            () => type = values.first);
-                                      },
-                                    ),
-                                  ),
-                                  const SizedBox(height: 14),
-                                  CompactDropdownField<String>(
-                                    label: '分类',
-                                    value: category,
-                                    width: dropdownWidth,
-                                    menuWidth: dropdownWidth,
-                                    selectedLabels: feedbackCategories
-                                        .map(feedbackCategoryLabel)
-                                        .toList(),
-                                    items: [
-                                      for (final item in feedbackCategories)
-                                        CompactDropdownField.centeredItem<
-                                            String>(
-                                          item,
-                                          feedbackCategoryLabel(item),
-                                          context,
-                                        ),
-                                    ],
-                                    onChanged: (value) {
-                                      if (value == null) return;
-                                      setDialogState(() => category = value);
-                                    },
-                                  ),
-                                  const SizedBox(height: 12),
-                                  TextField(
-                                    controller: content,
-                                    minLines: 4,
-                                    maxLines: 8,
-                                    maxLength: 1200,
-                                    decoration: const InputDecoration(
-                                      labelText: '内容',
-                                      hintText: '描述遇到的问题、建议，或想新增的功能、模型、主题、参数',
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('取消'),
-                            ),
-                            const SizedBox(width: 8),
-                            FilledButton(
-                              onPressed: () {
-                                final nextTitle = title.text.trim();
-                                final nextContent = content.text.trim();
-                                if (nextTitle.isEmpty || nextContent.isEmpty) {
-                                  showCenterNotice(context, '请填写标题和内容。');
-                                  return;
-                                }
-                                Navigator.pop(context, {
-                                  'type': type,
-                                  'category': category,
-                                  'title': nextTitle,
-                                  'content': nextContent,
-                                });
-                              },
-                              child: const Text('提交'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-    title.dispose();
-    content.dispose();
-    if (payload == null) return;
+  bool get _hasActiveFilters =>
+      _type.isNotEmpty ||
+      _status.isNotEmpty ||
+      _keywordController.text.trim().isNotEmpty;
 
-    try {
-      await ref.read(gatewayClientProvider).createMyFeedback(
-            type: payload['type']!,
-            category: payload['category'],
-            title: payload['title']!,
-            content: payload['content']!,
-          );
-      if (!mounted) return;
-      setState(() {
-        _page = 1;
-        _reload();
-      });
-      showCenterNotice(context, '已提交，管理员处理后会在这里显示状态和回复');
-    } catch (error) {
-      if (!mounted) return;
-      showCenterNotice(
-        context,
-        friendlyError(error, fallback: '提交反馈失败。'),
-      );
-    }
+  Future<void> _openCompose({String initialType = 'feedback'}) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => _FeedbackComposeScreen(initialType: initialType),
+      ),
+    );
+    if (created != true || !mounted) return;
+    setState(() {
+      _type = '';
+      _status = '';
+      _keywordController.clear();
+      _page = 1;
+      _reload();
+    });
+    showCenterNotice(context, '已提交，处理进度会在这里更新');
   }
 
   Future<void> _openDetail(Map<String, dynamic> item) async {
@@ -369,7 +183,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      resizeToAvoidBottomInset: false,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text('反馈与许愿'),
         actions: [
@@ -381,9 +195,9 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _submitFeedback,
+        onPressed: () => _openCompose(),
         icon: const Icon(Icons.add_comment_outlined),
-        label: const Text('提交'),
+        label: const Text('提交反馈'),
       ),
       body: BrandBackground(
         child: FutureBuilder<Map<String, dynamic>>(
@@ -394,7 +208,11 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
               onRefresh: _refresh,
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 children: [
+                  _quickSubmitPanel(),
+                  const SizedBox(height: 12),
                   _filters(),
                   const SizedBox(height: 12),
                   if (snapshot.connectionState != ConnectionState.done)
@@ -405,10 +223,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                   else if (snapshot.hasError)
                     _errorState(snapshot.error)
                   else if (items.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 80),
-                      child: Center(child: Text('还没有提交记录')),
-                    )
+                    _emptyState()
                   else
                     ...items.map(_feedbackCard),
                   if (items.isNotEmpty) _pager(snapshot.data ?? const {}),
@@ -422,7 +237,9 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
   }
 
   Widget _filters() {
+    final activeFilterText = _hasActiveFilters ? '重置筛选' : '全部记录';
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TextField(
           controller: _keywordController,
@@ -453,87 +270,156 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
           },
         ),
         const SizedBox(height: 12),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final width = (constraints.maxWidth - 12) / 2;
-            return Row(
-              children: [
-                Expanded(
-                  child: CompactDropdownField<String>(
-                    label: '类型',
-                    value: _type,
-                    width: width,
-                    menuWidth: width,
-                    selectedLabels: const ['全部类型', '反馈', '许愿'],
-                    items: [
-                      CompactDropdownField.centeredItem<String>(
-                        '',
-                        '全部类型',
-                        context,
-                      ),
-                      ...feedbackTypes.map(
-                        (item) => CompactDropdownField.centeredItem<String>(
-                          item,
-                          feedbackTypeLabel(item),
-                          context,
-                        ),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) return;
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _filterChip(
+                activeFilterText,
+                !_hasActiveFilters,
+                () {
+                  if (!_hasActiveFilters) return;
+                  FocusManager.instance.primaryFocus?.unfocus();
+                  setState(() {
+                    _type = '';
+                    _status = '';
+                    _keywordController.clear();
+                    _page = 1;
+                    _reload();
+                  });
+                },
+              ),
+              const SizedBox(width: 8),
+              ...feedbackTypes.map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: _filterChip(
+                    feedbackTypeLabel(item),
+                    _type == item,
+                    () {
+                      FocusManager.instance.primaryFocus?.unfocus();
                       setState(() {
-                        _type = value;
+                        _type = _type == item ? '' : item;
                         _page = 1;
                         _reload();
                       });
                     },
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: CompactDropdownField<String>(
-                    label: '状态',
-                    value: _status,
-                    width: width,
-                    menuWidth: width,
-                    selectedLabels: [
-                      '全部状态',
-                      ...feedbackStatuses.map(feedbackStatusLabel),
-                    ],
-                    items: [
-                      CompactDropdownField.centeredItem<String>(
-                        '',
-                        '全部状态',
-                        context,
-                      ),
-                      ...feedbackStatuses.map(
-                        (item) => CompactDropdownField.centeredItem<String>(
-                          item,
-                          feedbackStatusLabel(item),
-                          context,
-                        ),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) return;
+              ),
+              ...feedbackStatuses.map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: _filterChip(
+                    feedbackStatusLabel(item),
+                    _status == item,
+                    () {
+                      FocusManager.instance.primaryFocus?.unfocus();
                       setState(() {
-                        _status = value;
+                        _status = _status == item ? '' : item;
                         _page = 1;
                         _reload();
                       });
                     },
                   ),
                 ),
-              ],
-            );
-          },
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 
+  Widget _quickSubmitPanel() {
+    final brand = ref.watch(brandProvider);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: brand.panelColor.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: brand.primaryColor.withValues(alpha: 0.16)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.forum_outlined, color: brand.primaryColor),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '告诉管理员你遇到的问题或想要的能力',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () => _openCompose(initialType: 'feedback'),
+                  icon: const Icon(Icons.feedback_outlined),
+                  label: const Text('提交反馈'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _openCompose(initialType: 'wish'),
+                  icon: const Icon(Icons.auto_awesome_outlined),
+                  label: const Text('提交许愿'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChip(String label, bool selected, VoidCallback onTap) {
+    return ChoiceChip(
+      showCheckmark: false,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onTap(),
+    );
+  }
+
+  Widget _emptyState() {
+    final message = _hasActiveFilters ? '没有匹配的提交记录' : '还没有提交记录';
+    return Padding(
+      padding: const EdgeInsets.only(top: 70),
+      child: Column(
+        children: [
+          const Icon(Icons.chat_bubble_outline, size: 42),
+          const SizedBox(height: 12),
+          Text(message),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: () => _openCompose(),
+            icon: const Icon(Icons.add_comment_outlined),
+            label: const Text('写一条反馈'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _feedbackCard(Map<String, dynamic> item) {
     final status = item['status']?.toString();
+    final reply = feedbackText(
+      item['admin_reply'] ?? item['reply'],
+      fallback: '',
+    );
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
@@ -580,12 +466,30 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                     ),
                   _metaPill(Icons.schedule_outlined,
                       feedbackDate(item['created_at'])),
-                  if (feedbackText(item['admin_reply'] ?? item['reply'],
-                          fallback: '')
-                      .isNotEmpty)
+                  if (reply.isNotEmpty)
                     _metaPill(Icons.mark_chat_read_outlined, '已回复'),
                 ],
               ),
+              if (reply.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '管理员回复：$reply',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -679,6 +583,315 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _FeedbackComposeScreen extends ConsumerStatefulWidget {
+  const _FeedbackComposeScreen({
+    required this.initialType,
+  });
+
+  final String initialType;
+
+  @override
+  ConsumerState<_FeedbackComposeScreen> createState() =>
+      _FeedbackComposeScreenState();
+}
+
+class _FeedbackComposeScreenState
+    extends ConsumerState<_FeedbackComposeScreen> {
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _contentController = TextEditingController();
+  String _type = 'feedback';
+  String _category = 'feature';
+  bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _type = widget.initialType == 'wish' ? 'wish' : 'feedback';
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _contentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final title = _titleController.text.trim();
+    final content = _contentController.text.trim();
+    if (title.length < 2) {
+      showCenterNotice(context, '标题至少 2 个字');
+      return;
+    }
+    if (content.length < 3) {
+      showCenterNotice(context, '内容至少 3 个字');
+      return;
+    }
+    setState(() => _submitting = true);
+    try {
+      await ref.read(gatewayClientProvider).createMyFeedback(
+            type: _type,
+            category: _category,
+            title: title,
+            content: content,
+          );
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+      showCenterNotice(
+        context,
+        friendlyError(error, fallback: '提交失败，请稍后重试。'),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = ref.watch(brandProvider);
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    return Scaffold(
+      resizeToAvoidBottomInset: false,
+      appBar: AppBar(title: const Text('提交反馈与许愿')),
+      body: BrandBackground(
+        child: SafeArea(
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + keyboard),
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            children: [
+              _composeHeader(brand),
+              const SizedBox(height: 14),
+              _composePanel(
+                brand,
+                title: '类型',
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _typeCard(
+                        brand,
+                        type: 'feedback',
+                        icon: Icons.feedback_outlined,
+                        title: '反馈',
+                        subtitle: '问题、建议、体验',
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _typeCard(
+                        brand,
+                        type: 'wish',
+                        icon: Icons.auto_awesome_outlined,
+                        title: '许愿',
+                        subtitle: '功能、模型、主题',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              _composePanel(
+                brand,
+                title: '分类',
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final item in feedbackCategories) _categoryChip(item),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              _composePanel(
+                brand,
+                title: '内容',
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: _titleController,
+                      maxLength: 80,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: '标题',
+                        hintText: '一句话说明重点',
+                        prefixIcon: Icon(Icons.title),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _contentController,
+                      minLines: 7,
+                      maxLines: 12,
+                      maxLength: 1200,
+                      textInputAction: TextInputAction.newline,
+                      decoration: const InputDecoration(
+                        labelText: '详细内容',
+                        hintText: '写下现象、期望效果，或希望新增的能力',
+                        alignLabelWithHint: true,
+                        prefixIcon: Padding(
+                          padding: EdgeInsets.only(bottom: 126),
+                          child: Icon(Icons.notes_outlined),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              FilledButton.icon(
+                onPressed: _submitting ? null : _submit,
+                icon: _submitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send_outlined),
+                label: Text(_submitting ? '提交中' : '提交'),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed:
+                    _submitting ? null : () => Navigator.of(context).pop(false),
+                child: const Text('取消'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _composeHeader(AppBrand brand) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: brand.panelColor.withValues(alpha: 0.22),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: brand.primaryColor.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.forum_outlined, color: brand.primaryColor),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _type == 'wish' ? '写下你希望新增的能力' : '写下你遇到的问题或建议',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _composePanel(
+    AppBrand brand, {
+    required String title,
+    required Widget child,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.62),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: brand.primaryColor.withValues(alpha: 0.12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 10),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _typeCard(
+    AppBrand brand, {
+    required String type,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    final selected = _type == type;
+    return Material(
+      color: selected
+          ? brand.primaryColor.withValues(alpha: 0.14)
+          : Theme.of(context).colorScheme.surface.withValues(alpha: 0.5),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          FocusManager.instance.primaryFocus?.unfocus();
+          setState(() => _type = type);
+        },
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected
+                  ? brand.primaryColor
+                  : Theme.of(context)
+                      .colorScheme
+                      .outline
+                      .withValues(alpha: 0.18),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: selected ? brand.primaryColor : null),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  color: selected ? brand.primaryColor : null,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _categoryChip(String category) {
+    return ChoiceChip(
+      showCheckmark: false,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+      label: Text(feedbackCategoryLabel(category)),
+      selected: _category == category,
+      onSelected: (_) {
+        FocusManager.instance.primaryFocus?.unfocus();
+        setState(() => _category = category);
+      },
     );
   }
 }
