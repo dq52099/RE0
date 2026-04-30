@@ -65,85 +65,90 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
               title: const Text('反馈与许愿'),
               content: SizedBox(
                 width: double.maxFinite,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
-                        controller: title,
-                        maxLength: 80,
-                        decoration: const InputDecoration(labelText: '标题'),
-                      ),
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          '类型',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
-                        child: SegmentedButton<String>(
-                          segments: feedbackTypes
-                              .map(
-                                (item) => ButtonSegment<String>(
-                                  value: item,
-                                  label: Text(feedbackTypeLabel(item)),
-                                  icon: Icon(
-                                    item == 'wish'
-                                        ? Icons.auto_awesome_outlined
-                                        : Icons.feedback_outlined,
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                          selected: {type},
-                          onSelectionChanged: (values) {
-                            FocusScope.of(context).unfocus();
-                            setDialogState(() => type = values.first);
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          '分类',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final dropdownWidth = constraints.maxWidth.isFinite &&
+                            constraints.maxWidth > 0
+                        ? constraints.maxWidth
+                        : 280.0;
+                    return SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          for (final item in feedbackCategories)
-                            ChoiceChip(
-                              showCheckmark: false,
-                              label: Text(feedbackCategoryLabel(item)),
-                              selected: category == item,
-                              onSelected: (_) {
+                          TextField(
+                            controller: title,
+                            maxLength: 80,
+                            decoration: const InputDecoration(labelText: '标题'),
+                          ),
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              '类型',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            child: SegmentedButton<String>(
+                              segments: feedbackTypes
+                                  .map(
+                                    (item) => ButtonSegment<String>(
+                                      value: item,
+                                      label: Text(feedbackTypeLabel(item)),
+                                      icon: Icon(
+                                        item == 'wish'
+                                            ? Icons.auto_awesome_outlined
+                                            : Icons.feedback_outlined,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              selected: {type},
+                              onSelectionChanged: (values) {
                                 FocusScope.of(context).unfocus();
-                                setDialogState(() => category = item);
+                                setDialogState(() => type = values.first);
                               },
                             ),
+                          ),
+                          const SizedBox(height: 14),
+                          CompactDropdownField<String>(
+                            label: '分类',
+                            value: category,
+                            width: dropdownWidth,
+                            menuWidth: dropdownWidth,
+                            selectedLabels: feedbackCategories
+                                .map(feedbackCategoryLabel)
+                                .toList(),
+                            items: [
+                              for (final item in feedbackCategories)
+                                CompactDropdownField.centeredItem<String>(
+                                  item,
+                                  feedbackCategoryLabel(item),
+                                  context,
+                                ),
+                            ],
+                            onChanged: (value) {
+                              if (value == null) return;
+                              setDialogState(() => category = value);
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: content,
+                            minLines: 4,
+                            maxLines: 8,
+                            maxLength: 1200,
+                            decoration: const InputDecoration(
+                              labelText: '内容',
+                              hintText: '描述遇到的问题、建议，或想新增的功能、模型、主题、参数',
+                            ),
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: content,
-                        minLines: 4,
-                        maxLines: 8,
-                        maxLength: 1200,
-                        decoration: const InputDecoration(
-                          labelText: '内容',
-                          hintText: '描述遇到的问题、建议，或想新增的功能、模型、主题、参数',
-                        ),
-                      ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
               ),
               actions: [
@@ -156,9 +161,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                     final nextTitle = title.text.trim();
                     final nextContent = content.text.trim();
                     if (nextTitle.isEmpty || nextContent.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('请填写标题和内容。')),
-                      );
+                      showCenterNotice(context, '请填写标题和内容。');
                       return;
                     }
                     Navigator.pop(context, {
@@ -195,8 +198,9 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
       showCenterNotice(context, '已提交，管理员处理后会在这里显示状态和回复');
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyError(error, fallback: '提交反馈失败。'))),
+      showCenterNotice(
+        context,
+        friendlyError(error, fallback: '提交反馈失败。'),
       );
     }
   }

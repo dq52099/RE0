@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api_error.dart';
 import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
+import '../../core/compact_save_notice.dart';
 import '../../core/providers.dart';
 import '../home/home_screen.dart';
 import 'register_screen.dart';
@@ -108,8 +109,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(friendlyError(e, fallback: '登录失败，请检查账号和密码。'))),
+        showCenterNotice(
+          context,
+          friendlyError(e, fallback: '登录失败，请检查账号和密码。'),
         );
       }
     } finally {

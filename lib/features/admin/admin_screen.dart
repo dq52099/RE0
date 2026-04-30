@@ -308,6 +308,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               final userId = user['id']?.toString() ?? '';
               final canDelete =
                   canManage && userId.isNotEmpty && userId != currentUserId;
+              final generateQuota = _quotaBrief('生图', _map(quota['generate']));
+              final editQuota = _quotaBrief('改图', _map(quota['edit']));
               return _infoCard(
                 title:
                     '${_text(user['display_name'])} (${_text(user['username'])})',
@@ -335,10 +337,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                       )
                     : null,
                 lines: [
-                  _quotaLine('生图', _map(quota['generate'])),
-                  _quotaLine('改图', _map(quota['edit'])),
-                  '生图保留: ${_text(retention['generate'])}',
-                  '改图保留: ${_text(retention['edit'])}',
+                  '$generateQuota · $editQuota',
+                  '保留 生图 ${_text(retention['generate'])} / 改图 ${_text(retention['edit'])}',
                 ],
               );
             }),
@@ -1102,10 +1102,18 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       ),
     );
     if (confirmed != true) return;
-    await _save(
-      () => ref.read(gatewayClientProvider).deleteAdminUser(userId),
-      '用户已删除。',
-    );
+    try {
+      await ref.read(gatewayClientProvider).deleteAdminUser(userId);
+      if (!mounted) return;
+      _showMessage('用户已删除，列表已刷新。');
+      setState(() {
+        _usersPageIndex = 1;
+        _revision += 1;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage(friendlyError(error, fallback: '删除用户失败。'), isError: true);
+    }
   }
 
   Future<void> _editGroup(Map<String, dynamic>? group) async {
@@ -1821,11 +1829,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         .toSet();
   }
 
-  String _quotaLine(String label, Map<String, dynamic> quota) {
+  String _quotaBrief(String label, Map<String, dynamic> quota) {
     if (quota['is_unlimited'] == true) {
-      return '$label: 无限，已用 ${_text(quota['used'], fallback: '0')}';
+      return '$label 无限/已用 ${_text(quota['used'], fallback: '0')}';
     }
-    return '$label: ${_text(quota['total'], fallback: '0')} / 已用 ${_text(quota['used'], fallback: '0')} / 剩余 ${_text(quota['remaining'], fallback: '0')}';
+    return '$label ${_text(quota['remaining'], fallback: '0')}/${_text(quota['total'], fallback: '0')}';
   }
 
   int? _nullableInt(String value) {

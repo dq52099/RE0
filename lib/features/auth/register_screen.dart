@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_error.dart';
 import '../../core/brand_background.dart';
+import '../../core/compact_save_notice.dart';
 import '../../core/providers.dart';
 import '../home/home_screen.dart';
 
@@ -123,8 +124,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyError(error, fallback: '注册失败，请稍后重试。'))),
+      showCenterNotice(
+        context,
+        friendlyError(error, fallback: '注册失败，请稍后重试。'),
       );
     } finally {
       if (mounted) {
