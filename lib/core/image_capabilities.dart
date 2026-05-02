@@ -240,13 +240,24 @@ String resolveSizeForResolutionAndAspect(
   List<ImageOption> sizes,
   String tier,
   String aspectRatio,
+  String autoAspectRatio,
 ) {
+  if (tier == 'auto' && aspectRatio == 'auto') {
+    return _firstSizeValue(sizes, 'auto');
+  }
   if (tier == 'auto') {
+    final ratioMatches =
+        sizes.where((item) => _sizeRatio(item.value) == aspectRatio);
+    if (ratioMatches.isNotEmpty) return ratioMatches.first.value;
     return _firstSizeValue(sizes, 'auto');
   }
   if (aspectRatio == 'auto') {
     return defaultSizeForResolution(
-        sizes, tier, _firstSizeValue(sizes, 'auto'));
+      sizes,
+      tier,
+      _firstSizeValue(sizes, 'auto'),
+      autoAspectRatio,
+    );
   }
   final exactTierMatches = sizes.where(
     (item) =>
@@ -266,9 +277,13 @@ String defaultSizeForResolution(
   List<ImageOption> sizes,
   String tier,
   String fallback,
+  String preferredAspectRatio,
 ) {
   final filtered = filterSizeOptionsByResolution(sizes, tier);
   if (filtered.isEmpty) return fallback;
+  final preferred =
+      filtered.where((item) => _sizeRatio(item.value) == preferredAspectRatio);
+  if (preferred.isNotEmpty) return preferred.first.value;
   final square = filtered.where((item) => _sizeRatio(item.value) == '1:1');
   return (square.isNotEmpty ? square.first : filtered.first).value;
 }

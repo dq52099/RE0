@@ -19,6 +19,15 @@ enum _PromptAssistMode {
   image,
 }
 
+String _defaultAspectRatioForDevice(BuildContext context) {
+  final media = MediaQuery.of(context);
+  final size = media.size;
+  final shortestSide = size.shortestSide;
+  final isPortrait = size.height >= size.width;
+  if (isPortrait || shortestSide < 600) return '9:16';
+  return '16:9';
+}
+
 class MaterializerScreen extends ConsumerStatefulWidget {
   const MaterializerScreen({super.key});
 
@@ -33,6 +42,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
   int _count = 1;
   String _resolutionTier = 'auto';
   String _aspectRatio = 'auto';
+  bool _didApplyDeviceAspectDefault = false;
   String _quality = 'high';
   String _background = 'auto';
   String _outputFormat = 'png';
@@ -54,6 +64,14 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     _spellController.dispose();
     _ideaController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didApplyDeviceAspectDefault) return;
+    _didApplyDeviceAspectDefault = true;
+    _aspectRatio = _defaultAspectRatioForDevice(context);
   }
 
   void _dismissPromptAssistFocus([BuildContext? focusContext]) {
@@ -258,6 +276,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
       options.sizes,
       _resolutionTier,
       _aspectRatio,
+      _defaultAspectRatioForDevice(context),
     );
     final quality =
         _safeValue(_quality, options.qualities, options.defaultQuality);

@@ -13,6 +13,15 @@ import '../../core/providers.dart';
 import '../../core/timezone_reset_hint.dart';
 import '../compendium/image_preview_screen.dart';
 
+String _defaultAspectRatioForDevice(BuildContext context) {
+  final media = MediaQuery.of(context);
+  final size = media.size;
+  final shortestSide = size.shortestSide;
+  final isPortrait = size.height >= size.width;
+  if (isPortrait || shortestSide < 600) return '9:16';
+  return '16:9';
+}
+
 class ChronogearScreen extends ConsumerStatefulWidget {
   const ChronogearScreen({super.key});
 
@@ -26,6 +35,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
   int _count = 1;
   String _resolutionTier = 'auto';
   String _aspectRatio = 'auto';
+  bool _didApplyDeviceAspectDefault = false;
   String _quality = 'high';
   String _background = 'auto';
   String _outputFormat = 'png';
@@ -35,6 +45,14 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
   void dispose() {
     _spellController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didApplyDeviceAspectDefault) return;
+    _didApplyDeviceAspectDefault = true;
+    _aspectRatio = _defaultAspectRatioForDevice(context);
   }
 
   Future<void> _pickImage() async {
@@ -57,6 +75,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
       options.sizes,
       _resolutionTier,
       _aspectRatio,
+      _defaultAspectRatioForDevice(context),
     );
     final quality =
         _safeValue(_quality, options.qualities, options.defaultQuality);
