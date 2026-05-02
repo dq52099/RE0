@@ -19,6 +19,22 @@ const imageResolutionTiers = [
   ImageResolutionTier(value: '4k', label: '4K'),
 ];
 
+class ImageAspectRatioOption {
+  const ImageAspectRatioOption({required this.value, required this.label});
+
+  final String value;
+  final String label;
+}
+
+const imageAspectRatioOptions = [
+  ImageAspectRatioOption(value: 'auto', label: '自动'),
+  ImageAspectRatioOption(value: '1:1', label: '1:1 方图'),
+  ImageAspectRatioOption(value: '4:3', label: '4:3 横图'),
+  ImageAspectRatioOption(value: '3:4', label: '3:4 竖图'),
+  ImageAspectRatioOption(value: '16:9', label: '16:9 横图'),
+  ImageAspectRatioOption(value: '9:16', label: '9:16 竖图'),
+];
+
 class ImageActionOptions {
   const ImageActionOptions({
     required this.sizes,
@@ -61,6 +77,10 @@ class ImageCapabilities {
     const sizes = [
       ImageOption(value: 'auto', label: '自动'),
       ImageOption(value: '1024x1024', label: '1024 × 1024'),
+      ImageOption(value: '1024x768', label: '1024 × 768'),
+      ImageOption(value: '768x1024', label: '768 × 1024'),
+      ImageOption(value: '1024x576', label: '1024 × 576'),
+      ImageOption(value: '576x1024', label: '576 × 1024'),
       ImageOption(value: '1536x1024', label: '1536 × 1024'),
       ImageOption(value: '1024x1536', label: '1024 × 1536'),
       ImageOption(value: '2048x2048', label: '2048 × 2048'),
@@ -216,6 +236,28 @@ List<ImageOption> filterSizeOptionsByResolution(
       sizes.where((item) => item.value != 'auto').toList());
 }
 
+String resolveSizeForResolutionAndAspect(
+  List<ImageOption> sizes,
+  String tier,
+  String aspectRatio,
+) {
+  if (tier == 'auto' || aspectRatio == 'auto') {
+    return _firstSizeValue(sizes, 'auto');
+  }
+  final exactTierMatches = sizes.where(
+    (item) =>
+        _belongsToResolutionTier(item.value, tier) &&
+        _sizeRatio(item.value) == aspectRatio,
+  );
+  if (exactTierMatches.isNotEmpty) return exactTierMatches.first.value;
+
+  final ratioMatches =
+      sizes.where((item) => _sizeRatio(item.value) == aspectRatio);
+  if (ratioMatches.isNotEmpty) return ratioMatches.first.value;
+
+  return _firstSizeValue(sizes, 'auto');
+}
+
 String defaultSizeForResolution(
   List<ImageOption> sizes,
   String tier,
@@ -252,6 +294,25 @@ String _sizeRatio(String value) {
   if (width <= 0 || height <= 0) return '';
   final divisor = width.gcd(height);
   return '${width ~/ divisor}:${height ~/ divisor}';
+}
+
+bool _belongsToResolutionTier(String value, String tier) {
+  final match = RegExp(r'^(\d+)x(\d+)$').firstMatch(value.trim().toLowerCase());
+  if (match == null) return false;
+  final width = int.tryParse(match.group(1) ?? '') ?? 0;
+  final height = int.tryParse(match.group(2) ?? '') ?? 0;
+  final longest = width > height ? width : height;
+  if (tier == '1k') return longest > 0 && longest < 2048;
+  if (tier == '2k') return longest == 2048;
+  if (tier == '4k') return longest >= 3840;
+  return tier == 'auto' && value == 'auto';
+}
+
+String _firstSizeValue(List<ImageOption> sizes, String preferred) {
+  for (final item in sizes) {
+    if (item.value == preferred) return item.value;
+  }
+  return sizes.isEmpty ? preferred : sizes.first.value;
 }
 
 List<ImageOption> _dedupeSizesByRatio(List<ImageOption> sizes) {

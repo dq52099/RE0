@@ -1512,6 +1512,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     controller: externalBase,
                     decoration: const InputDecoration(labelText: '外部访问地址')),
                 const SizedBox(height: 12),
+                _settingsSectionTitle('VIP 模式上游'),
+                const SizedBox(height: 8),
                 TextField(
                     controller: providerBase,
                     decoration:
@@ -1534,7 +1536,23 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 const SizedBox(height: 12),
                 TextField(
                     controller: providerModel,
-                    decoration: const InputDecoration(labelText: 'VIP 模型')),
+                    decoration: const InputDecoration(
+                      labelText: 'VIP 模型',
+                      helperText: '用于 VIP 模式的 Responses 文本调度和图片工具调用',
+                    )),
+                const SizedBox(height: 12),
+                _stringDropdown(
+                    'VIP 图片档位',
+                    profile,
+                    const ['gpt-image-2', 'codex-gpt-image-2', 'gpt-image-1'],
+                    (value) => setDialogState(() => profile = value)),
+                const SizedBox(height: 12),
+                TextField(
+                    controller: providerTimeout,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: '超时时间秒')),
+                const SizedBox(height: 18),
+                _settingsSectionTitle('一般模式上游'),
                 const SizedBox(height: 12),
                 TextField(
                   controller: generalProviderBase,
@@ -1550,14 +1568,22 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: generalProviderModel,
-                  decoration: const InputDecoration(labelText: '一般模式文本模型'),
+                  decoration: const InputDecoration(
+                    labelText: '一般模式文本模型',
+                    helperText: '用于普通模式文本探活；图片生成实际使用下面的图片模型',
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: generalProviderImageModel,
-                  decoration: const InputDecoration(labelText: '一般模式图片模型'),
+                  decoration: const InputDecoration(
+                    labelText: '一般模式图片模型',
+                    helperText: '用于普通模式 /v1/images 生图和改图',
+                  ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 18),
+                _settingsSectionTitle('通用生成设置'),
+                const SizedBox(height: 8),
                 _stringDropdown(
                     '当前线路',
                     activeProviderSlot,
@@ -1576,17 +1602,6 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     controller: providerHealthcheckInterval,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(labelText: '探活间隔分钟')),
-                const SizedBox(height: 12),
-                _stringDropdown(
-                    '图片档位',
-                    profile,
-                    const ['gpt-image-2', 'codex-gpt-image-2', 'gpt-image-1'],
-                    (value) => setDialogState(() => profile = value)),
-                const SizedBox(height: 12),
-                TextField(
-                    controller: providerTimeout,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: '超时时间秒')),
                 const SizedBox(height: 12),
                 _stringDropdown(
                     '响应格式',
@@ -1968,6 +1983,20 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       if (!mounted) return;
       _showMessage(friendlyError(error, fallback: '上游测活失败。'), isError: true);
     }
+  }
+
+  Widget _settingsSectionTitle(String title) {
+    final scheme = Theme.of(context).colorScheme;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Text(
+        title,
+        style: TextStyle(
+          fontWeight: FontWeight.w700,
+          color: scheme.primary,
+        ),
+      ),
+    );
   }
 
   Future<void> _showProviderHealthResult(Map<String, dynamic> result) async {

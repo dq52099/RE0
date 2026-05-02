@@ -24,8 +24,8 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
   final TextEditingController _spellController = TextEditingController();
   File? _imageFile;
   int _count = 1;
-  String _size = 'auto';
   String _resolutionTier = 'auto';
+  String _aspectRatio = 'auto';
   String _quality = 'high';
   String _background = 'auto';
   String _outputFormat = 'png';
@@ -53,13 +53,10 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     final capabilities = ref.watch(imageCapabilitiesProvider).valueOrNull ??
         ImageCapabilities.fallback();
     final options = capabilities.edit;
-    final sizeOptions =
-        filterSizeOptionsByResolution(options.sizes, _resolutionTier);
-    final size = _safeValue(
-      _size,
-      sizeOptions,
-      defaultSizeForResolution(
-          options.sizes, _resolutionTier, options.defaultSize),
+    final size = resolveSizeForResolutionAndAspect(
+      options.sizes,
+      _resolutionTier,
+      _aspectRatio,
     );
     final quality =
         _safeValue(_quality, options.qualities, options.defaultQuality);
@@ -135,8 +132,6 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                 _buildTaskNotice('生图任务正在进行，请等待完成后再开始改图。'),
               ],
               const SizedBox(height: 16),
-              _buildResolutionSelector(brand, options.sizes),
-              const SizedBox(height: 12),
               LayoutBuilder(
                 builder: (context, constraints) {
                   final fieldWidth = (constraints.maxWidth - 12) / 2;
@@ -165,15 +160,16 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: _dropdownField<String>(
-                          label: '尺寸',
-                          value: size,
+                          label: '清晰度',
+                          value: _resolutionTier,
                           width: fieldWidth,
                           menuWidth: menuWidth,
-                          items: _sizeItems(sizeOptions),
-                          selectedLabels: sizeOptions
-                              .map((item) => decoratedSizeLabel(item))
+                          items: _resolutionItems(),
+                          selectedLabels: imageResolutionTiers
+                              .map((item) => item.label)
                               .toList(),
-                          onChanged: (value) => setState(() => _size = value!),
+                          onChanged: (value) =>
+                              setState(() => _resolutionTier = value!),
                         ),
                       ),
                     ],
@@ -189,6 +185,21 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                     children: [
                       Expanded(
                         child: _dropdownField<String>(
+                          label: '尺寸',
+                          value: _aspectRatio,
+                          width: fieldWidth,
+                          menuWidth: menuWidth,
+                          items: _aspectItems(),
+                          selectedLabels: imageAspectRatioOptions
+                              .map((item) => item.label)
+                              .toList(),
+                          onChanged: (value) =>
+                              setState(() => _aspectRatio = value!),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _dropdownField<String>(
                           label: '质量',
                           value: quality,
                           width: fieldWidth,
@@ -201,7 +212,17 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                               setState(() => _quality = value!),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final fieldWidth = (constraints.maxWidth - 12) / 2;
+                  final menuWidth = fieldWidth;
+                  return Row(
+                    children: [
                       Expanded(
                         child: _dropdownField<String>(
                           label: '背景',
@@ -216,24 +237,22 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                               setState(() => _background = value!),
                         ),
                       ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _dropdownField<String>(
+                          label: '输出格式',
+                          value: outputFormat,
+                          width: fieldWidth,
+                          menuWidth: menuWidth,
+                          items: _items(capabilities.outputFormats),
+                          selectedLabels: capabilities.outputFormats
+                              .map((item) => item.label)
+                              .toList(),
+                          onChanged: (value) =>
+                              setState(() => _outputFormat = value!),
+                        ),
+                      ),
                     ],
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  return _dropdownField<String>(
-                    label: '输出格式',
-                    value: outputFormat,
-                    width: constraints.maxWidth,
-                    menuWidth: constraints.maxWidth,
-                    items: _items(capabilities.outputFormats),
-                    selectedLabels: capabilities.outputFormats
-                        .map((item) => item.label)
-                        .toList(),
-                    onChanged: (value) =>
-                        setState(() => _outputFormat = value!),
                   );
                 },
               ),
@@ -377,41 +396,24 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     );
   }
 
-  Widget _buildResolutionSelector(AppBrand brand, List<ImageOption> sizes) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('清晰度', style: Theme.of(context).textTheme.bodyMedium),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: imageResolutionTiers.map((tier) {
-            final selected = _resolutionTier == tier.value;
-            return ChoiceChip(
-              label: Text(tier.label),
-              selected: selected,
-              onSelected: (_) => setState(() {
-                _resolutionTier = tier.value;
-                _size = defaultSizeForResolution(
-                  sizes,
-                  tier.value,
-                  sizes.isEmpty ? 'auto' : sizes.first.value,
-                );
-              }),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  List<DropdownMenuItem<String>> _sizeItems(List<ImageOption> options) {
-    return options
+  List<DropdownMenuItem<String>> _resolutionItems() {
+    return imageResolutionTiers
         .map(
           (item) => CompactDropdownField.centeredItem<String>(
             item.value,
-            decoratedSizeLabel(item),
+            item.label,
+            context,
+          ),
+        )
+        .toList();
+  }
+
+  List<DropdownMenuItem<String>> _aspectItems() {
+    return imageAspectRatioOptions
+        .map(
+          (item) => CompactDropdownField.centeredItem<String>(
+            item.value,
+            item.label,
             context,
           ),
         )
