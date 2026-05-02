@@ -2,28 +2,41 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:re0/core/prompt_assist.dart';
 
 void main() {
-  group('buildEditPromptIdeaRequest', () {
-    test('returns empty string when idea is blank', () {
-      expect(buildEditPromptIdeaRequest('   ', const ['a']), '');
-    });
+  group('parsePromptCandidates', () {
+    test('parses candidates from raw json text', () {
+      const raw =
+          '{"candidates":["古风国风人物海报，一位灵动少女主角站在画面中央","东方玄幻角色设定图，中心全身像为一名清冷美丽的古装少女","古典仙侠人物志封面，主视觉是一位仙气少女置于中央"]}';
 
-    test('returns plain idea when no image candidates exist', () {
       expect(
-        buildEditPromptIdeaRequest('保留人物姿态，改成雨夜霓虹感', const []),
-        '保留人物姿态，改成雨夜霓虹感',
+        parsePromptCandidates(raw),
+        [
+          '古风国风人物海报，一位灵动少女主角站在画面中央',
+          '东方玄幻角色设定图，中心全身像为一名清冷美丽的古装少女',
+          '古典仙侠人物志封面，主视觉是一位仙气少女置于中央',
+        ],
       );
     });
 
-    test('builds merged request with numbered image traits', () {
-      final text = buildEditPromptIdeaRequest(
-        '保留人物姿态，改成雨夜霓虹感',
-        const ['少女站在街道中央，冷色霓虹灯', '长发、风衣、电影感逆光'],
-      );
+    test('parses candidates when json text is nested in candidates', () {
+      const raw =
+          '{"candidates":["古风国风人物海报，一位灵动少女主角站在画面中央","东方玄幻角色设定图，中心全身像为一名清冷美丽的古装少女","古典仙侠人物志封面，主视觉是一位仙气少女置于中央"]}';
 
-      expect(text, contains('用户简单想法：保留人物姿态，改成雨夜霓虹感'));
-      expect(text, contains('1. 少女站在街道中央，冷色霓虹灯'));
-      expect(text, contains('2. 长发、风衣、电影感逆光'));
-      expect(text, contains('生成 3 条适合图片编辑的中文提示词候选'));
+      expect(
+        parsePromptCandidates({
+          'candidates': [raw]
+        }),
+        [
+          '古风国风人物海报，一位灵动少女主角站在画面中央',
+          '东方玄幻角色设定图，中心全身像为一名清冷美丽的古装少女',
+          '古典仙侠人物志封面，主视觉是一位仙气少女置于中央',
+        ],
+      );
+    });
+
+    test('does not expose unresolved json as a single candidate', () {
+      const malformed = '{"candidates":["一条候选",';
+
+      expect(parsePromptCandidates(malformed), isEmpty);
     });
   });
 }

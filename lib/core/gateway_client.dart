@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:cookie_jar/cookie_jar.dart';
@@ -219,10 +217,15 @@ class GatewayClient {
     }, fallback: 'AI 生成咒文失败。');
   }
 
-  Future<List<String>> identifyImagePromptCandidates(String imagePath) async {
+  Future<List<String>> identifyImagePromptCandidates(
+    String imagePath, {
+    String? idea,
+  }) async {
     return _guard(() async {
+      final ideaText = idea?.trim();
       final formData = FormData.fromMap({
         'count': 3,
+        if (ideaText != null && ideaText.isNotEmpty) 'idea': ideaText,
         'image': await MultipartFile.fromFile(imagePath),
       });
       final res = await _dio.post(
@@ -241,13 +244,7 @@ class GatewayClient {
     if (ideaText.isEmpty) return const [];
 
     try {
-      final imageCandidates = await identifyImagePromptCandidates(imagePath);
-      final mergedIdea = buildEditPromptIdeaRequest(ideaText, imageCandidates);
-      final mergedCandidates = await generatePromptCandidates(mergedIdea);
-      if (mergedCandidates.isNotEmpty) {
-        return mergedCandidates;
-      }
-      return imageCandidates.take(3).toList();
+      return await identifyImagePromptCandidates(imagePath, idea: ideaText);
     } catch (error) {
       throw gatewayException(error, fallback: '结合图片推荐提示词失败。');
     }
@@ -857,101 +854,7 @@ class GatewayClient {
   }
 
   List<String> _promptCandidates(dynamic data) {
-    final values = <String>[];
-
-    void collect(dynamic value) {
-      if (value == null) return;
-      if (value is String) {
-        values.addAll(_splitCandidateText(value));
-        return;
-      }
-      if (value is List) {
-        for (final item in value) {
-          collect(item);
-        }
-        return;
-      }
-      if (value is Map) {
-        for (final key in [
-          'prompt',
-          'text',
-          'content',
-          'message',
-          'candidates',
-          'prompts',
-          'data',
-          'items',
-          'results',
-          'choices',
-        ]) {
-          final raw = value[key];
-          if (raw == null) continue;
-          if (key == 'message' && raw is Map) {
-            collect(raw['content']);
-          } else {
-            collect(raw);
-          }
-        }
-      }
-    }
-
-    collect(data);
-    final seen = <String>{};
-    return values
-        .map((item) => item.trim())
-        .where((item) => item.isNotEmpty)
-        .where((item) => seen.add(item))
-        .take(3)
-        .toList();
-  }
-
-  List<String> _splitCandidateText(String text) {
-    final normalized = text.trim();
-    if (normalized.isEmpty) return const [];
-    final decoded = _tryDecodeCandidateJson(normalized);
-    if (decoded != null) {
-      final values = _promptCandidates(decoded);
-      if (values.isNotEmpty) return values;
-    }
-    final lines = normalized
-        .split(RegExp(r'\n+'))
-        .map((line) =>
-            line.replaceFirst(RegExp(r'^\s*(?:[-*]|\d+[.)、])\s*'), '').trim())
-        .where((line) => line.isNotEmpty)
-        .toList();
-    if (lines.length >= 3) {
-      return lines.take(3).toList();
-    }
-    return [normalized];
-  }
-
-  dynamic _tryDecodeCandidateJson(String text) {
-    String raw = text.trim();
-    if (raw.startsWith('```')) {
-      raw =
-          raw.replaceAll(RegExp(r'^```(?:json)?\s*', caseSensitive: false), '');
-      raw = raw.replaceAll(RegExp(r'\s*```$'), '').trim();
-    }
-    for (final candidate in [
-      raw,
-      _substringBetween(raw, '{', '}'),
-      _substringBetween(raw, '[', ']'),
-    ]) {
-      if (candidate == null || candidate.trim().isEmpty) continue;
-      try {
-        return jsonDecode(candidate);
-      } catch (_) {
-        continue;
-      }
-    }
-    return null;
-  }
-
-  String? _substringBetween(String text, String startToken, String endToken) {
-    final start = text.indexOf(startToken);
-    final end = text.lastIndexOf(endToken);
-    if (start < 0 || end <= start) return null;
-    return text.substring(start, end + 1);
+    return parsePromptCandidates(data);
   }
 
   Future<Map<String, dynamic>> _getMap(
