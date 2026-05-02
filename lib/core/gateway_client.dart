@@ -716,6 +716,18 @@ class GatewayClient {
     }, fallback: '探测图片尺寸失败。');
   }
 
+  Future<Map<String, dynamic>> providerHealthcheck({
+    bool applySwitch = false,
+  }) async {
+    return _guard(() async {
+      final res = await _dio.post(
+        '/api/admin/provider-healthcheck',
+        data: {'apply_switch': applySwitch},
+      );
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '上游测活失败。');
+  }
+
   Future<List<dynamic>> adminApiKeys() async {
     return _getList('/api/admin/api-keys', fallback: '读取 API Key 失败。');
   }

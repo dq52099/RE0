@@ -23,6 +23,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   static const _defaultAiBaseUrl = 'https://2c2ch1u11-share-api-0.hf.space/v1';
   static const _feedbackAiModel = 'deepseek-v4-flash';
   static const _promptAiModel = 'gpt-5.4-mini';
+  static const _generalProviderBaseUrl = 'http://10.0.1.70:18088/v1';
+  static const _generalProviderModel = 'gpt-5.4-mini';
+  static const _generalProviderImageModel = 'gpt-image-1';
   static const _usersPageSize = 20;
   static const _invitesPageSize = 30;
 
@@ -310,6 +313,13 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   canManage && userId.isNotEmpty && userId != currentUserId;
               final generateQuota = _quotaBrief('生图', _map(quota['generate']));
               final editQuota = _quotaBrief('改图', _map(quota['edit']));
+              final mode = _imageModeLabel(_text(
+                user['effective_image_mode'],
+                fallback: _text(user['image_mode'], fallback: 'vip'),
+              ));
+              final overrideMode = _imageModeOverrideLabel(
+                _text(user['image_mode_override'], fallback: ''),
+              );
               return _infoCard(
                 title:
                     '${_text(user['display_name'])} (${_text(user['username'])})',
@@ -337,6 +347,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                       )
                     : null,
                 lines: [
+                  '生图模式: $mode · $overrideMode',
                   '$generateQuota · $editQuota',
                   '保留 生图 ${_text(retention['generate'])} / 改图 ${_text(retention['edit'])}',
                 ],
@@ -491,6 +502,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     )
                   : null,
               lines: [
+                '默认生图模式: ${_imageModeLabel(_text(group['image_mode'], fallback: 'vip'))}',
                 '默认生图额度: ${_text(group['default_generate_quota'])}',
                 '默认改图额度: ${_text(group['default_edit_quota'])}',
                 '默认生图保留: ${_text(group['default_generate_history_retention'])}',
@@ -612,6 +624,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                       onPressed: _probeCapabilities,
                       icon: const Icon(Icons.radar),
                       label: const Text('探测尺寸'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _probeProviderHealth,
+                      icon: const Icon(Icons.monitor_heart_outlined),
+                      label: const Text('上游测活'),
                     ),
                   ],
                 )
@@ -978,6 +995,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       user?['group_id'],
       fallback: data.groups.isEmpty ? '' : _text(data.groups.first['id']),
     );
+    var imageModeOverride = _text(user?['image_mode_override'], fallback: '');
+    if (!const ['', 'vip', 'general'].contains(imageModeOverride)) {
+      imageModeOverride = '';
+    }
     var active = user?['is_active'] != false;
     var canEditUsername = user?['can_edit_username'] != false;
 
@@ -1018,6 +1039,18 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   value: groupId,
                   items: data.groups,
                   onChanged: (value) => setDialogState(() => groupId = value),
+                ),
+                const SizedBox(height: 12),
+                _stringDropdown(
+                  '生图模式',
+                  imageModeOverride,
+                  const ['', 'vip', 'general'],
+                  (value) => setDialogState(() => imageModeOverride = value),
+                  labels: const {
+                    '': '跟随用户组',
+                    'vip': 'VIP模式',
+                    'general': '一般模式',
+                  },
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -1069,6 +1102,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     'display_name': displayName.text.trim(),
                     'role_id': roleId,
                     'group_id': groupId,
+                    'image_mode_override':
+                        imageModeOverride.isEmpty ? null : imageModeOverride,
                     'is_active': active,
                     'can_edit_username': canEditUsername,
                     'generate_quota_total_override':
@@ -1153,6 +1188,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final editHistoryRetention = TextEditingController(
       text: _text(group?['default_edit_history_retention'], fallback: '3'),
     );
+    var imageMode = _text(group?['image_mode'], fallback: 'vip');
+    if (!const ['vip', 'general'].contains(imageMode)) {
+      imageMode = 'vip';
+    }
     var active = group?['is_active'] != false;
     final payload = await _basicEntityDialog(
       title: group == null ? '新增用户组' : '编辑用户组',
@@ -1179,6 +1218,16 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           keyboardType: TextInputType.number,
           decoration: const InputDecoration(labelText: '默认改图历史保留'),
         ),
+        _stringDropdown(
+          '默认生图模式',
+          imageMode,
+          const ['vip', 'general'],
+          (value) => imageMode = value,
+          labels: const {
+            'vip': 'VIP模式',
+            'general': '一般模式',
+          },
+        ),
       ],
       active: active,
       onActiveChanged: (value) => active = value,
@@ -1191,6 +1240,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
             int.tryParse(generateHistoryRetention.text) ?? 0,
         'default_edit_history_retention':
             int.tryParse(editHistoryRetention.text) ?? 0,
+        'image_mode': imageMode,
         'is_active': active,
       },
     );
@@ -1347,6 +1397,28 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final providerBackupKey = TextEditingController();
     final providerModel =
         TextEditingController(text: _settingValue(byKey, 'provider_model'));
+    final generalProviderBase = TextEditingController(
+      text: _settingValue(
+        byKey,
+        'general_provider_base_url',
+        fallback: _generalProviderBaseUrl,
+      ),
+    );
+    final generalProviderKey = TextEditingController();
+    final generalProviderModel = TextEditingController(
+      text: _settingValue(
+        byKey,
+        'general_provider_model',
+        fallback: _generalProviderModel,
+      ),
+    );
+    final generalProviderImageModel = TextEditingController(
+      text: _settingValue(
+        byKey,
+        'general_provider_image_model',
+        fallback: _generalProviderImageModel,
+      ),
+    );
     final providerTimeout = TextEditingController(
         text: _settingValue(byKey, 'provider_timeout_seconds'));
     final providerHealthcheckInterval = TextEditingController(
@@ -1462,7 +1534,29 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 const SizedBox(height: 12),
                 TextField(
                     controller: providerModel,
-                    decoration: const InputDecoration(labelText: '模型')),
+                    decoration: const InputDecoration(labelText: 'VIP 模型')),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: generalProviderBase,
+                  decoration: const InputDecoration(labelText: '一般模式 base_url'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: generalProviderKey,
+                  obscureText: true,
+                  decoration:
+                      const InputDecoration(labelText: '一般模式 Key，留空不修改'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: generalProviderModel,
+                  decoration: const InputDecoration(labelText: '一般模式文本模型'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: generalProviderImageModel,
+                  decoration: const InputDecoration(labelText: '一般模式图片模型'),
+                ),
                 const SizedBox(height: 12),
                 _stringDropdown(
                     '当前线路',
@@ -1615,6 +1709,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   'provider_healthcheck_interval_minutes':
                       int.tryParse(providerHealthcheckInterval.text),
                   'provider_model': providerModel.text.trim(),
+                  'general_provider_base_url': generalProviderBase.text.trim(),
+                  if (generalProviderKey.text.trim().isNotEmpty)
+                    'general_provider_api_key': generalProviderKey.text.trim(),
+                  'general_provider_model': generalProviderModel.text.trim(),
+                  'general_provider_image_model':
+                      generalProviderImageModel.text.trim(),
                   'provider_image_profile': profile,
                   'provider_timeout_seconds':
                       int.tryParse(providerTimeout.text),
@@ -1833,15 +1933,16 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     String label,
     String value,
     List<String> items,
-    void Function(String value) onChanged,
-  ) {
+    void Function(String value) onChanged, {
+    Map<String, String> labels = const {},
+  }) {
     final safeValue = items.contains(value) ? value : items.first;
     return DropdownButtonFormField<String>(
       initialValue: safeValue,
       decoration: InputDecoration(labelText: label),
       items: items
-          .map((item) =>
-              DropdownMenuItem<String>(value: item, child: Text(item)))
+          .map((item) => DropdownMenuItem<String>(
+              value: item, child: Text(labels[item] ?? item)))
           .toList(),
       onChanged: (value) {
         if (value != null) onChanged(value);
@@ -1853,6 +1954,70 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     await _save(
       () => ref.read(gatewayClientProvider).probeImageCapabilities(),
       '图片尺寸探测已完成。',
+    );
+  }
+
+  Future<void> _probeProviderHealth() async {
+    try {
+      final result =
+          await ref.read(gatewayClientProvider).providerHealthcheck();
+      if (!mounted) return;
+      await _showProviderHealthResult(result);
+      _reload();
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage(friendlyError(error, fallback: '上游测活失败。'), isError: true);
+    }
+  }
+
+  Future<void> _showProviderHealthResult(Map<String, dynamic> result) async {
+    final checks = _map(result['checks']);
+    final current = _text(result['current_slot'], fallback: 'primary');
+    final recommended = _text(result['recommended_slot'], fallback: current);
+    final shouldSwitch = recommended != current;
+    final apply = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('上游测活'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _healthLine('主用', _map(checks['primary'])),
+            const SizedBox(height: 8),
+            _healthLine('备用', _map(checks['backup'])),
+            const SizedBox(height: 12),
+            Text('当前线路: $current，建议线路: $recommended'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('关闭'),
+          ),
+          if (shouldSwitch)
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('切换到建议线路'),
+            ),
+        ],
+      ),
+    );
+    if (apply != true) return;
+    final switched = await ref
+        .read(gatewayClientProvider)
+        .providerHealthcheck(applySwitch: true);
+    if (!mounted) return;
+    final newSlot = _text(switched['recommended_slot'], fallback: recommended);
+    _showMessage('已切换到 $newSlot。');
+  }
+
+  Widget _healthLine(String label, Map<String, dynamic> item) {
+    final ok = item['ok'] == true;
+    final configured = item['configured'] == true;
+    final detail = _text(item['detail'], fallback: configured ? '-' : '未配置');
+    return Text(
+      '$label: ${ok ? '可用' : '不可用'} · ${_text(item['base_url'], fallback: '-')} · $detail',
     );
   }
 
@@ -1916,6 +2081,22 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     return '$label ${_text(quota['remaining'], fallback: '0')}/${_text(quota['total'], fallback: '0')}';
   }
 
+  String _imageModeLabel(String mode) {
+    switch (mode) {
+      case 'general':
+        return '一般模式';
+      case 'vip':
+        return 'VIP模式';
+      default:
+        return 'VIP模式';
+    }
+  }
+
+  String _imageModeOverrideLabel(String mode) {
+    if (mode.trim().isEmpty || mode == '-') return '跟随用户组';
+    return '用户指定 ${_imageModeLabel(mode)}';
+  }
+
   int? _nullableInt(String value) {
     final text = value.trim();
     if (text.isEmpty) return null;
@@ -1956,6 +2137,26 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         'key': 'provider_healthcheck_interval_minutes',
         'value': '60',
         'description': '上游文本探活间隔分钟',
+      },
+      {
+        'key': 'general_provider_base_url',
+        'value': _generalProviderBaseUrl,
+        'description': '一般模式 OpenAI 兼容服务地址',
+      },
+      {
+        'key': 'general_provider_api_key',
+        'value': 'xxx',
+        'description': '一般模式 API Key',
+      },
+      {
+        'key': 'general_provider_model',
+        'value': _generalProviderModel,
+        'description': '一般模式文本模型',
+      },
+      {
+        'key': 'general_provider_image_model',
+        'value': _generalProviderImageModel,
+        'description': '一般模式图片模型',
       },
       {
         'key': 'feedback_ai_api_key',
