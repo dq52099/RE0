@@ -6,6 +6,7 @@ import 'package:cookie_jar/cookie_jar.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'api_error.dart';
+import 'prompt_assist.dart';
 
 class GatewayClient {
   static const Duration _imageRequestTimeout = Duration(minutes: 20);
@@ -230,6 +231,26 @@ class GatewayClient {
       );
       return _promptCandidates(res.data);
     }, fallback: '图片识别咒文失败。');
+  }
+
+  Future<List<String>> generateEditPromptCandidates({
+    required String idea,
+    required String imagePath,
+  }) async {
+    final ideaText = idea.trim();
+    if (ideaText.isEmpty) return const [];
+
+    try {
+      final imageCandidates = await identifyImagePromptCandidates(imagePath);
+      final mergedIdea = buildEditPromptIdeaRequest(ideaText, imageCandidates);
+      final mergedCandidates = await generatePromptCandidates(mergedIdea);
+      if (mergedCandidates.isNotEmpty) {
+        return mergedCandidates;
+      }
+      return imageCandidates.take(3).toList();
+    } catch (error) {
+      throw gatewayException(error, fallback: '结合图片推荐提示词失败。');
+    }
   }
 
   Future<Map<String, dynamic>> getHistory(
