@@ -83,7 +83,7 @@ class AppUpdateService {
       fileSize: _asInt(asset['size']),
       sha256: '',
       releaseNotes: (releaseNotes == null || releaseNotes.isEmpty)
-          ? 'GitHub Release 最新安装包。'
+          ? '包含最新修复与体验优化。'
           : releaseNotes,
       releaseUrl: data['html_url']?.toString() ?? '',
     );

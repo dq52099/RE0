@@ -87,6 +87,19 @@ jobs:
           fi
           cp build/app/outputs/flutter-apk/app-release.apk "build/release/RE0-${version}.apk"
 
+      - name: Prepare release notes
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          printf '%s\n' \
+            '本次更新：' \
+            '' \
+            '- 改图页新增“简单想法 + 当前图片”推荐提示词。' \
+            '- 推荐候选支持切换、查看完整内容、编辑后替换当前咒文。' \
+            '- 修复使用候选后焦点回到简单想法输入框、键盘误弹的问题。' \
+            '- 发布流程加入 flutter analyze 与 flutter test，检查通过后才构建发布。' \
+            > build/release/notes.md
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
@@ -97,4 +110,5 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          body_path: build/release/notes.md
           files: build/release/*.apk
