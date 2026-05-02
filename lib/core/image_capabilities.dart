@@ -241,8 +241,12 @@ String resolveSizeForResolutionAndAspect(
   String tier,
   String aspectRatio,
 ) {
-  if (tier == 'auto' || aspectRatio == 'auto') {
+  if (tier == 'auto') {
     return _firstSizeValue(sizes, 'auto');
+  }
+  if (aspectRatio == 'auto') {
+    return defaultSizeForResolution(
+        sizes, tier, _firstSizeValue(sizes, 'auto'));
   }
   final exactTierMatches = sizes.where(
     (item) =>
