@@ -1392,9 +1392,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final providerBase =
         TextEditingController(text: _settingValue(byKey, 'provider_base_url'));
     final providerKey = TextEditingController();
+    final providerSecondaryKey = TextEditingController();
     final providerBackupBase = TextEditingController(
         text: _settingValue(byKey, 'provider_backup_base_url'));
     final providerBackupKey = TextEditingController();
+    final providerBackupSecondaryKey = TextEditingController();
     final providerModel =
         TextEditingController(text: _settingValue(byKey, 'provider_model'));
     final generalProviderBase = TextEditingController(
@@ -1521,8 +1523,15 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 const SizedBox(height: 12),
                 TextField(
                     controller: providerKey,
+                    obscureText: true,
                     decoration:
-                        const InputDecoration(labelText: '主用上游 Key，留空不修改')),
+                        const InputDecoration(labelText: '主用上游 Key 1，留空不修改')),
+                const SizedBox(height: 12),
+                TextField(
+                    controller: providerSecondaryKey,
+                    obscureText: true,
+                    decoration:
+                        const InputDecoration(labelText: '主用上游 Key 2，留空不修改')),
                 const SizedBox(height: 12),
                 TextField(
                     controller: providerBackupBase,
@@ -1531,8 +1540,15 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 const SizedBox(height: 12),
                 TextField(
                     controller: providerBackupKey,
+                    obscureText: true,
                     decoration:
-                        const InputDecoration(labelText: '备用上游 Key，留空不修改')),
+                        const InputDecoration(labelText: '备用上游 Key 1，留空不修改')),
+                const SizedBox(height: 12),
+                TextField(
+                    controller: providerBackupSecondaryKey,
+                    obscureText: true,
+                    decoration:
+                        const InputDecoration(labelText: '备用上游 Key 2，留空不修改')),
                 const SizedBox(height: 12),
                 TextField(
                     controller: providerModel,
@@ -1715,10 +1731,17 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   'ui_title': uiTitle.text.trim(),
                   'external_access_base_url': externalBase.text.trim(),
                   'provider_base_url': providerBase.text.trim(),
-                  'provider_api_key': providerKey.text.trim(),
+                  if (providerKey.text.trim().isNotEmpty)
+                    'provider_api_key': providerKey.text.trim(),
+                  if (providerSecondaryKey.text.trim().isNotEmpty)
+                    'provider_secondary_api_key':
+                        providerSecondaryKey.text.trim(),
                   'provider_backup_base_url': providerBackupBase.text.trim(),
                   if (providerBackupKey.text.trim().isNotEmpty)
                     'provider_backup_api_key': providerBackupKey.text.trim(),
+                  if (providerBackupSecondaryKey.text.trim().isNotEmpty)
+                    'provider_backup_secondary_api_key':
+                        providerBackupSecondaryKey.text.trim(),
                   'provider_active_slot': activeProviderSlot,
                   'provider_healthcheck_enabled': providerHealthcheckEnabled,
                   'provider_healthcheck_interval_minutes':
@@ -2166,6 +2189,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         'description': '反馈 AI 整理服务地址',
       },
       {
+        'key': 'provider_secondary_api_key',
+        'value': 'xxx',
+        'description': '主用上游第二 API Key',
+      },
+      {
         'key': 'provider_backup_base_url',
         'value': '',
         'description': '备用上游服务地址',
@@ -2174,6 +2202,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         'key': 'provider_backup_api_key',
         'value': 'xxx',
         'description': '备用上游 API Key',
+      },
+      {
+        'key': 'provider_backup_secondary_api_key',
+        'value': 'xxx',
+        'description': '备用上游第二 API Key',
       },
       {
         'key': 'provider_active_slot',

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:cookie_jar/cookie_jar.dart';
@@ -885,6 +887,11 @@ class GatewayClient {
   List<String> _splitCandidateText(String text) {
     final normalized = text.trim();
     if (normalized.isEmpty) return const [];
+    final decoded = _tryDecodeCandidateJson(normalized);
+    if (decoded != null) {
+      final values = _promptCandidates(decoded);
+      if (values.isNotEmpty) return values;
+    }
     final lines = normalized
         .split(RegExp(r'\n+'))
         .map((line) =>
@@ -895,6 +902,35 @@ class GatewayClient {
       return lines.take(3).toList();
     }
     return [normalized];
+  }
+
+  dynamic _tryDecodeCandidateJson(String text) {
+    String raw = text.trim();
+    if (raw.startsWith('```')) {
+      raw =
+          raw.replaceAll(RegExp(r'^```(?:json)?\s*', caseSensitive: false), '');
+      raw = raw.replaceAll(RegExp(r'\s*```$'), '').trim();
+    }
+    for (final candidate in [
+      raw,
+      _substringBetween(raw, '{', '}'),
+      _substringBetween(raw, '[', ']'),
+    ]) {
+      if (candidate == null || candidate.trim().isEmpty) continue;
+      try {
+        return jsonDecode(candidate);
+      } catch (_) {
+        continue;
+      }
+    }
+    return null;
+  }
+
+  String? _substringBetween(String text, String startToken, String endToken) {
+    final start = text.indexOf(startToken);
+    final end = text.lastIndexOf(endToken);
+    if (start < 0 || end <= start) return null;
+    return text.substring(start, end + 1);
   }
 
   Future<Map<String, dynamic>> _getMap(
