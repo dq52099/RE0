@@ -35,7 +35,6 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
   int _count = 1;
   String _resolutionTier = 'auto';
   String _aspectRatio = 'auto';
-  bool _didApplyDeviceAspectDefault = false;
   String _quality = 'high';
   String _background = 'auto';
   String _outputFormat = 'png';
@@ -45,14 +44,6 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
   void dispose() {
     _spellController.dispose();
     super.dispose();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_didApplyDeviceAspectDefault) return;
-    _didApplyDeviceAspectDefault = true;
-    _aspectRatio = _defaultAspectRatioForDevice(context);
   }
 
   Future<void> _pickImage() async {

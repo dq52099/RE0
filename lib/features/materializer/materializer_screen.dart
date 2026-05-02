@@ -42,7 +42,6 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
   int _count = 1;
   String _resolutionTier = 'auto';
   String _aspectRatio = 'auto';
-  bool _didApplyDeviceAspectDefault = false;
   String _quality = 'high';
   String _background = 'auto';
   String _outputFormat = 'png';
@@ -64,14 +63,6 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     _spellController.dispose();
     _ideaController.dispose();
     super.dispose();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_didApplyDeviceAspectDefault) return;
-    _didApplyDeviceAspectDefault = true;
-    _aspectRatio = _defaultAspectRatioForDevice(context);
   }
 
   void _dismissPromptAssistFocus([BuildContext? focusContext]) {

@@ -236,6 +236,17 @@ List<ImageOption> filterSizeOptionsByResolution(
       sizes.where((item) => item.value != 'auto').toList());
 }
 
+List<ImageOption> _strictSizeOptionsByResolution(
+  List<ImageOption> sizes,
+  String tier,
+) {
+  if (tier == 'auto')
+    return sizes.where((item) => item.value == 'auto').toList();
+  return sizes
+      .where((item) => _belongsToResolutionTier(item.value, tier))
+      .toList();
+}
+
 String resolveSizeForResolutionAndAspect(
   List<ImageOption> sizes,
   String tier,
@@ -268,9 +279,18 @@ String resolveSizeForResolutionAndAspect(
 
   final ratioMatches =
       sizes.where((item) => _sizeRatio(item.value) == aspectRatio);
-  if (ratioMatches.isNotEmpty) return ratioMatches.first.value;
+  if (ratioMatches.isNotEmpty) {
+    final sameTier = ratioMatches
+        .where((item) => _belongsToResolutionTier(item.value, tier));
+    if (sameTier.isNotEmpty) return sameTier.first.value;
+  }
 
-  return _firstSizeValue(sizes, 'auto');
+  return defaultSizeForResolution(
+    sizes,
+    tier,
+    _firstSizeValue(sizes, 'auto'),
+    autoAspectRatio,
+  );
 }
 
 String defaultSizeForResolution(
@@ -281,11 +301,13 @@ String defaultSizeForResolution(
 ) {
   final filtered = filterSizeOptionsByResolution(sizes, tier);
   if (filtered.isEmpty) return fallback;
+  final strict = _strictSizeOptionsByResolution(sizes, tier);
+  if (strict.isEmpty) return fallback;
   final preferred =
-      filtered.where((item) => _sizeRatio(item.value) == preferredAspectRatio);
+      strict.where((item) => _sizeRatio(item.value) == preferredAspectRatio);
   if (preferred.isNotEmpty) return preferred.first.value;
-  final square = filtered.where((item) => _sizeRatio(item.value) == '1:1');
-  return (square.isNotEmpty ? square.first : filtered.first).value;
+  final square = strict.where((item) => _sizeRatio(item.value) == '1:1');
+  return (square.isNotEmpty ? square.first : strict.first).value;
 }
 
 String decoratedSizeLabel(ImageOption option) {
