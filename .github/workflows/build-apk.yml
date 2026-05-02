@@ -41,6 +41,12 @@ jobs:
       - name: Generate App Icons
         run: dart run flutter_launcher_icons:main
 
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
       - name: Read app version
         id: app_version
         shell: bash
