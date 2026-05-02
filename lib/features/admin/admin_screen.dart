@@ -25,7 +25,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   static const _promptAiModel = 'gpt-5.4-mini';
   static const _generalProviderBaseUrl = 'http://10.0.1.70:18088/v1';
   static const _generalProviderModel = 'gpt-5.4-mini';
-  static const _generalProviderImageModel = 'gpt-image-1';
+  static const _generalProviderImageModel = 'codex-gpt-image-2';
   static const _usersPageSize = 20;
   static const _invitesPageSize = 30;
 
@@ -1580,7 +1580,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 _stringDropdown(
                     '图片档位',
                     profile,
-                    const ['gpt-image-2', 'gpt-image-1'],
+                    const ['gpt-image-2', 'codex-gpt-image-2', 'gpt-image-1'],
                     (value) => setDialogState(() => profile = value)),
                 const SizedBox(height: 12),
                 TextField(
@@ -1979,16 +1979,18 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('上游测活'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _healthLine('主用', _map(checks['primary'])),
-            const SizedBox(height: 8),
-            _healthLine('备用', _map(checks['backup'])),
-            const SizedBox(height: 12),
-            Text('当前线路: $current，建议线路: $recommended'),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _healthLine('主用', _map(checks['primary'])),
+              const SizedBox(height: 8),
+              _healthLine('备用', _map(checks['backup'])),
+              const SizedBox(height: 12),
+              Text('当前线路: $current，建议线路: $recommended'),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -2015,10 +2017,31 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   Widget _healthLine(String label, Map<String, dynamic> item) {
     final ok = item['ok'] == true;
     final configured = item['configured'] == true;
-    final detail = _text(item['detail'], fallback: configured ? '-' : '未配置');
+    final detail = _compactHealthDetail(
+        _text(item['detail'], fallback: configured ? '-' : '未配置'));
+    final textOk = item['text_ok'];
+    final imageOk = item['image_ok'];
+    final textDetail =
+        _compactHealthDetail(_text(item['text_detail'], fallback: '-'));
+    final imageDetail =
+        _compactHealthDetail(_text(item['image_detail'], fallback: '-'));
+    final statusLines = <String>[
+      '$label: ${ok ? '可用' : '不可用'} · ${_text(item['base_url'], fallback: '-')}',
+      if (textOk != null) '文本: ${textOk == true ? '可用' : '不可用'} · $textDetail',
+      if (imageOk != null)
+        '图片: ${imageOk == true ? '可用' : '不可用'} · $imageDetail',
+      if (textOk == null && imageOk == null) detail,
+    ];
     return Text(
-      '$label: ${ok ? '可用' : '不可用'} · ${_text(item['base_url'], fallback: '-')} · $detail',
+      statusLines.join('\n'),
     );
+  }
+
+  String _compactHealthDetail(String value) {
+    const maxLength = 220;
+    final normalized = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalized.length <= maxLength) return normalized;
+    return '${normalized.substring(0, maxLength)}...';
   }
 
   Future<void> _copyText(String text, String success) async {
@@ -2136,7 +2159,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       {
         'key': 'provider_healthcheck_interval_minutes',
         'value': '60',
-        'description': '上游文本探活间隔分钟',
+        'description': '上游文本和图片探活间隔分钟',
       },
       {
         'key': 'general_provider_base_url',

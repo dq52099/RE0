@@ -5,6 +5,20 @@ class ImageOption {
   final String label;
 }
 
+class ImageResolutionTier {
+  const ImageResolutionTier({required this.value, required this.label});
+
+  final String value;
+  final String label;
+}
+
+const imageResolutionTiers = [
+  ImageResolutionTier(value: 'auto', label: '自动'),
+  ImageResolutionTier(value: '1k', label: '1K'),
+  ImageResolutionTier(value: '2k', label: '2K'),
+  ImageResolutionTier(value: '4k', label: '4K'),
+];
+
 class ImageActionOptions {
   const ImageActionOptions({
     required this.sizes,
@@ -50,8 +64,17 @@ class ImageCapabilities {
       ImageOption(value: '1536x1024', label: '1536 × 1024'),
       ImageOption(value: '1024x1536', label: '1024 × 1536'),
       ImageOption(value: '2048x2048', label: '2048 × 2048'),
+      ImageOption(value: '2048x1152', label: '2048 × 1152'),
+      ImageOption(value: '1152x2048', label: '1152 × 2048'),
+      ImageOption(value: '2048x1536', label: '2048 × 1536'),
+      ImageOption(value: '1536x2048', label: '1536 × 2048'),
       ImageOption(value: '3840x2160', label: '3840 × 2160'),
       ImageOption(value: '2160x3840', label: '2160 × 3840'),
+      ImageOption(value: '4096x2304', label: '4096 × 2304'),
+      ImageOption(value: '2304x4096', label: '2304 × 4096'),
+      ImageOption(value: '4096x3072', label: '4096 × 3072'),
+      ImageOption(value: '3072x4096', label: '3072 × 4096'),
+      ImageOption(value: '4096x4096', label: '4096 × 4096'),
     ];
     const qualities = [
       ImageOption(value: 'auto', label: '自动'),
@@ -166,4 +189,88 @@ class ImageCapabilities {
     }
     return (label == null || label.trim().isEmpty) ? value : label;
   }
+}
+
+List<ImageOption> filterSizeOptionsByResolution(
+  List<ImageOption> sizes,
+  String tier,
+) {
+  bool belongsToTier(ImageOption option) {
+    final value = option.value.trim().toLowerCase();
+    if (tier == 'auto') return value == 'auto';
+    final match = RegExp(r'^(\d+)x(\d+)$').firstMatch(value);
+    if (match == null) return false;
+    final width = int.tryParse(match.group(1) ?? '') ?? 0;
+    final height = int.tryParse(match.group(2) ?? '') ?? 0;
+    final longest = width > height ? width : height;
+    if (tier == '1k') return longest > 0 && longest < 2048;
+    if (tier == '2k') return longest == 2048;
+    if (tier == '4k') return longest >= 3840;
+    return false;
+  }
+
+  final filtered = sizes.where(belongsToTier).toList();
+  if (filtered.isNotEmpty) return _dedupeSizesByRatio(filtered);
+  if (tier == 'auto') return sizes.isEmpty ? const [] : [sizes.first];
+  return _dedupeSizesByRatio(
+      sizes.where((item) => item.value != 'auto').toList());
+}
+
+String defaultSizeForResolution(
+  List<ImageOption> sizes,
+  String tier,
+  String fallback,
+) {
+  final filtered = filterSizeOptionsByResolution(sizes, tier);
+  if (filtered.isEmpty) return fallback;
+  final square = filtered.where((item) => _sizeRatio(item.value) == '1:1');
+  return (square.isNotEmpty ? square.first : filtered.first).value;
+}
+
+String decoratedSizeLabel(ImageOption option) {
+  final value = option.value.trim().toLowerCase();
+  if (value == 'auto') return option.label;
+  final match = RegExp(r'^(\d+)x(\d+)$').firstMatch(value);
+  if (match == null) return option.label;
+  final width = int.tryParse(match.group(1) ?? '') ?? 0;
+  final height = int.tryParse(match.group(2) ?? '') ?? 0;
+  if (width <= 0 || height <= 0) return option.label;
+  final ratio = _sizeRatio(value);
+  final orientation = width == height
+      ? '方图'
+      : width > height
+          ? '横图'
+          : '竖图';
+  return '$ratio $orientation · ${option.label}';
+}
+
+String _sizeRatio(String value) {
+  final match = RegExp(r'^(\d+)x(\d+)$').firstMatch(value.trim().toLowerCase());
+  if (match == null) return '';
+  final width = int.tryParse(match.group(1) ?? '') ?? 0;
+  final height = int.tryParse(match.group(2) ?? '') ?? 0;
+  if (width <= 0 || height <= 0) return '';
+  final divisor = width.gcd(height);
+  return '${width ~/ divisor}:${height ~/ divisor}';
+}
+
+List<ImageOption> _dedupeSizesByRatio(List<ImageOption> sizes) {
+  const ratioOrder = ['1:1', '4:3', '3:4', '16:9', '9:16'];
+  final byRatio = <String, ImageOption>{};
+  final extras = <ImageOption>[];
+  for (final item in sizes) {
+    final ratio = _sizeRatio(item.value);
+    if (ratio.isEmpty) {
+      extras.add(item);
+      continue;
+    }
+    byRatio.putIfAbsent(ratio, () => item);
+  }
+  return [
+    for (final ratio in ratioOrder)
+      if (byRatio.containsKey(ratio)) byRatio[ratio]!,
+    for (final entry in byRatio.entries)
+      if (!ratioOrder.contains(entry.key)) entry.value,
+    ...extras,
+  ];
 }

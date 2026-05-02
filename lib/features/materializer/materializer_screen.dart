@@ -32,6 +32,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
   final ImagePicker _assistImagePicker = ImagePicker();
   int _count = 1;
   String _size = 'auto';
+  String _resolutionTier = 'auto';
   String _quality = 'high';
   String _background = 'auto';
   String _outputFormat = 'png';
@@ -253,7 +254,14 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     final capabilities = ref.watch(imageCapabilitiesProvider).valueOrNull ??
         ImageCapabilities.fallback();
     final options = capabilities.generate;
-    final size = _safeValue(_size, options.sizes, options.defaultSize);
+    final sizeOptions =
+        filterSizeOptionsByResolution(options.sizes, _resolutionTier);
+    final size = _safeValue(
+      _size,
+      sizeOptions,
+      defaultSizeForResolution(
+          options.sizes, _resolutionTier, options.defaultSize),
+    );
     final quality =
         _safeValue(_quality, options.qualities, options.defaultQuality);
     final background =
@@ -298,6 +306,8 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                 _buildTaskNotice('改图任务正在进行，请等待完成后再开始生图。'),
               ],
               const SizedBox(height: 16),
+              _buildResolutionSelector(brand, options.sizes),
+              const SizedBox(height: 12),
               LayoutBuilder(
                 builder: (context, constraints) {
                   final fieldWidth = (constraints.maxWidth - 12) / 2;
@@ -330,9 +340,10 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                           value: size,
                           width: fieldWidth,
                           menuWidth: menuWidth,
-                          items: _items(options.sizes),
-                          selectedLabels:
-                              options.sizes.map((item) => item.label).toList(),
+                          items: _sizeItems(sizeOptions),
+                          selectedLabels: sizeOptions
+                              .map((item) => decoratedSizeLabel(item))
+                              .toList(),
                           onChanged: (value) => setState(() => _size = value!),
                         ),
                       ),
@@ -777,6 +788,47 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
       ),
       child: Text(message),
     );
+  }
+
+  Widget _buildResolutionSelector(AppBrand brand, List<ImageOption> sizes) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('清晰度', style: Theme.of(context).textTheme.bodyMedium),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: imageResolutionTiers.map((tier) {
+            final selected = _resolutionTier == tier.value;
+            return ChoiceChip(
+              label: Text(tier.label),
+              selected: selected,
+              onSelected: (_) => setState(() {
+                _resolutionTier = tier.value;
+                _size = defaultSizeForResolution(
+                  sizes,
+                  tier.value,
+                  sizes.isEmpty ? 'auto' : sizes.first.value,
+                );
+              }),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  List<DropdownMenuItem<String>> _sizeItems(List<ImageOption> options) {
+    return options
+        .map(
+          (item) => CompactDropdownField.centeredItem<String>(
+            item.value,
+            decoratedSizeLabel(item),
+            context,
+          ),
+        )
+        .toList();
   }
 
   List<DropdownMenuItem<String>> _items(List<ImageOption> options) {
