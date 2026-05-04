@@ -19,21 +19,28 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   final _usernameController = TextEditingController();
   final _displayNameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _emailCodeController = TextEditingController();
   final _invitationCodeController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
   String? _usernameError;
   String? _displayNameError;
+  String? _emailError;
+  String? _emailCodeError;
   String? _invitationCodeError;
   String? _passwordError;
   String? _confirmPasswordError;
   bool _isSubmitting = false;
+  bool _isSendingEmailCode = false;
 
   @override
   void dispose() {
     _usernameController.dispose();
     _displayNameController.dispose();
+    _emailController.dispose();
+    _emailCodeController.dispose();
     _invitationCodeController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -43,12 +50,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   bool _validate() {
     final username = _usernameController.text.trim();
     final displayName = _displayNameController.text.trim();
+    final email = _emailController.text.trim();
+    final emailCode = _emailCodeController.text.trim();
     final invitationCode = _invitationCodeController.text.trim();
     final password = _passwordController.text;
     final confirmPassword = _confirmPasswordController.text;
 
     String? usernameError;
     String? displayNameError;
+    String? emailError;
+    String? emailCodeError;
     String? invitationCodeError;
     String? passwordError;
     String? confirmPasswordError;
@@ -65,6 +76,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       displayNameError = '请输入显示名称。';
     } else if (displayName.length < 2 || displayName.length > 32) {
       displayNameError = '显示名称长度需为 2 到 32 个字符。';
+    }
+
+    if (email.isNotEmpty &&
+        !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      emailError = '邮箱格式不正确。';
+    }
+    if (email.isNotEmpty && emailCode.isEmpty) {
+      emailCodeError = '请先获取并填写邮箱验证码。';
     }
 
     if (invitationCode.isEmpty) {
@@ -88,6 +107,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     setState(() {
       _usernameError = usernameError;
       _displayNameError = displayNameError;
+      _emailError = emailError;
+      _emailCodeError = emailCodeError;
       _invitationCodeError = invitationCodeError;
       _passwordError = passwordError;
       _confirmPasswordError = confirmPasswordError;
@@ -95,9 +116,51 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
     return usernameError == null &&
         displayNameError == null &&
+        emailError == null &&
+        emailCodeError == null &&
         invitationCodeError == null &&
         passwordError == null &&
         confirmPasswordError == null;
+  }
+
+  Future<void> _sendEmailCode() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      setState(() => _emailError = '请先填写邮箱。');
+      return;
+    }
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      setState(() => _emailError = '邮箱格式不正确。');
+      return;
+    }
+
+    setState(() {
+      _emailError = null;
+      _emailCodeError = null;
+      _isSendingEmailCode = true;
+    });
+    try {
+      final client = ref.read(gatewayClientProvider);
+      await client.init(_defaultServerUrl);
+      final result = await client.sendEmailCode(email, 'bind');
+      if (!mounted) return;
+      final message = result['message']?.toString() ?? '验证码已发送，请查看邮箱。';
+      final devCode = result['dev_code']?.toString();
+      showCenterNotice(
+        context,
+        devCode == null || devCode.isEmpty ? message : '$message 验证码：$devCode',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      showCenterNotice(
+        context,
+        friendlyError(error, fallback: '发送邮箱验证码失败。'),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSendingEmailCode = false);
+      }
+    }
   }
 
   Future<void> _register() async {
@@ -112,6 +175,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         _displayNameController.text.trim(),
         _invitationCodeController.text.trim(),
         _passwordController.text,
+        email: _emailController.text.trim(),
+        emailCode: _emailCodeController.text.trim(),
       );
       final prefs = ref.read(sharedPrefsProvider);
       await prefs.setString('server_url', _defaultServerUrl);
@@ -140,7 +205,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final brand = ref.watch(brandProvider);
 
     return Scaffold(
-      resizeToAvoidBottomInset: false,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(title: const Text('注册新账号')),
       body: BrandBackground(
         child: SafeArea(
@@ -161,7 +226,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '使用管理员发放的邀请码创建账号，注册成功后会直接进入主页。',
+                          '使用邀请码创建账号，可同时绑定邮箱用于验证码登录和找回密码。',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                         const SizedBox(height: 24),
@@ -191,6 +256,63 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             helperText: '2-32 个字符',
                             errorText: _displayNameError,
                           ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          onChanged: (_) {
+                            if (_emailError != null ||
+                                _emailCodeError != null) {
+                              setState(() {
+                                _emailError = null;
+                                _emailCodeError = null;
+                              });
+                            }
+                          },
+                          decoration: InputDecoration(
+                            labelText: '邮箱（可选）',
+                            helperText: '绑定后可用邮箱验证码登录和找回密码',
+                            errorText: _emailError,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _emailCodeController,
+                                keyboardType: TextInputType.number,
+                                onChanged: (_) {
+                                  if (_emailCodeError != null) {
+                                    setState(() => _emailCodeError = null);
+                                  }
+                                },
+                                decoration: InputDecoration(
+                                  labelText: '邮箱验证码',
+                                  errorText: _emailCodeError,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            SizedBox(
+                              height: 56,
+                              child: OutlinedButton(
+                                onPressed:
+                                    _isSendingEmailCode ? null : _sendEmailCode,
+                                child: _isSendingEmailCode
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Text('获取验证码'),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 12),
                         TextField(

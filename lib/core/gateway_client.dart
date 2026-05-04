@@ -64,18 +64,71 @@ class GatewayClient {
     }, fallback: '读取登录配置失败。');
   }
 
+  Future<Map<String, dynamic>> sendEmailCode(
+    String email,
+    String purpose,
+  ) async {
+    return _guard(() async {
+      final res = await _dio.post('/api/auth/email-code', data: {
+        'email': email,
+        'purpose': purpose,
+      });
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '发送邮箱验证码失败。');
+  }
+
+  Future<Map<String, dynamic>> emailLogin(String email, String code) async {
+    return _guard(() async {
+      final res = await _dio.post('/api/auth/email-login', data: {
+        'email': email,
+        'code': code,
+      });
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '邮箱验证码登录失败。');
+  }
+
+  Future<Map<String, dynamic>> requestPasswordReset(String account) async {
+    return _guard(() async {
+      final res = await _dio.post('/api/auth/password-reset', data: {
+        'account': account,
+      });
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '发送找回密码验证码失败。');
+  }
+
+  Future<Map<String, dynamic>> confirmPasswordReset({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) async {
+    return _guard(() async {
+      final res = await _dio.post('/api/auth/password-reset/confirm', data: {
+        'email': email,
+        'code': code,
+        'new_password': newPassword,
+      });
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '重置密码失败。');
+  }
+
   Future<Map<String, dynamic>> register(
     String username,
     String displayName,
     String invitationCode,
-    String password,
-  ) async {
+    String password, {
+    String? email,
+    String? emailCode,
+  }) async {
     return _guard(() async {
+      final emailText = email?.trim();
+      final codeText = emailCode?.trim();
       final res = await _dio.post('/api/auth/register', data: {
         'username': username,
         'display_name': displayName,
         'invitation_code': invitationCode,
         'password': password,
+        if (emailText != null && emailText.isNotEmpty) 'email': emailText,
+        if (codeText != null && codeText.isNotEmpty) 'email_code': codeText,
       });
       return Map<String, dynamic>.from(res.data as Map);
     }, fallback: '注册失败，请稍后重试。');
@@ -299,6 +352,16 @@ class GatewayClient {
       });
       return Map<String, dynamic>.from(res.data as Map);
     }, fallback: '保存个人资料失败。');
+  }
+
+  Future<Map<String, dynamic>> bindMyEmail(String email, String code) async {
+    return _guard(() async {
+      final res = await _dio.post('/api/me/email', data: {
+        'email': email,
+        'code': code,
+      });
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '绑定邮箱失败。');
   }
 
   Future<Map<String, dynamic>> updateMyAvatar(String imagePath) async {

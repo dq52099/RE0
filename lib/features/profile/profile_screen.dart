@@ -512,6 +512,142 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
+  Future<void> _bindEmail(Map<String, dynamic>? user) async {
+    final email = TextEditingController(text: user?['email']?.toString() ?? '');
+    final code = TextEditingController();
+    var sending = false;
+    final payload = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> sendCode() async {
+              final emailText = email.text.trim();
+              if (emailText.isEmpty) {
+                showCenterNotice(context, '请先填写邮箱。');
+                return;
+              }
+              if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(emailText)) {
+                showCenterNotice(context, '邮箱格式不正确。');
+                return;
+              }
+              setDialogState(() => sending = true);
+              try {
+                final result = await ref
+                    .read(gatewayClientProvider)
+                    .sendEmailCode(emailText, 'bind');
+                if (!context.mounted) return;
+                final message =
+                    result['message']?.toString() ?? '验证码已发送，请查看邮箱。';
+                final devCode = result['dev_code']?.toString();
+                showCenterNotice(
+                  context,
+                  devCode == null || devCode.isEmpty
+                      ? message
+                      : '$message 验证码：$devCode',
+                );
+              } catch (error) {
+                if (!context.mounted) return;
+                showCenterNotice(
+                  context,
+                  friendlyError(error, fallback: '发送邮箱验证码失败。'),
+                );
+              } finally {
+                if (context.mounted) {
+                  setDialogState(() => sending = false);
+                }
+              }
+            }
+
+            return _wideDialog(
+              title: '绑定邮箱',
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: email,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: '邮箱',
+                      helperText: '绑定后可用邮箱验证码登录和找回密码',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: code,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(labelText: '验证码'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        height: 56,
+                        child: OutlinedButton(
+                          onPressed: sending ? null : sendCode,
+                          child: sending
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Text('获取验证码'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final emailText = email.text.trim();
+                    final codeText = code.text.trim();
+                    if (emailText.isEmpty || codeText.isEmpty) {
+                      showCenterNotice(context, '请填写邮箱和验证码。');
+                      return;
+                    }
+                    Navigator.pop(context, {
+                      'email': emailText,
+                      'code': codeText,
+                    });
+                  },
+                  child: const Text('绑定'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    email.dispose();
+    code.dispose();
+    if (payload == null) return;
+    try {
+      final updated = await ref
+          .read(gatewayClientProvider)
+          .bindMyEmail(payload['email']!, payload['code']!);
+      ref.read(authStateProvider.notifier).state = updated;
+      ref.read(energyProvider.notifier).state = updated['quota_summary'];
+      if (!mounted) return;
+      showCenterNotice(context, '邮箱已绑定');
+    } catch (error) {
+      if (!mounted) return;
+      showCenterNotice(
+        context,
+        friendlyError(error, fallback: '绑定邮箱失败。'),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final brand = ref.watch(brandProvider);
@@ -607,17 +743,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 onTap: () => _showProfileDetails(brand, user),
               ),
             ),
-            if (!hasSystemManagement)
-              _menuCard(
-                child: ListTile(
-                  leading:
-                      Icon(Icons.forum_outlined, color: brand.primaryColor),
-                  title: const Text('反馈与许愿'),
-                  subtitle: _menuSubtitle('提交问题、建议，或希望新增的功能、模型、主题和参数'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: _openFeedback,
-                ),
+            _menuCard(
+              child: ListTile(
+                leading: Icon(Icons.forum_outlined, color: brand.primaryColor),
+                title: const Text('反馈与许愿'),
+                subtitle: _menuSubtitle('提交问题、建议，或希望新增的功能、模型、主题和参数'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _openFeedback,
               ),
+            ),
             if (hasSystemManagement)
               _menuCard(
                 child: ListTile(
@@ -1038,6 +1172,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               const SizedBox(height: 16),
               _profileLine('角色', role['name']?.toString() ?? '-'),
               _profileLine('用户组', group['name']?.toString() ?? '-'),
+              _profileLine(
+                '邮箱',
+                (user?['email']?.toString().trim().isNotEmpty ?? false)
+                    ? '${user?['email']}${user?['email_verified'] == true ? '（已验证）' : '（未验证）'}'
+                    : '未绑定',
+              ),
               _profileLine('登录网关', 'image.6688667.xyz'),
               const SizedBox(height: 18),
               FilledButton.icon(
@@ -1047,6 +1187,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 },
                 icon: const Icon(Icons.edit),
                 label: const Text('编辑资料'),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _bindEmail(user);
+                },
+                icon: const Icon(Icons.alternate_email),
+                label: const Text('绑定邮箱'),
               ),
               const SizedBox(height: 10),
               OutlinedButton.icon(
