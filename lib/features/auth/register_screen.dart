@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -34,9 +36,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   String? _confirmPasswordError;
   bool _isSubmitting = false;
   bool _isSendingEmailCode = false;
+  int _emailCooldownSeconds = 0;
+  Timer? _emailCooldownTimer;
 
   @override
   void dispose() {
+    _emailCooldownTimer?.cancel();
     _usernameController.dispose();
     _displayNameController.dispose();
     _emailController.dispose();
@@ -79,8 +84,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
 
     if (email.isNotEmpty &&
-        !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
-      emailError = '邮箱格式不正确。';
+        !RegExp(r'^[^@\s]+@(qq\.com|163\.com|163\.cm)$')
+            .hasMatch(email.toLowerCase())) {
+      emailError = '当前仅支持 qq.com、163.com 和 163.cm 邮箱。';
     }
     if (email.isNotEmpty && emailCode.isEmpty) {
       emailCodeError = '请先获取并填写邮箱验证码。';
@@ -129,8 +135,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       setState(() => _emailError = '请先填写邮箱。');
       return;
     }
-    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
-      setState(() => _emailError = '邮箱格式不正确。');
+    if (!RegExp(r'^[^@\s]+@(qq\.com|163\.com|163\.cm)$')
+        .hasMatch(email.toLowerCase())) {
+      setState(() => _emailError = '当前仅支持 qq.com、163.com 和 163.cm 邮箱。');
       return;
     }
 
@@ -144,6 +151,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       await client.init(_defaultServerUrl);
       final result = await client.sendEmailCode(email, 'bind');
       if (!mounted) return;
+      _startEmailCooldown();
       final message = result['message']?.toString() ?? '验证码已发送，请查看邮箱。';
       final devCode = result['dev_code']?.toString();
       showCenterNotice(
@@ -161,6 +169,23 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         setState(() => _isSendingEmailCode = false);
       }
     }
+  }
+
+  void _startEmailCooldown() {
+    _emailCooldownTimer?.cancel();
+    setState(() => _emailCooldownSeconds = 60);
+    _emailCooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_emailCooldownSeconds <= 1) {
+        timer.cancel();
+        setState(() => _emailCooldownSeconds = 0);
+      } else {
+        setState(() => _emailCooldownSeconds -= 1);
+      }
+    });
   }
 
   Future<void> _register() async {
@@ -299,8 +324,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             SizedBox(
                               height: 56,
                               child: OutlinedButton(
-                                onPressed:
-                                    _isSendingEmailCode ? null : _sendEmailCode,
+                                onPressed: _isSendingEmailCode ||
+                                        _emailCooldownSeconds > 0
+                                    ? null
+                                    : _sendEmailCode,
                                 child: _isSendingEmailCode
                                     ? const SizedBox(
                                         width: 18,
@@ -309,7 +336,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                           strokeWidth: 2,
                                         ),
                                       )
-                                    : const Text('发送邮件'),
+                                    : Text(_emailCooldownSeconds > 0
+                                        ? '${_emailCooldownSeconds}s'
+                                        : '发送邮件'),
                               ),
                             ),
                           ],

@@ -30,7 +30,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void initState() {
     super.initState();
     _loadBootstrap();
-    _checkSavedAuth();
   }
 
   @override
@@ -51,25 +50,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       });
     } catch (_) {
       // Fall back to showing registration entry.
-    }
-  }
-
-  Future<void> _checkSavedAuth() async {
-    setState(() => _isLoading = true);
-    try {
-      final client = ref.read(gatewayClientProvider);
-      await client.init(_defaultServerUrl);
-      final auth = await client.checkAuth();
-      ref.read(authStateProvider.notifier).state = auth;
-      ref.read(energyProvider.notifier).state = auth['quota_summary'];
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const HomeScreen()));
-      }
-    } catch (e) {
-      // Not logged in or server unreachable
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 

@@ -34,6 +34,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   int _usersPageIndex = 1;
   int _invitesPageIndex = 1;
   String _inviteStatusFilter = '';
+  bool _isProviderHealthChecking = false;
+  bool _isRunningBackup = false;
 
   @override
   Widget build(BuildContext context) {
@@ -637,9 +639,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                       label: const Text('探测尺寸'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: _probeProviderHealth,
+                      onPressed: _isProviderHealthChecking
+                          ? null
+                          : _probeProviderHealth,
                       icon: const Icon(Icons.monitor_heart_outlined),
-                      label: const Text('上游测活'),
+                      label:
+                          Text(_isProviderHealthChecking ? '测活中...' : '上游测活'),
                     ),
                   ],
                 )
@@ -686,9 +691,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                       label: const Text('备份设置'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: _runLocalBackup,
+                      onPressed: _isRunningBackup ? null : _runLocalBackup,
                       icon: const Icon(Icons.backup_outlined),
-                      label: const Text('立即备份'),
+                      label: Text(_isRunningBackup ? '备份中...' : '立即备份'),
                     ),
                   ],
                 )
@@ -746,13 +751,25 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 title: '$target备份${status == 'success' ? '完成' : '异常'}',
                 subtitle: _text(item['message']),
                 badge: _backupStatusLabel(status),
-                trailing: url.isEmpty
-                    ? null
-                    : IconButton(
+                trailing: Wrap(
+                  spacing: 4,
+                  children: [
+                    if (url.isNotEmpty)
+                      IconButton(
                         tooltip: '复制远端地址',
                         icon: const Icon(Icons.link),
                         onPressed: () => _copyText(url, '远端备份地址已复制。'),
                       ),
+                    if (canManage &&
+                        _text(item['target']) == 'local' &&
+                        status == 'success')
+                      IconButton(
+                        tooltip: '恢复此备份',
+                        icon: const Icon(Icons.restore),
+                        onPressed: () => _restoreLocalBackup(item),
+                      ),
+                  ],
+                ),
                 lines: [
                   '时间: ${formatLocalTime(item['created_at'])}',
                   '大小: ${_formatBytes(item['size_bytes'])}',
@@ -1593,6 +1610,13 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final hermesBase =
         TextEditingController(text: _settingValue(byKey, 'hermes_base_url'));
     final hermesKey = TextEditingController();
+    final resendBase = TextEditingController(
+      text: _settingValue(
+        byKey,
+        'resend_base_url',
+        fallback: 'https://api.resend.com',
+      ),
+    );
     final resendKey = TextEditingController();
     final resendFrom = TextEditingController(
       text: _settingValue(
@@ -1896,6 +1920,14 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 ),
                 const SizedBox(height: 12),
                 TextField(
+                  controller: resendBase,
+                  decoration: const InputDecoration(
+                    labelText: 'Resend base_url',
+                    helperText: '默认 https://api.resend.com',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
                   controller: resendFrom,
                   decoration: const InputDecoration(
                     labelText: 'Resend 发件人',
@@ -2014,6 +2046,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     'hermes_api_key': hermesKey.text.trim(),
                   if (resendKey.text.trim().isNotEmpty)
                     'resend_api_key': resendKey.text.trim(),
+                  'resend_base_url': resendBase.text.trim().isEmpty
+                      ? 'https://api.resend.com'
+                      : resendBase.text.trim(),
                   'resend_from': resendFrom.text.trim(),
                   'system_notice_email_to': systemNoticeEmailTo.text.trim(),
                   'email_smtp_host': smtpHost.text.trim(),
@@ -2276,6 +2311,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   }
 
   Future<void> _runLocalBackup() async {
+    if (_isRunningBackup) return;
+    setState(() => _isRunningBackup = true);
     try {
       final result =
           await ref.read(gatewayClientProvider).runAdminLocalBackup();
@@ -2289,6 +2326,45 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     } catch (error) {
       if (!mounted) return;
       _showMessage(friendlyError(error, fallback: '执行数据备份失败。'), isError: true);
+    } finally {
+      if (mounted) setState(() => _isRunningBackup = false);
+    }
+  }
+
+  Future<void> _restoreLocalBackup(Map<String, dynamic> item) async {
+    final id = _text(item['id']);
+    if (id.isEmpty || id == '-') return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('恢复备份'),
+        content: Text(
+          '将恢复 ${formatLocalTime(item['created_at'])} 的本地备份。'
+          '系统会先生成当前状态安全备份，再恢复数据库和生成文件。确认继续？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('确认恢复'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final result =
+          await ref.read(gatewayClientProvider).restoreAdminLocalBackup(id);
+      if (!mounted) return;
+      _showMessage(_text(result['message'], fallback: '备份已恢复。'));
+      _reload();
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage(friendlyError(error, fallback: '恢复数据备份失败。'), isError: true);
     }
   }
 
@@ -2492,6 +2568,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   }
 
   Future<void> _probeProviderHealth() async {
+    if (_isProviderHealthChecking) return;
+    setState(() => _isProviderHealthChecking = true);
+    _showMessage('正在执行上游测活，请稍候。');
     try {
       final result =
           await ref.read(gatewayClientProvider).providerHealthcheck();
@@ -2501,6 +2580,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     } catch (error) {
       if (!mounted) return;
       _showMessage(friendlyError(error, fallback: '上游测活失败。'), isError: true);
+    } finally {
+      if (mounted) setState(() => _isProviderHealthChecking = false);
     }
   }
 
@@ -2554,12 +2635,20 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       ),
     );
     if (apply != true) return;
-    final switched = await ref
-        .read(gatewayClientProvider)
-        .providerHealthcheck(applySwitch: true);
-    if (!mounted) return;
-    final newSlot = _text(switched['recommended_slot'], fallback: recommended);
-    _showMessage('已切换到 $newSlot。');
+    try {
+      _showMessage('正在切换推荐线路...');
+      final switched = await ref
+          .read(gatewayClientProvider)
+          .providerHealthcheck(applySwitch: true);
+      if (!mounted) return;
+      final newSlot =
+          _text(switched['recommended_slot'], fallback: recommended);
+      _showMessage('已切换到 $newSlot。');
+      _reload();
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage(friendlyError(error, fallback: '切换推荐线路失败。'), isError: true);
+    }
   }
 
   Widget _healthLine(String label, Map<String, dynamic> item) {
@@ -2845,6 +2934,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         'key': 'hermes_api_key',
         'value': 'xxx',
         'description': 'HTTP 邮件服务 Key',
+      },
+      {
+        'key': 'resend_base_url',
+        'value': 'https://api.resend.com',
+        'description': 'Resend API 地址，用于发送验证码邮件',
       },
       {
         'key': 'resend_api_key',

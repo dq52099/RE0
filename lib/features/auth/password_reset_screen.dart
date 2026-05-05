@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -30,6 +32,8 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
   String? _passwordError;
   bool _isSendingCode = false;
   bool _isSubmitting = false;
+  int _emailCooldownSeconds = 0;
+  Timer? _emailCooldownTimer;
 
   @override
   void initState() {
@@ -39,6 +43,7 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
 
   @override
   void dispose() {
+    _emailCooldownTimer?.cancel();
     _accountController.dispose();
     _emailController.dispose();
     _codeController.dispose();
@@ -65,6 +70,7 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
       _emailController.text =
           result['email']?.toString() ?? _emailController.text;
       if (!mounted) return;
+      _startEmailCooldown();
       final message = result['message']?.toString() ?? '验证码已发送，请查看邮箱。';
       final devCode = result['dev_code']?.toString();
       showCenterNotice(
@@ -84,6 +90,23 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
     }
   }
 
+  void _startEmailCooldown() {
+    _emailCooldownTimer?.cancel();
+    setState(() => _emailCooldownSeconds = 60);
+    _emailCooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_emailCooldownSeconds <= 1) {
+        timer.cancel();
+        setState(() => _emailCooldownSeconds = 0);
+      } else {
+        setState(() => _emailCooldownSeconds -= 1);
+      }
+    });
+  }
+
   bool _validate() {
     final email = _emailController.text.trim();
     final code = _codeController.text.trim();
@@ -95,8 +118,9 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
 
     if (email.isEmpty) {
       emailError = '请先发送验证码获取收件邮箱。';
-    } else if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
-      emailError = '邮箱格式不正确。';
+    } else if (!RegExp(r'^[^@\s]+@(qq\.com|163\.com|163\.cm)$')
+        .hasMatch(email.toLowerCase())) {
+      emailError = '当前仅支持 qq.com、163.com 和 163.cm 邮箱。';
     }
     if (code.isEmpty) {
       codeError = '请输入验证码。';
@@ -224,7 +248,9 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
                               height: 56,
                               child: OutlinedButton(
                                 onPressed:
-                                    _isSendingCode ? null : _sendResetCode,
+                                    _isSendingCode || _emailCooldownSeconds > 0
+                                        ? null
+                                        : _sendResetCode,
                                 child: _isSendingCode
                                     ? const SizedBox(
                                         width: 18,
@@ -233,7 +259,9 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
                                           strokeWidth: 2,
                                         ),
                                       )
-                                    : const Text('发送邮件'),
+                                    : Text(_emailCooldownSeconds > 0
+                                        ? '${_emailCooldownSeconds}s'
+                                        : '发送邮件'),
                               ),
                             ),
                           ],

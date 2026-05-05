@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
@@ -516,11 +518,33 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final email = TextEditingController(text: user?['email']?.toString() ?? '');
     final code = TextEditingController();
     var sending = false;
+    var binding = false;
+    var cooldownSeconds = 0;
+    Timer? cooldownTimer;
     final payload = await showDialog<Map<String, String>>(
       context: context,
+      barrierDismissible: false,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            void startCooldown() {
+              cooldownTimer?.cancel();
+              setDialogState(() => cooldownSeconds = 60);
+              cooldownTimer =
+                  Timer.periodic(const Duration(seconds: 1), (timer) {
+                if (!context.mounted) {
+                  timer.cancel();
+                  return;
+                }
+                if (cooldownSeconds <= 1) {
+                  timer.cancel();
+                  setDialogState(() => cooldownSeconds = 0);
+                } else {
+                  setDialogState(() => cooldownSeconds -= 1);
+                }
+              });
+            }
+
             Future<void> sendCode() async {
               final emailText = email.text.trim();
               if (emailText.isEmpty) {
@@ -537,6 +561,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     .read(gatewayClientProvider)
                     .sendEmailCode(emailText, 'bind');
                 if (!context.mounted) return;
+                startCooldown();
                 final message =
                     result['message']?.toString() ?? '验证码已发送，请查看邮箱。';
                 final devCode = result['dev_code']?.toString();
@@ -555,6 +580,46 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               } finally {
                 if (context.mounted) {
                   setDialogState(() => sending = false);
+                }
+              }
+            }
+
+            Future<void> bindNow() async {
+              final emailText = email.text.trim();
+              final codeText = code.text.trim();
+              if (emailText.isEmpty || codeText.isEmpty) {
+                showCenterNotice(context, '请填写邮箱和验证码。');
+                return;
+              }
+              if (!RegExp(r'^[^@\s]+@(qq\.com|163\.com|163\.cm)$')
+                  .hasMatch(emailText.toLowerCase())) {
+                showCenterNotice(context, '当前仅支持 qq.com、163.com 和 163.cm 邮箱。');
+                return;
+              }
+              setDialogState(() => binding = true);
+              try {
+                final updated = await ref
+                    .read(gatewayClientProvider)
+                    .bindMyEmail(emailText, codeText);
+                if (!context.mounted) return;
+                Navigator.pop(context, {
+                  'email': emailText,
+                  'code': codeText,
+                  '_updated': 'true',
+                });
+                ref.read(authStateProvider.notifier).state = updated;
+                ref.read(energyProvider.notifier).state =
+                    updated['quota_summary'];
+                if (mounted) showCenterNotice(this.context, '邮箱已绑定');
+              } catch (error) {
+                if (!context.mounted) return;
+                showCenterNotice(
+                  context,
+                  friendlyError(error, fallback: '绑定邮箱失败。'),
+                );
+              } finally {
+                if (context.mounted) {
+                  setDialogState(() => binding = false);
                 }
               }
             }
@@ -587,7 +652,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       SizedBox(
                         height: 56,
                         child: OutlinedButton(
-                          onPressed: sending ? null : sendCode,
+                          onPressed:
+                              sending || cooldownSeconds > 0 ? null : sendCode,
                           child: sending
                               ? const SizedBox(
                                   width: 18,
@@ -595,7 +661,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                   child:
                                       CircularProgressIndicator(strokeWidth: 2),
                                 )
-                              : const Text('发送邮件'),
+                              : Text(cooldownSeconds > 0
+                                  ? '${cooldownSeconds}s'
+                                  : '发送邮件'),
                         ),
                       ),
                     ],
@@ -608,19 +676,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   child: const Text('取消'),
                 ),
                 FilledButton(
-                  onPressed: () {
-                    final emailText = email.text.trim();
-                    final codeText = code.text.trim();
-                    if (emailText.isEmpty || codeText.isEmpty) {
-                      showCenterNotice(context, '请填写邮箱和验证码。');
-                      return;
-                    }
-                    Navigator.pop(context, {
-                      'email': emailText,
-                      'code': codeText,
-                    });
-                  },
-                  child: const Text('绑定'),
+                  onPressed: binding ? null : bindNow,
+                  child: binding
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('绑定'),
                 ),
               ],
             );
@@ -628,9 +691,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         );
       },
     );
+    cooldownTimer?.cancel();
     email.dispose();
     code.dispose();
-    if (payload == null) return;
+    if (payload == null || payload['_updated'] == 'true') return;
     try {
       final updated = await ref
           .read(gatewayClientProvider)
