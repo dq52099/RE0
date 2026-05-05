@@ -106,6 +106,13 @@ String _polishMessage(String message, String fallback) {
       normalized.contains('not enough credits')) {
     return '当前额度不足，请检查剩余额度或联系管理员。';
   }
+  if (normalized.contains('usage_limit_exceeded') ||
+      normalized.contains('daily_limit_exceeded') ||
+      normalized.contains('daily usage limit exceeded') ||
+      normalized.contains('code=429') ||
+      normalized.contains('http 429')) {
+    return '今日生图通道额度已用尽，请稍后再试，或联系管理员切换备用线路。';
+  }
   final minLengthMatch = _minLengthPattern.firstMatch(normalized);
   if (minLengthMatch != null) {
     return '输入内容至少需要 ${minLengthMatch.group(1)} 个字符。';
