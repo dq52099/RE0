@@ -6,6 +6,7 @@ import '../../core/brand_background.dart';
 import '../../core/compact_save_notice.dart';
 import '../../core/providers.dart';
 import '../home/home_screen.dart';
+import 'password_reset_screen.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -20,20 +21,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _emailCodeController = TextEditingController();
-  final _resetAccountController = TextEditingController();
-  final _resetEmailController = TextEditingController();
-  final _resetCodeController = TextEditingController();
-  final _resetPasswordController = TextEditingController();
   String? _usernameError;
   String? _passwordError;
-  String? _emailError;
-  String? _emailCodeError;
   bool _isLoading = false;
-  bool _isEmailLogin = false;
-  bool _isSendingEmailCode = false;
-  bool _isSendingResetCode = false;
   bool _allowRegistration = true;
 
   @override
@@ -47,12 +37,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
-    _emailController.dispose();
-    _emailCodeController.dispose();
-    _resetAccountController.dispose();
-    _resetEmailController.dispose();
-    _resetCodeController.dispose();
-    _resetPasswordController.dispose();
     super.dispose();
   }
 
@@ -90,16 +74,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _login() async {
-    if (_isEmailLogin) {
-      await _loginWithEmailCode();
-      return;
-    }
     final username = _usernameController.text.trim();
     final password = _passwordController.text;
     String? usernameError;
     String? passwordError;
     if (username.isEmpty) {
-      usernameError = '请输入账号。';
+      usernameError = '请输入用户名、账号或邮箱。';
     }
     if (password.isEmpty) {
       passwordError = '请输入密码。';
@@ -140,234 +120,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  Future<void> _sendLoginEmailCode() async {
-    final email = _emailController.text.trim();
-    if (email.isEmpty) {
-      setState(() => _emailError = '请输入邮箱。');
-      return;
-    }
-    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
-      setState(() => _emailError = '邮箱格式不正确。');
-      return;
-    }
-    setState(() {
-      _emailError = null;
-      _emailCodeError = null;
-      _isSendingEmailCode = true;
-    });
-    try {
-      final client = ref.read(gatewayClientProvider);
-      await client.init(_defaultServerUrl);
-      final result = await client.sendEmailCode(email, 'login');
-      if (!mounted) return;
-      final message = result['message']?.toString() ?? '验证码已发送，请查看邮箱。';
-      final devCode = result['dev_code']?.toString();
-      showCenterNotice(
-        context,
-        devCode == null || devCode.isEmpty ? message : '$message 验证码：$devCode',
-      );
-    } catch (error) {
-      if (!mounted) return;
-      showCenterNotice(
-        context,
-        friendlyError(error, fallback: '发送邮箱验证码失败。'),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isSendingEmailCode = false);
-      }
-    }
-  }
-
-  Future<void> _loginWithEmailCode() async {
-    final email = _emailController.text.trim();
-    final code = _emailCodeController.text.trim();
-    String? emailError;
-    String? codeError;
-    if (email.isEmpty) {
-      emailError = '请输入邮箱。';
-    } else if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
-      emailError = '邮箱格式不正确。';
-    }
-    if (code.isEmpty) {
-      codeError = '请输入验证码。';
-    }
-    if (emailError != null || codeError != null) {
-      setState(() {
-        _emailError = emailError;
-        _emailCodeError = codeError;
-      });
-      return;
-    }
-
-    setState(() => _isLoading = true);
-    try {
-      final client = ref.read(gatewayClientProvider);
-      await client.init(_defaultServerUrl);
-      final res = await client.emailLogin(email, code);
-      final prefs = ref.read(sharedPrefsProvider);
-      await prefs.setString('server_url', _defaultServerUrl);
-      ref.read(authStateProvider.notifier).state = res['user'];
-      ref.read(energyProvider.notifier).state = res['user']['quota_summary'];
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const HomeScreen()));
-      }
-    } catch (error) {
-      if (mounted) {
-        showCenterNotice(
-          context,
-          friendlyError(error, fallback: '邮箱验证码登录失败。'),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _openPasswordReset() async {
-    _resetAccountController.text = _usernameController.text.trim();
-    _resetEmailController.clear();
-    _resetCodeController.clear();
-    _resetPasswordController.clear();
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            Future<void> sendResetCode() async {
-              final account = _resetAccountController.text.trim();
-              if (account.isEmpty) {
-                showCenterNotice(context, '请先填写账号或邮箱。');
-                return;
-              }
-              setDialogState(() => _isSendingResetCode = true);
-              try {
-                final client = ref.read(gatewayClientProvider);
-                await client.init(_defaultServerUrl);
-                final result = await client.requestPasswordReset(account);
-                _resetEmailController.text =
-                    result['email']?.toString() ?? _resetEmailController.text;
-                final message =
-                    result['message']?.toString() ?? '验证码已发送，请查看邮箱。';
-                final devCode = result['dev_code']?.toString();
-                if (!context.mounted) return;
-                showCenterNotice(
-                  context,
-                  devCode == null || devCode.isEmpty
-                      ? message
-                      : '$message 验证码：$devCode',
-                );
-              } catch (error) {
-                if (!context.mounted) return;
-                showCenterNotice(
-                  context,
-                  friendlyError(error, fallback: '发送找回密码验证码失败。'),
-                );
-              } finally {
-                if (context.mounted) {
-                  setDialogState(() => _isSendingResetCode = false);
-                }
-              }
-            }
-
-            Future<void> confirmReset() async {
-              final email = _resetEmailController.text.trim();
-              final code = _resetCodeController.text.trim();
-              final password = _resetPasswordController.text;
-              if (email.isEmpty || code.isEmpty || password.isEmpty) {
-                showCenterNotice(context, '请填写邮箱、验证码和新密码。');
-                return;
-              }
-              try {
-                await ref.read(gatewayClientProvider).confirmPasswordReset(
-                      email: email,
-                      code: code,
-                      newPassword: password,
-                    );
-                if (!context.mounted) return;
-                Navigator.pop(context);
-                showCenterNotice(context, '密码已重置，请重新登录。');
-              } catch (error) {
-                if (!context.mounted) return;
-                showCenterNotice(
-                  context,
-                  friendlyError(error, fallback: '重置密码失败。'),
-                );
-              }
-            }
-
-            return AlertDialog(
-              title: const Text('找回密码'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: _resetAccountController,
-                      decoration: const InputDecoration(
-                        labelText: '账号或邮箱',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _resetEmailController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: '收件邮箱',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _resetCodeController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: '验证码'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _resetPasswordController,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: '新密码',
-                        helperText: '至少 10 位，包含大小写字母、数字和特殊字符',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('取消'),
-                ),
-                OutlinedButton(
-                  onPressed: _isSendingResetCode ? null : sendResetCode,
-                  child: _isSendingResetCode
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('发送验证码'),
-                ),
-                FilledButton(
-                  onPressed: confirmReset,
-                  child: const Text('重置密码'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-    if (mounted) {
-      setState(() => _isSendingResetCode = false);
-    }
-  }
-
   void _openRegisterScreen() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const RegisterScreen()),
+    );
+  }
+
+  void _openPasswordResetScreen() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PasswordResetScreen(
+          initialAccount: _usernameController.text.trim(),
+        ),
+      ),
     );
   }
 
@@ -431,99 +196,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ],
                 const SizedBox(height: 40),
-                SegmentedButton<bool>(
-                  segments: const [
-                    ButtonSegment(value: false, label: Text('密码登录')),
-                    ButtonSegment(value: true, label: Text('邮箱验证码')),
-                  ],
-                  selected: {_isEmailLogin},
-                  onSelectionChanged: (values) {
-                    setState(() => _isEmailLogin = values.first);
+                TextField(
+                  controller: _usernameController,
+                  onChanged: (_) {
+                    if (_usernameError != null) {
+                      setState(() => _usernameError = null);
+                    }
                   },
+                  decoration: InputDecoration(
+                    labelText: '用户名、账号或邮箱',
+                    hintText: '输入显示名称、账号或已绑定邮箱',
+                    errorText: _usernameError,
+                  ),
                 ),
-                const SizedBox(height: 18),
-                if (!_isEmailLogin) ...[
-                  TextField(
-                    controller: _usernameController,
-                    onChanged: (_) {
-                      if (_usernameError != null) {
-                        setState(() => _usernameError = null);
-                      }
-                    },
-                    decoration: InputDecoration(
-                      labelText: '账号或邮箱',
-                      hintText: '输入账号或已绑定邮箱',
-                      errorText: _usernameError,
-                    ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _passwordController,
+                  obscureText: true,
+                  onChanged: (_) {
+                    if (_passwordError != null) {
+                      setState(() => _passwordError = null);
+                    }
+                  },
+                  decoration: InputDecoration(
+                    labelText: '密码',
+                    hintText: '输入你的密码',
+                    errorText: _passwordError,
                   ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    onChanged: (_) {
-                      if (_passwordError != null) {
-                        setState(() => _passwordError = null);
-                      }
-                    },
-                    decoration: InputDecoration(
-                      labelText: '密码',
-                      hintText: '输入你的密码',
-                      errorText: _passwordError,
-                    ),
-                  ),
-                ] else ...[
-                  TextField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    onChanged: (_) {
-                      if (_emailError != null) {
-                        setState(() => _emailError = null);
-                      }
-                    },
-                    decoration: InputDecoration(
-                      labelText: '邮箱',
-                      hintText: '输入已绑定邮箱',
-                      errorText: _emailError,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _emailCodeController,
-                          keyboardType: TextInputType.number,
-                          onChanged: (_) {
-                            if (_emailCodeError != null) {
-                              setState(() => _emailCodeError = null);
-                            }
-                          },
-                          decoration: InputDecoration(
-                            labelText: '验证码',
-                            errorText: _emailCodeError,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      SizedBox(
-                        height: 56,
-                        child: OutlinedButton(
-                          onPressed:
-                              _isSendingEmailCode ? null : _sendLoginEmailCode,
-                          child: _isSendingEmailCode
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Text('获取验证码'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
                 const SizedBox(height: 32),
                 _isLoading
                     ? const CircularProgressIndicator()
@@ -532,16 +232,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         child: const Text('登录'),
                       ),
                 const SizedBox(height: 8),
-                TextButton(
-                  onPressed: _isLoading ? null : _openPasswordReset,
-                  child: const Text('忘记密码'),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    TextButton(
+                      onPressed: _isLoading ? null : _openPasswordResetScreen,
+                      child: const Text('忘记密码'),
+                    ),
+                    if (_allowRegistration) ...[
+                      const SizedBox(width: 12),
+                      TextButton(
+                        onPressed: _isLoading ? null : _openRegisterScreen,
+                        child: const Text('注册新账号'),
+                      ),
+                    ],
+                  ],
                 ),
-                if (_allowRegistration) ...[
-                  TextButton(
-                    onPressed: _isLoading ? null : _openRegisterScreen,
-                    child: const Text('注册新账号'),
-                  ),
-                ],
               ],
             ),
           ),

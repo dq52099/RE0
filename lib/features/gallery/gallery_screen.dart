@@ -7,6 +7,7 @@ import '../../core/brand_background.dart';
 import '../../core/cached_gateway_image.dart';
 import '../../core/compact_dropdown_field.dart';
 import '../../core/compact_save_notice.dart';
+import '../../core/local_time_format.dart';
 import '../../core/providers.dart';
 import '../../core/value_parsers.dart';
 import '../compendium/image_preview_screen.dart';
@@ -852,14 +853,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
   }
 
   String _formatGalleryTime(String? raw) {
-    final parsed = raw == null ? null : DateTime.tryParse(raw);
-    if (parsed == null) return '';
-    final local = parsed.toLocal();
-    final month = local.month.toString().padLeft(2, '0');
-    final day = local.day.toString().padLeft(2, '0');
-    final hour = local.hour.toString().padLeft(2, '0');
-    final minute = local.minute.toString().padLeft(2, '0');
-    return '$month-$day $hour:$minute';
+    return formatLocalTime(raw, fallback: '');
   }
 
   String _promptSummary(Map<String, dynamic> item) {

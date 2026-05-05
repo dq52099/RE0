@@ -226,7 +226,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '使用邀请码创建账号，可同时绑定邮箱用于验证码登录和找回密码。',
+                          '使用邀请码创建账号，可同时绑定邮箱用于邮箱密码登录和找回密码。',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                         const SizedBox(height: 24),
@@ -272,7 +272,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           },
                           decoration: InputDecoration(
                             labelText: '邮箱（可选）',
-                            helperText: '绑定后可用邮箱验证码登录和找回密码',
+                            helperText: '绑定后可用邮箱密码登录和找回密码',
                             errorText: _emailError,
                           ),
                         ),
@@ -309,7 +309,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                           strokeWidth: 2,
                                         ),
                                       )
-                                    : const Text('获取验证码'),
+                                    : const Text('发送邮件'),
                               ),
                             ),
                           ],

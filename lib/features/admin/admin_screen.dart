@@ -7,6 +7,7 @@ import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
 import '../../core/compact_dropdown_field.dart';
 import '../../core/compact_save_notice.dart';
+import '../../core/local_time_format.dart';
 import '../../core/providers.dart';
 import '../feedback/admin_feedback_panel.dart';
 
@@ -118,6 +119,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     }
     if (isAdmin ||
         permissions.contains('settings.view') ||
+        menus.contains('backups')) {
+      sections.add(const _AdminSection('backups', '数据备份'));
+    }
+    if (isAdmin ||
+        permissions.contains('settings.view') ||
         menus.contains('settings')) {
       sections.add(const _AdminSection('settings', '设置'));
     }
@@ -185,6 +191,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           canReply: _can(user, 'feedback.reply'),
           canAi: _can(user, 'feedback.ai'),
         );
+      case 'backups':
+        return _backupsPage(brand, canManage: _can(user, 'settings.manage'));
       case 'settings':
         return _settingsPage(brand, canManage: _can(user, 'settings.manage'));
       case 'audit':
@@ -217,6 +225,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               Icons.group_work_outlined, 'groups', '管理默认额度'),
           _OverviewItem('角色', overview['role_count'],
               Icons.admin_panel_settings_outlined, 'roles', '管理权限组合'),
+          _OverviewItem('数据备份', overview['local_backup_count'],
+              Icons.backup_outlined, 'backups', '本地与 OpenList 备份'),
           _OverviewItem('可用密钥', overview['active_api_key_count'],
               Icons.key_outlined, 'apiKeys', '对外调用密钥'),
         ];
@@ -452,11 +462,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   onPressed: () => _copyText(_text(item['code']), '邀请码已复制。'),
                 ),
                 lines: [
-                  '创建: ${_text(item['created_at'])}',
+                  '创建: ${formatLocalTime(item['created_at'])}',
                   '创建人: ${_text(item['created_by_display_name'], fallback: _text(item['created_by_username']))}',
                   if (status != 'unused')
                     '使用人: ${usedBy.isEmpty ? '-' : usedBy}',
-                  if (status != 'unused') '使用时间: ${_text(item['used_at'])}',
+                  if (status != 'unused')
+                    '使用时间: ${formatLocalTime(item['used_at'])}',
                 ],
               );
             }),
@@ -594,7 +605,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   : null,
               lines: [
                 'Key: ${_text(item['masked_key'])}',
-                '最近使用: ${_text(item['last_used_at'], fallback: '暂无')}',
+                '最近使用: ${formatLocalTime(item['last_used_at'], fallback: '暂无')}',
               ],
             );
           }).toList(),
@@ -654,6 +665,108 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     );
   }
 
+  Widget _backupsPage(AppBrand brand, {required bool canManage}) {
+    return _futureSection<_BackupsData>(
+      future: _loadBackupsData(),
+      builder: (data) {
+        final byKey = {
+          for (final item in _settingsWithAiDefaults(data.settings))
+            _text(item['key']): item,
+        };
+        final runtime = data.runtime;
+        return _adminList(
+          action: canManage
+              ? Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: () => _editBackupSettings(data.settings),
+                      icon: const Icon(Icons.tune),
+                      label: const Text('备份设置'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _runLocalBackup,
+                      icon: const Icon(Icons.backup_outlined),
+                      label: const Text('立即备份'),
+                    ),
+                  ],
+                )
+              : null,
+          children: [
+            _infoCard(
+              title: '本地备份',
+              subtitle: '生成包含数据库和本地生成文件的备份包。',
+              active: runtime['local_backup_enabled'] == true,
+              lines: [
+                '定时备份: ${_enabledLabel(runtime['local_backup_enabled'])}',
+                '间隔: ${_settingValue(byKey, 'local_backup_interval_hours', fallback: '24')} 小时',
+                '保留: ${_settingValue(byKey, 'local_backup_retention_days', fallback: '14')} 天',
+              ],
+            ),
+            _infoCard(
+              title: 'Google Drive 备份',
+              subtitle: '使用 Service Account 上传备份包。',
+              active: runtime['google_drive_backup_enabled'] == true,
+              lines: [
+                '开关: ${_enabledLabel(runtime['google_drive_backup_enabled'])}',
+                '配置: ${runtime['google_drive_backup_configured'] == true ? '已配置' : '未完整配置'}',
+                '文件夹: ${_settingValue(byKey, 'google_drive_backup_folder_id')}',
+              ],
+            ),
+            _infoCard(
+              title: 'OpenList 主用备份',
+              subtitle: '通过 WebDAV 上传，外网地址用于打开远端文件。',
+              active: runtime['openlist_backup_primary_enabled'] == true,
+              lines: [
+                '开关: ${_enabledLabel(runtime['openlist_backup_primary_enabled'])}',
+                '配置: ${runtime['openlist_backup_primary_configured'] == true ? '已配置' : '未完整配置'}',
+                'WebDAV: ${_settingValue(byKey, 'openlist_backup_primary_webdav_url')}',
+                '外网: ${_settingValue(byKey, 'openlist_backup_primary_public_url')}',
+                '目录: ${_settingValue(byKey, 'openlist_backup_primary_path', fallback: '/gateway-backups')}',
+              ],
+            ),
+            _infoCard(
+              title: 'OpenList 备用备份',
+              subtitle: '主备独立开关，备用未配置时不会上传。',
+              active: runtime['openlist_backup_secondary_enabled'] == true,
+              lines: [
+                '开关: ${_enabledLabel(runtime['openlist_backup_secondary_enabled'])}',
+                '配置: ${runtime['openlist_backup_secondary_configured'] == true ? '已配置' : '未完整配置'}',
+                'WebDAV: ${_settingValue(byKey, 'openlist_backup_secondary_webdav_url')}',
+                '外网: ${_settingValue(byKey, 'openlist_backup_secondary_public_url')}',
+                '目录: ${_settingValue(byKey, 'openlist_backup_secondary_path', fallback: '/gateway-backups-secondary')}',
+              ],
+            ),
+            ...data.backups.map((item) {
+              final target = _backupTargetLabel(_text(item['target']));
+              final status = _text(item['status']);
+              final url = _text(item['remote_file_url'], fallback: '');
+              return _infoCard(
+                title: '$target备份${status == 'success' ? '完成' : '异常'}',
+                subtitle: _text(item['message']),
+                badge: _backupStatusLabel(status),
+                trailing: url.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: '复制远端地址',
+                        icon: const Icon(Icons.link),
+                        onPressed: () => _copyText(url, '远端备份地址已复制。'),
+                      ),
+                lines: [
+                  '时间: ${formatLocalTime(item['created_at'])}',
+                  '大小: ${_formatBytes(item['size_bytes'])}',
+                  if (url.isNotEmpty) '远端: $url',
+                  if (url.isEmpty) '文件: ${_text(item['file_path'])}',
+                ],
+              );
+            }),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _auditPage(AppBrand brand) {
     return _futureSection<List<Map<String, dynamic>>>(
       future: _loadMapList(ref.read(gatewayClientProvider).adminAuditLogs()),
@@ -663,7 +776,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
             return _infoCard(
               title: _text(log['action']),
               subtitle:
-                  '${_text(log['actor_username'], fallback: '系统')}  ${_text(log['created_at'])}',
+                  '${_text(log['actor_username'], fallback: '系统')}  ${formatLocalTime(log['created_at'])}',
               lines: [
                 '资源: ${_text(log['resource_type'])} ${_text(log['resource_id'])}',
                 if (log['detail'] != null) '详情: ${_text(log['detail'])}',
@@ -672,6 +785,21 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           }).toList(),
         );
       },
+    );
+  }
+
+  Future<_BackupsData> _loadBackupsData() async {
+    final client = ref.read(gatewayClientProvider);
+    final values = await Future.wait([
+      client.adminSystemSettings(),
+      client.adminLocalBackups(),
+    ]);
+    final settingsData = values[0];
+    final backupData = values[1];
+    return _BackupsData(
+      _mapList(settingsData['settings']),
+      _map(settingsData['runtime_status']),
+      _mapList(backupData['items']),
     );
   }
 
@@ -1462,6 +1590,28 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         fallback: _promptAiModel,
       ),
     );
+    final hermesBase =
+        TextEditingController(text: _settingValue(byKey, 'hermes_base_url'));
+    final hermesKey = TextEditingController();
+    final resendKey = TextEditingController();
+    final resendFrom = TextEditingController(
+      text: _settingValue(
+        byKey,
+        'resend_from',
+        fallback: '从零开始生图 <noreply@mail.6688667.xyz>',
+      ),
+    );
+    final systemNoticeEmailTo = TextEditingController(
+      text: _settingValue(byKey, 'system_notice_email_to'),
+    );
+    final smtpHost =
+        TextEditingController(text: _settingValue(byKey, 'email_smtp_host'));
+    final smtpPort = TextEditingController(
+        text: _settingValue(byKey, 'email_smtp_port', fallback: '465'));
+    final smtpUsername = TextEditingController(
+        text: _settingValue(byKey, 'email_smtp_username'));
+    final smtpPassword = TextEditingController();
+    var smtpUseSsl = _settingBool(byKey, 'email_smtp_use_ssl', fallback: true);
     final generateCheckinMultiplier = TextEditingController(
       text: _settingValue(byKey, 'daily_checkin_generate_multiplier',
           fallback: '1'),
@@ -1713,6 +1863,89 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   controller: promptAiModel,
                   decoration: const InputDecoration(labelText: 'model'),
                 ),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 8),
+                Text(
+                  '邮件验证码',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: hermesBase,
+                  decoration:
+                      const InputDecoration(labelText: 'HTTP 邮件服务 base_url'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: hermesKey,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'HTTP 邮件服务 Key，留空不修改',
+                    helperText: '支持 Bearer；填写 user:password 时使用 Basic',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: resendKey,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Resend API Key，留空不修改',
+                    helperText: '配置后优先使用 Resend 发送验证码',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: resendFrom,
+                  decoration: const InputDecoration(
+                    labelText: 'Resend 发件人',
+                    helperText: '例如：从零开始生图 <noreply@mail.6688667.xyz>',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 8),
+                Text(
+                  '系统通知邮件',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: systemNoticeEmailTo,
+                  decoration: const InputDecoration(
+                    labelText: '系统通知收件人',
+                    helperText: '多个邮箱用英文逗号分隔；系统通知通过 OpenClaw/SMTP 发送',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: smtpHost,
+                  decoration: const InputDecoration(labelText: 'SMTP 服务器'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: smtpPort,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'SMTP 端口'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: smtpUsername,
+                  decoration: const InputDecoration(labelText: 'SMTP 用户名/邮箱'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: smtpPassword,
+                  obscureText: true,
+                  decoration:
+                      const InputDecoration(labelText: 'SMTP 密码/授权码，留空不修改'),
+                ),
+                SwitchListTile(
+                  value: smtpUseSsl,
+                  onChanged: (value) =>
+                      setDialogState(() => smtpUseSsl = value),
+                  title: const Text('SMTP 使用 SSL'),
+                ),
                 const SizedBox(height: 8),
                 CheckboxListTile(
                   value: allowRegistration,
@@ -1776,6 +2009,19 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   'prompt_ai_model': promptAiModel.text.trim().isEmpty
                       ? _promptAiModel
                       : promptAiModel.text.trim(),
+                  'hermes_base_url': hermesBase.text.trim(),
+                  if (hermesKey.text.trim().isNotEmpty)
+                    'hermes_api_key': hermesKey.text.trim(),
+                  if (resendKey.text.trim().isNotEmpty)
+                    'resend_api_key': resendKey.text.trim(),
+                  'resend_from': resendFrom.text.trim(),
+                  'system_notice_email_to': systemNoticeEmailTo.text.trim(),
+                  'email_smtp_host': smtpHost.text.trim(),
+                  'email_smtp_port': int.tryParse(smtpPort.text.trim()),
+                  'email_smtp_username': smtpUsername.text.trim(),
+                  if (smtpPassword.text.trim().isNotEmpty)
+                    'email_smtp_password': smtpPassword.text.trim(),
+                  'email_smtp_use_ssl': smtpUseSsl,
                   'daily_checkin_generate_multiplier':
                       double.tryParse(generateCheckinMultiplier.text),
                   'daily_checkin_edit_multiplier':
@@ -1794,6 +2040,256 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     await _save(
         () => ref.read(gatewayClientProvider).saveAdminSystemSettings(payload),
         '系统设置已保存。');
+  }
+
+  Future<void> _editBackupSettings(List<Map<String, dynamic>> settings) async {
+    final byKey = {
+      for (final item in _settingsWithAiDefaults(settings))
+        _text(item['key']): item,
+    };
+    var localEnabled = _settingBool(byKey, 'local_backup_enabled');
+    final localInterval = TextEditingController(
+      text: _settingValue(byKey, 'local_backup_interval_hours', fallback: '24'),
+    );
+    final localRetention = TextEditingController(
+      text: _settingValue(byKey, 'local_backup_retention_days', fallback: '14'),
+    );
+    var googleEnabled = _settingBool(byKey, 'google_drive_backup_enabled');
+    final googleFolder = TextEditingController(
+      text: _settingValue(byKey, 'google_drive_backup_folder_id'),
+    );
+    final googleServiceAccount = TextEditingController();
+    var openlistPrimaryEnabled =
+        _settingBool(byKey, 'openlist_backup_primary_enabled');
+    final openlistPrimaryWebdav = TextEditingController(
+      text: _settingValue(byKey, 'openlist_backup_primary_webdav_url'),
+    );
+    final openlistPrimaryPublic = TextEditingController(
+      text: _settingValue(byKey, 'openlist_backup_primary_public_url'),
+    );
+    final openlistPrimaryUsername = TextEditingController(
+      text: _settingValue(byKey, 'openlist_backup_primary_username'),
+    );
+    final openlistPrimaryPassword = TextEditingController();
+    final openlistPrimaryPath = TextEditingController(
+      text: _settingValue(
+        byKey,
+        'openlist_backup_primary_path',
+        fallback: '/gateway-backups',
+      ),
+    );
+    var openlistSecondaryEnabled =
+        _settingBool(byKey, 'openlist_backup_secondary_enabled');
+    final openlistSecondaryWebdav = TextEditingController(
+      text: _settingValue(byKey, 'openlist_backup_secondary_webdav_url'),
+    );
+    final openlistSecondaryPublic = TextEditingController(
+      text: _settingValue(byKey, 'openlist_backup_secondary_public_url'),
+    );
+    final openlistSecondaryUsername = TextEditingController(
+      text: _settingValue(byKey, 'openlist_backup_secondary_username'),
+    );
+    final openlistSecondaryPassword = TextEditingController();
+    final openlistSecondaryPath = TextEditingController(
+      text: _settingValue(
+        byKey,
+        'openlist_backup_secondary_path',
+        fallback: '/gateway-backups-secondary',
+      ),
+    );
+
+    final payload = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return _adminDialog(
+            title: '数据备份设置',
+            icon: Icons.backup_outlined,
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _settingsSectionTitle('本地备份'),
+                SwitchListTile(
+                  value: localEnabled,
+                  onChanged: (value) =>
+                      setDialogState(() => localEnabled = value),
+                  title: const Text('开启定时备份'),
+                ),
+                TextField(
+                  controller: localInterval,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: '备份间隔小时'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: localRetention,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: '本地保留天数'),
+                ),
+                const SizedBox(height: 18),
+                _settingsSectionTitle('Google Drive'),
+                SwitchListTile(
+                  value: googleEnabled,
+                  onChanged: (value) =>
+                      setDialogState(() => googleEnabled = value),
+                  title: const Text('上传到 Google Drive'),
+                ),
+                TextField(
+                  controller: googleFolder,
+                  decoration: const InputDecoration(labelText: '目标文件夹 ID'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: googleServiceAccount,
+                  obscureText: true,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Service Account JSON，留空不修改',
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _settingsSectionTitle('OpenList 主用'),
+                SwitchListTile(
+                  value: openlistPrimaryEnabled,
+                  onChanged: (value) =>
+                      setDialogState(() => openlistPrimaryEnabled = value),
+                  title: const Text('启用主用 OpenList'),
+                ),
+                TextField(
+                  controller: openlistPrimaryWebdav,
+                  decoration: const InputDecoration(labelText: 'WebDAV 地址'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: openlistPrimaryPublic,
+                  decoration: const InputDecoration(labelText: '外网打开地址'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: openlistPrimaryUsername,
+                  decoration: const InputDecoration(labelText: '用户名'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: openlistPrimaryPassword,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: '密码，留空不修改'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: openlistPrimaryPath,
+                  decoration: const InputDecoration(labelText: '远端目录'),
+                ),
+                const SizedBox(height: 18),
+                _settingsSectionTitle('OpenList 备用'),
+                SwitchListTile(
+                  value: openlistSecondaryEnabled,
+                  onChanged: (value) =>
+                      setDialogState(() => openlistSecondaryEnabled = value),
+                  title: const Text('启用备用 OpenList'),
+                ),
+                TextField(
+                  controller: openlistSecondaryWebdav,
+                  decoration: const InputDecoration(labelText: 'WebDAV 地址'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: openlistSecondaryPublic,
+                  decoration: const InputDecoration(labelText: '外网打开地址'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: openlistSecondaryUsername,
+                  decoration: const InputDecoration(labelText: '用户名'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: openlistSecondaryPassword,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: '密码，留空不修改'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: openlistSecondaryPath,
+                  decoration: const InputDecoration(labelText: '远端目录'),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, {
+                  'local_backup_enabled': localEnabled,
+                  'local_backup_interval_hours':
+                      int.tryParse(localInterval.text.trim()),
+                  'local_backup_retention_days':
+                      int.tryParse(localRetention.text.trim()),
+                  'google_drive_backup_enabled': googleEnabled,
+                  'google_drive_backup_folder_id': googleFolder.text.trim(),
+                  if (googleServiceAccount.text.trim().isNotEmpty)
+                    'google_drive_service_account_json':
+                        googleServiceAccount.text.trim(),
+                  'openlist_backup_primary_enabled': openlistPrimaryEnabled,
+                  'openlist_backup_primary_webdav_url':
+                      openlistPrimaryWebdav.text.trim(),
+                  'openlist_backup_primary_public_url':
+                      openlistPrimaryPublic.text.trim(),
+                  'openlist_backup_primary_username':
+                      openlistPrimaryUsername.text.trim(),
+                  if (openlistPrimaryPassword.text.trim().isNotEmpty)
+                    'openlist_backup_primary_password':
+                        openlistPrimaryPassword.text.trim(),
+                  'openlist_backup_primary_path':
+                      openlistPrimaryPath.text.trim().isEmpty
+                          ? '/gateway-backups'
+                          : openlistPrimaryPath.text.trim(),
+                  'openlist_backup_secondary_enabled': openlistSecondaryEnabled,
+                  'openlist_backup_secondary_webdav_url':
+                      openlistSecondaryWebdav.text.trim(),
+                  'openlist_backup_secondary_public_url':
+                      openlistSecondaryPublic.text.trim(),
+                  'openlist_backup_secondary_username':
+                      openlistSecondaryUsername.text.trim(),
+                  if (openlistSecondaryPassword.text.trim().isNotEmpty)
+                    'openlist_backup_secondary_password':
+                        openlistSecondaryPassword.text.trim(),
+                  'openlist_backup_secondary_path':
+                      openlistSecondaryPath.text.trim().isEmpty
+                          ? '/gateway-backups-secondary'
+                          : openlistSecondaryPath.text.trim(),
+                }),
+                child: const Text('保存'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (payload == null) return;
+    await _save(
+      () => ref.read(gatewayClientProvider).saveAdminSystemSettings(payload),
+      '备份设置已保存。',
+    );
+  }
+
+  Future<void> _runLocalBackup() async {
+    try {
+      final result =
+          await ref.read(gatewayClientProvider).runAdminLocalBackup();
+      if (!mounted) return;
+      final status = _text(result['status']);
+      _showMessage(
+        _text(result['message'], fallback: '备份已执行。'),
+        isError: status == 'failed',
+      );
+      _reload();
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage(friendlyError(error, fallback: '执行数据备份失败。'), isError: true);
+    }
   }
 
   Future<void> _createInvitationCodes() async {
@@ -2096,6 +2592,63 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     return '${normalized.substring(0, maxLength)}...';
   }
 
+  String _enabledLabel(dynamic value) {
+    return value == true ? '开启' : '关闭';
+  }
+
+  String _backupTargetLabel(String target) {
+    switch (target) {
+      case 'local':
+        return '本地';
+      case 'google_drive':
+        return 'Google Drive';
+      case 'openlist_primary':
+        return 'OpenList 主用';
+      case 'openlist_secondary':
+        return 'OpenList 备用';
+      default:
+        return target == '-' ? '备份' : target;
+    }
+  }
+
+  String _backupStatusLabel(String status) {
+    switch (status) {
+      case 'success':
+        return '成功';
+      case 'partial':
+        return '部分成功';
+      case 'failed':
+        return '失败';
+      default:
+        return status == '-' ? '未知' : status;
+    }
+  }
+
+  String _formatBytes(dynamic value) {
+    final bytes =
+        value is num ? value.toDouble() : double.tryParse('$value') ?? 0;
+    if (bytes <= 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    var size = bytes;
+    var index = 0;
+    while (size >= 1024 && index < units.length - 1) {
+      size /= 1024;
+      index += 1;
+    }
+    final fractionDigits = index == 0 ? 0 : 1;
+    return '${size.toStringAsFixed(fractionDigits)} ${units[index]}';
+  }
+
+  bool _settingBool(
+    Map<String, Map<String, dynamic>> settings,
+    String key, {
+    bool fallback = false,
+  }) {
+    final value =
+        _settingValue(settings, key, fallback: fallback ? 'true' : 'false');
+    return const {'1', 'true', 'yes', 'on'}.contains(value.toLowerCase());
+  }
+
   Future<void> _copyText(String text, String success) async {
     final value = text.trim();
     if (value.isEmpty || value == '-') return;
@@ -2283,6 +2836,146 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         'value': _promptAiModel,
         'description': '提示词生成与图片识别 AI 模型',
       },
+      {
+        'key': 'hermes_base_url',
+        'value': '',
+        'description': 'HTTP 邮件服务地址，用于发送验证码',
+      },
+      {
+        'key': 'hermes_api_key',
+        'value': 'xxx',
+        'description': 'HTTP 邮件服务 Key',
+      },
+      {
+        'key': 'resend_api_key',
+        'value': 'xxx',
+        'description': 'Resend API Key，用于发送验证码邮件',
+      },
+      {
+        'key': 'resend_from',
+        'value': '从零开始生图 <noreply@mail.6688667.xyz>',
+        'description': 'Resend 发件人',
+      },
+      {
+        'key': 'system_notice_email_to',
+        'value': '',
+        'description': '系统通知邮件收件人，多个邮箱用英文逗号分隔',
+      },
+      {
+        'key': 'email_smtp_host',
+        'value': '',
+        'description': 'SMTP 邮件服务器地址',
+      },
+      {
+        'key': 'email_smtp_port',
+        'value': '465',
+        'description': 'SMTP 邮件服务器端口',
+      },
+      {
+        'key': 'email_smtp_username',
+        'value': '',
+        'description': 'SMTP 登录邮箱或用户名',
+      },
+      {
+        'key': 'email_smtp_password',
+        'value': 'xxx',
+        'description': 'SMTP 登录密码或授权码',
+      },
+      {
+        'key': 'email_smtp_use_ssl',
+        'value': 'true',
+        'description': 'SMTP 是否使用 SSL 直连',
+      },
+      {
+        'key': 'local_backup_enabled',
+        'value': 'false',
+        'description': '是否开启本地数据定时备份',
+      },
+      {
+        'key': 'local_backup_interval_hours',
+        'value': '24',
+        'description': '本地数据自动备份间隔小时',
+      },
+      {
+        'key': 'local_backup_retention_days',
+        'value': '14',
+        'description': '本地备份文件保留天数',
+      },
+      {
+        'key': 'google_drive_backup_enabled',
+        'value': 'false',
+        'description': '是否把备份包同步上传到 Google Drive',
+      },
+      {
+        'key': 'google_drive_backup_folder_id',
+        'value': '',
+        'description': 'Google Drive 目标文件夹 ID',
+      },
+      {
+        'key': 'google_drive_service_account_json',
+        'value': 'xxx',
+        'description': 'Google Drive Service Account JSON',
+      },
+      {
+        'key': 'openlist_backup_primary_enabled',
+        'value': 'false',
+        'description': '是否同步上传到 OpenList 主用备份',
+      },
+      {
+        'key': 'openlist_backup_primary_webdav_url',
+        'value': 'http://openlist:5244/dav',
+        'description': 'OpenList 主用 WebDAV 地址',
+      },
+      {
+        'key': 'openlist_backup_primary_public_url',
+        'value': 'http://127.0.0.1:5244/dav',
+        'description': 'OpenList 主用外网打开地址',
+      },
+      {
+        'key': 'openlist_backup_primary_username',
+        'value': 'admin',
+        'description': 'OpenList 主用 WebDAV 用户名',
+      },
+      {
+        'key': 'openlist_backup_primary_password',
+        'value': 'xxx',
+        'description': 'OpenList 主用 WebDAV 密码',
+      },
+      {
+        'key': 'openlist_backup_primary_path',
+        'value': '/gateway-backups',
+        'description': 'OpenList 主用备份目录',
+      },
+      {
+        'key': 'openlist_backup_secondary_enabled',
+        'value': 'false',
+        'description': '是否同步上传到 OpenList 备用备份',
+      },
+      {
+        'key': 'openlist_backup_secondary_webdav_url',
+        'value': '',
+        'description': 'OpenList 备用 WebDAV 地址',
+      },
+      {
+        'key': 'openlist_backup_secondary_public_url',
+        'value': '',
+        'description': 'OpenList 备用外网打开地址',
+      },
+      {
+        'key': 'openlist_backup_secondary_username',
+        'value': '',
+        'description': 'OpenList 备用 WebDAV 用户名',
+      },
+      {
+        'key': 'openlist_backup_secondary_password',
+        'value': 'xxx',
+        'description': 'OpenList 备用 WebDAV 密码',
+      },
+      {
+        'key': 'openlist_backup_secondary_path',
+        'value': '/gateway-backups-secondary',
+        'description': 'OpenList 备用备份目录',
+      },
     ];
     return [
       ...settings,
@@ -2293,7 +2986,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   String _displaySettingValue(Map<String, dynamic> setting) {
     final key = _text(setting['key'], fallback: '');
     final value = _text(setting['value'], fallback: '未设置');
-    if (key.contains('api_key') || key.endsWith('_key')) {
+    if (key.contains('api_key') ||
+        key.endsWith('_key') ||
+        key.endsWith('_password') ||
+        key.contains('service_account')) {
       return _maskSecret(value);
     }
     return value;
@@ -2371,4 +3067,12 @@ class _RolesData {
 
   final List<Map<String, dynamic>> roles;
   final List<Map<String, dynamic>> permissions;
+}
+
+class _BackupsData {
+  const _BackupsData(this.settings, this.runtime, this.backups);
+
+  final List<Map<String, dynamic>> settings;
+  final Map<String, dynamic> runtime;
+  final List<Map<String, dynamic>> backups;
 }

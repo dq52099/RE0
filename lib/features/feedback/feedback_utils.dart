@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/local_time_format.dart';
+
 const feedbackStatuses = [
   'collected',
   'accepted',
@@ -112,15 +114,7 @@ String feedbackText(dynamic value, {String fallback = '-'}) {
 }
 
 String feedbackDate(dynamic raw) {
-  final parsed = DateTime.tryParse(raw?.toString() ?? '');
-  if (parsed == null) return '-';
-  final local = parsed.toLocal();
-  final year = local.year.toString().padLeft(4, '0');
-  final month = local.month.toString().padLeft(2, '0');
-  final day = local.day.toString().padLeft(2, '0');
-  final hour = local.hour.toString().padLeft(2, '0');
-  final minute = local.minute.toString().padLeft(2, '0');
-  return '$year-$month-$day $hour:$minute';
+  return formatLocalTime(raw);
 }
 
 List<String> feedbackTags(dynamic raw) {

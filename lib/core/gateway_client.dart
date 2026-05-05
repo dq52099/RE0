@@ -811,6 +811,17 @@ class GatewayClient {
     }, fallback: '上游测活失败。');
   }
 
+  Future<Map<String, dynamic>> adminLocalBackups() async {
+    return _getMap('/api/admin/local-backups', fallback: '读取备份记录失败。');
+  }
+
+  Future<Map<String, dynamic>> runAdminLocalBackup() async {
+    return _guard(() async {
+      final res = await _dio.post('/api/admin/local-backups/run');
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '执行数据备份失败。');
+  }
+
   Future<List<dynamic>> adminApiKeys() async {
     return _getList('/api/admin/api-keys', fallback: '读取 API Key 失败。');
   }

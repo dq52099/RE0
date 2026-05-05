@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'local_time_format.dart';
 import 'timezone_reset_hint.dart';
 
 Future<void> showPointsSheet(
@@ -275,12 +276,5 @@ int _intValue(dynamic value) => int.tryParse(value?.toString() ?? '') ?? 0;
 String _signed(int value) => value > 0 ? '+$value' : value.toString();
 
 String _formatTime(String? raw) {
-  final parsed = raw == null ? null : DateTime.tryParse(raw);
-  if (parsed == null) return '';
-  final local = parsed.toLocal();
-  final month = local.month.toString().padLeft(2, '0');
-  final day = local.day.toString().padLeft(2, '0');
-  final hour = local.hour.toString().padLeft(2, '0');
-  final minute = local.minute.toString().padLeft(2, '0');
-  return '$month-$day $hour:$minute';
+  return formatLocalTime(raw, fallback: '');
 }

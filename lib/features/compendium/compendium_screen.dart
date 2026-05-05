@@ -9,6 +9,7 @@ import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
 import '../../core/cached_gateway_image.dart';
 import '../../core/compact_save_notice.dart';
+import '../../core/local_time_format.dart';
 import '../../core/providers.dart';
 import 'image_preview_screen.dart';
 
@@ -1086,17 +1087,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   }
 
   String _formatCreatedAt(String? raw) {
-    final parsed = raw == null ? null : DateTime.tryParse(raw);
-    if (parsed == null) {
-      return '时间未记录';
-    }
-    final local = parsed.toLocal();
-    final year = local.year.toString().padLeft(4, '0');
-    final month = local.month.toString().padLeft(2, '0');
-    final day = local.day.toString().padLeft(2, '0');
-    final hour = local.hour.toString().padLeft(2, '0');
-    final minute = local.minute.toString().padLeft(2, '0');
-    return '$year-$month-$day $hour:$minute';
+    return formatLocalTime(raw, fallback: '时间未记录');
   }
 
   String? _formatDuration(dynamic raw) {

@@ -5,6 +5,7 @@
 .pub-cache/
 .pub/
 build/
+data/
 
 android/.gradle/
 android/local.properties

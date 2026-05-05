@@ -569,7 +569,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     keyboardType: TextInputType.emailAddress,
                     decoration: const InputDecoration(
                       labelText: '邮箱',
-                      helperText: '绑定后可用邮箱验证码登录和找回密码',
+                      helperText: '绑定后可用邮箱密码登录和找回密码',
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -595,7 +595,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                   child:
                                       CircularProgressIndicator(strokeWidth: 2),
                                 )
-                              : const Text('获取验证码'),
+                              : const Text('发送邮件'),
                         ),
                       ),
                     ],

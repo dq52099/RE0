@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api_error.dart';
 import '../../core/brand_background.dart';
 import '../../core/compact_save_notice.dart';
+import '../../core/local_time_format.dart';
 import '../../core/providers.dart';
 import '../feedback/feedback_screen.dart';
 import '../gallery/gallery_detail_screen.dart';
@@ -297,14 +298,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   }
 
   String _formatTime(String? raw) {
-    final parsed = raw == null ? null : DateTime.tryParse(raw);
-    if (parsed == null) return '';
-    final local = parsed.toLocal();
-    final month = local.month.toString().padLeft(2, '0');
-    final day = local.day.toString().padLeft(2, '0');
-    final hour = local.hour.toString().padLeft(2, '0');
-    final minute = local.minute.toString().padLeft(2, '0');
-    return '$month-$day $hour:$minute';
+    return formatLocalTime(raw, fallback: '');
   }
 
   void _showError(Object error, String fallback) {

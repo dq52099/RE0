@@ -603,6 +603,11 @@ class _FeedbackComposeScreenState
     extends ConsumerState<_FeedbackComposeScreen> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  final FocusNode _titleFocusNode = FocusNode();
+  final FocusNode _contentFocusNode = FocusNode();
+  final GlobalKey _titleFieldKey = GlobalKey();
+  final GlobalKey _contentFieldKey = GlobalKey();
   String _type = 'feedback';
   String _category = 'feature';
   bool _submitting = false;
@@ -611,13 +616,33 @@ class _FeedbackComposeScreenState
   void initState() {
     super.initState();
     _type = widget.initialType == 'wish' ? 'wish' : 'feedback';
+    _titleFocusNode.addListener(() => _ensureFieldVisible(_titleFieldKey));
+    _contentFocusNode.addListener(() => _ensureFieldVisible(_contentFieldKey));
   }
 
   @override
   void dispose() {
+    _titleFocusNode.dispose();
+    _contentFocusNode.dispose();
+    _scrollController.dispose();
     _titleController.dispose();
     _contentController.dispose();
     super.dispose();
+  }
+
+  void _ensureFieldVisible(GlobalKey key) {
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future<void>.delayed(const Duration(milliseconds: 180));
+      final context = key.currentContext;
+      if (!mounted || context == null) return;
+      await Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+        alignment: 0.16,
+      );
+    });
   }
 
   Future<void> _submit() async {
@@ -656,112 +681,125 @@ class _FeedbackComposeScreenState
   @override
   Widget build(BuildContext context) {
     final brand = ref.watch(brandProvider);
-    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
     return Scaffold(
-      resizeToAvoidBottomInset: false,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(title: const Text('提交反馈与许愿')),
       body: BrandBackground(
         child: SafeArea(
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + keyboard),
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            children: [
-              _composeHeader(brand),
-              const SizedBox(height: 14),
-              _composePanel(
-                brand,
-                title: '类型',
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _typeCard(
-                        brand,
-                        type: 'feedback',
-                        icon: Icons.feedback_outlined,
-                        title: '反馈',
-                        subtitle: '问题、建议、体验',
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _typeCard(
-                        brand,
-                        type: 'wish',
-                        icon: Icons.auto_awesome_outlined,
-                        title: '许愿',
-                        subtitle: '功能、模型、主题',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              _composePanel(
-                brand,
-                title: '分类',
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final item in feedbackCategories) _categoryChip(item),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              _composePanel(
-                brand,
-                title: '内容',
-                child: Column(
-                  children: [
-                    TextField(
-                      controller: _titleController,
-                      maxLength: 80,
-                      textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(
-                        labelText: '标题',
-                        hintText: '一句话说明重点',
-                        prefixIcon: Icon(Icons.title),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _contentController,
-                      minLines: 7,
-                      maxLines: 12,
-                      maxLength: 1200,
-                      textInputAction: TextInputAction.newline,
-                      decoration: const InputDecoration(
-                        labelText: '详细内容',
-                        hintText: '写下现象、期望效果，或希望新增的能力',
-                        alignLabelWithHint: true,
-                        prefixIcon: Padding(
-                          padding: EdgeInsets.only(bottom: 126),
-                          child: Icon(Icons.notes_outlined),
+          child: AnimatedPadding(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewInsetsOf(context).bottom,
+            ),
+            child: ListView(
+              controller: _scrollController,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              children: [
+                _composeHeader(brand),
+                const SizedBox(height: 14),
+                _composePanel(
+                  brand,
+                  title: '类型',
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _typeCard(
+                          brand,
+                          type: 'feedback',
+                          icon: Icons.feedback_outlined,
+                          title: '反馈',
+                          subtitle: '问题、建议、体验',
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _typeCard(
+                          brand,
+                          type: 'wish',
+                          icon: Icons.auto_awesome_outlined,
+                          title: '许愿',
+                          subtitle: '功能、模型、主题',
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 18),
-              FilledButton.icon(
-                onPressed: _submitting ? null : _submit,
-                icon: _submitting
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.send_outlined),
-                label: Text(_submitting ? '提交中' : '提交'),
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed:
-                    _submitting ? null : () => Navigator.of(context).pop(false),
-                child: const Text('取消'),
-              ),
-            ],
+                const SizedBox(height: 12),
+                _composePanel(
+                  brand,
+                  title: '分类',
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final item in feedbackCategories)
+                        _categoryChip(item),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _composePanel(
+                  brand,
+                  title: '内容',
+                  child: Column(
+                    children: [
+                      TextField(
+                        key: _titleFieldKey,
+                        controller: _titleController,
+                        focusNode: _titleFocusNode,
+                        maxLength: 80,
+                        textInputAction: TextInputAction.next,
+                        decoration: const InputDecoration(
+                          labelText: '标题',
+                          hintText: '一句话说明重点',
+                          prefixIcon: Icon(Icons.title),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        key: _contentFieldKey,
+                        controller: _contentController,
+                        focusNode: _contentFocusNode,
+                        minLines: 7,
+                        maxLines: 12,
+                        maxLength: 1200,
+                        textInputAction: TextInputAction.newline,
+                        decoration: const InputDecoration(
+                          labelText: '详细内容',
+                          hintText: '写下现象、期望效果，或希望新增的能力',
+                          alignLabelWithHint: true,
+                          prefixIcon: Padding(
+                            padding: EdgeInsets.only(bottom: 126),
+                            child: Icon(Icons.notes_outlined),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+                FilledButton.icon(
+                  onPressed: _submitting ? null : _submit,
+                  icon: _submitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.send_outlined),
+                  label: Text(_submitting ? '提交中' : '提交'),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: _submitting
+                      ? null
+                      : () => Navigator.of(context).pop(false),
+                  child: const Text('取消'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
