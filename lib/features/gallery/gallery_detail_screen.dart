@@ -6,6 +6,7 @@ import '../../core/api_error.dart';
 import '../../core/app_brand.dart';
 import '../../core/cached_gateway_image.dart';
 import '../../core/compact_save_notice.dart';
+import '../../core/gateway_avatar.dart';
 import '../../core/image_save_flow.dart';
 import '../../core/local_time_format.dart';
 import '../../core/providers.dart';
@@ -985,19 +986,13 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
   }) {
     final normalizedUrl = avatarUrl.trim();
     final normalizedName = displayName.trim();
-    final avatar = CircleAvatar(
+    final avatar = GatewayAvatar(
+      avatarUrl: normalizedUrl,
+      displayName: normalizedName,
       radius: radius,
       backgroundColor: brand.primaryColor.withValues(alpha: 0.14),
-      backgroundImage:
-          normalizedUrl.isNotEmpty ? NetworkImage(normalizedUrl) : null,
-      child: normalizedUrl.isEmpty
-          ? Text(
-              normalizedName.isEmpty
-                  ? fallback
-                  : normalizedName.substring(0, 1),
-              style: Theme.of(context).textTheme.bodySmall,
-            )
-          : null,
+      fallback: fallback,
+      textStyle: Theme.of(context).textTheme.bodySmall,
     );
     if (normalizedUrl.isEmpty) return avatar;
     return InkWell(

@@ -189,22 +189,12 @@ class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage>
   }
 
   Widget _networkFallback() {
-    return Image.network(
-      widget.url,
+    return Container(
       width: widget.width,
-      height: widget.height,
-      fit: widget.fit,
-      cacheWidth: widget.cacheWidth,
-      cacheHeight: widget.cacheHeight,
-      filterQuality: FilterQuality.low,
-      gaplessPlayback: true,
-      errorBuilder: (_, __, ___) => Container(
-        width: widget.width,
-        height: widget.height ?? 220,
-        alignment: Alignment.center,
-        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.25),
-        child: const Icon(Icons.broken_image_outlined),
-      ),
+      height: widget.height ?? 220,
+      alignment: Alignment.center,
+      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.25),
+      child: const Icon(Icons.broken_image_outlined),
     );
   }
 

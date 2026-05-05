@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api_error.dart';
 import '../../core/brand_background.dart';
 import '../../core/compact_save_notice.dart';
+import '../../core/gateway_avatar.dart';
 import '../../core/local_time_format.dart';
 import '../../core/providers.dart';
 import '../feedback/feedback_screen.dart';
@@ -168,15 +169,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      CircleAvatar(
+                      GatewayAvatar(
+                        avatarUrl: actorAvatar,
+                        displayName:
+                            actorName ?? item['type']?.toString() ?? '',
                         radius: 22,
-                        backgroundImage: actorAvatar.isNotEmpty
-                            ? NetworkImage(actorAvatar)
-                            : null,
-                        child: actorAvatar.isEmpty
-                            ? Text(
-                                _initial(actorName ?? item['type']?.toString()))
-                            : null,
+                        backgroundColor:
+                            colorScheme.primary.withValues(alpha: 0.12),
+                        fallback:
+                            _initial(actorName ?? item['type']?.toString()),
                       ),
                       const SizedBox(width: 12),
                       Expanded(

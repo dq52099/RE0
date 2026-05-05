@@ -17,7 +17,10 @@ final gatewayClientProvider = Provider<GatewayClient>((ref) {
 });
 
 final imageCacheProvider = Provider<ImageCacheService>((ref) {
-  return ImageCacheService();
+  final client = ref.read(gatewayClientProvider);
+  return ImageCacheService(
+    downloader: (url, savePath) => client.downloadFile(url, savePath),
+  );
 });
 
 final appUpdateProvider = Provider<AppUpdateService>((ref) {

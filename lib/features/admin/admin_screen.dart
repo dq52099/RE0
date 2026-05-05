@@ -36,6 +36,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   String _inviteStatusFilter = '';
   bool _isProviderHealthChecking = false;
   bool _isRunningBackup = false;
+  bool _isPublishingAnnouncement = false;
+  bool _isGrantingWelfare = false;
 
   @override
   Widget build(BuildContext context) {
@@ -116,6 +118,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         menus.contains('feedback')) {
       sections.add(const _AdminSection('feedback', '用户反馈'));
     }
+    if (isAdmin ||
+        permissions.contains('announcement.view') ||
+        menus.contains('announcements')) {
+      sections.add(const _AdminSection('announcements', '公告福利'));
+    }
     if (isAdmin || permissions.contains('feedback.ai')) {
       sections.add(const _AdminSection('feedbackAi', '反馈 AI'));
     }
@@ -193,6 +200,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           canReply: _can(user, 'feedback.reply'),
           canAi: _can(user, 'feedback.ai'),
         );
+      case 'announcements':
+        return _announcementsPage(
+          brand,
+          canManage: _can(user, 'announcement.manage'),
+        );
       case 'backups':
         return _backupsPage(brand, canManage: _can(user, 'settings.manage'));
       case 'settings':
@@ -223,6 +235,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               Icons.forum_outlined,
               'feedback',
               '未关闭 ${overview['feedback_open_count'] ?? 0} 条'),
+          _OverviewItem(
+              '公告福利',
+              overview['announcement_count'],
+              Icons.campaign_outlined,
+              'announcements',
+              '福利 ${overview['welfare_grant_count'] ?? 0} 次'),
           _OverviewItem('用户组', overview['group_count'],
               Icons.group_work_outlined, 'groups', '管理默认额度'),
           _OverviewItem('角色', overview['role_count'],
@@ -778,6 +796,70 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 ],
               );
             }),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _announcementsPage(AppBrand brand, {required bool canManage}) {
+    return _futureSection<Map<String, dynamic>>(
+      future: ref.read(gatewayClientProvider).adminAnnouncements(),
+      builder: (data) {
+        final announcements = _mapList(data['announcements']);
+        final grants = _mapList(data['welfare_grants']);
+        return _adminList(
+          action: canManage
+              ? Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: _isPublishingAnnouncement
+                          ? null
+                          : _publishAnnouncement,
+                      icon: const Icon(Icons.campaign_outlined),
+                      label:
+                          Text(_isPublishingAnnouncement ? '发布中...' : '发布公告'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _isGrantingWelfare ? null : _grantWelfare,
+                      icon: const Icon(Icons.card_giftcard_outlined),
+                      label: Text(_isGrantingWelfare ? '发放中...' : '发放福利'),
+                    ),
+                  ],
+                )
+              : null,
+          children: [
+            _infoCard(
+              title: '展示位置',
+              subtitle: '公告会进入每个用户的通知中心；未读通知会在“我的”页显示红点。',
+              lines: const ['系统公告', '全员通知', '福利到账'],
+            ),
+            ...announcements.map(
+              (item) => _infoCard(
+                title: _text(item['title']),
+                subtitle: _text(item['body']),
+                badge: '公告',
+                lines: [
+                  '发布者: ${_text(item['created_by_display_name'], fallback: _text(item['created_by_username']))}',
+                  '时间: ${formatLocalTime(_text(item['created_at']))}',
+                ],
+              ),
+            ),
+            ...grants.map(
+              (item) => _infoCard(
+                title: _text(item['title']),
+                subtitle: _text(item['body'], fallback: '全员额度福利'),
+                badge: '福利',
+                lines: [
+                  '生图 +${_text(item['generate_bonus'], fallback: '0')}',
+                  '改图 +${_text(item['edit_bonus'], fallback: '0')}',
+                  '人数: ${_text(item['recipient_count'], fallback: '0')}',
+                  '时间: ${formatLocalTime(_text(item['created_at']))}',
+                ],
+              ),
+            ),
           ],
         );
       },
@@ -2468,6 +2550,192 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _publishAnnouncement() async {
+    final title = TextEditingController();
+    final body = TextEditingController();
+    var notify = true;
+    final payload = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return _adminDialog(
+            title: '发布公告',
+            icon: Icons.campaign_outlined,
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: title,
+                  decoration: const InputDecoration(labelText: '公告标题'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: body,
+                  minLines: 4,
+                  maxLines: 8,
+                  decoration: const InputDecoration(labelText: '公告内容'),
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  value: notify,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('同步推送到通知'),
+                  onChanged: (value) => setDialogState(() => notify = value),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, {
+                  'title': title.text.trim(),
+                  'body': body.text.trim(),
+                  'notify': notify,
+                }),
+                child: const Text('发布'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    title.dispose();
+    body.dispose();
+    if (payload == null) return;
+    if (_text(payload['title'], fallback: '').length < 2 ||
+        _text(payload['body'], fallback: '').length < 2) {
+      _showMessage('请填写公告标题和内容。', isError: true);
+      return;
+    }
+    setState(() => _isPublishingAnnouncement = true);
+    try {
+      await ref.read(gatewayClientProvider).publishAdminAnnouncement(
+            title: _text(payload['title'], fallback: ''),
+            body: _text(payload['body'], fallback: ''),
+            notify: payload['notify'] == true,
+          );
+      if (!mounted) return;
+      _showMessage('公告已发布。');
+      _reload();
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage(friendlyError(error, fallback: '发布公告失败。'), isError: true);
+    } finally {
+      if (mounted) setState(() => _isPublishingAnnouncement = false);
+    }
+  }
+
+  Future<void> _grantWelfare() async {
+    final title = TextEditingController(text: '全员福利');
+    final body = TextEditingController();
+    final generate = TextEditingController(text: '0');
+    final edit = TextEditingController(text: '0');
+    var notify = true;
+    final payload = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return _adminDialog(
+            title: '发放福利',
+            icon: Icons.card_giftcard_outlined,
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: title,
+                  decoration: const InputDecoration(labelText: '福利标题'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: body,
+                  minLines: 2,
+                  maxLines: 5,
+                  decoration: const InputDecoration(labelText: '说明，可选'),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: generate,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: '生图额度'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: edit,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: '改图额度'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  value: notify,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('同步推送到通知'),
+                  onChanged: (value) => setDialogState(() => notify = value),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, {
+                  'title': title.text.trim(),
+                  'body': body.text.trim(),
+                  'generate': int.tryParse(generate.text.trim()) ?? 0,
+                  'edit': int.tryParse(edit.text.trim()) ?? 0,
+                  'notify': notify,
+                }),
+                child: const Text('发放'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    title.dispose();
+    body.dispose();
+    generate.dispose();
+    edit.dispose();
+    if (payload == null) return;
+    final generateBonus = payload['generate'] as int? ?? 0;
+    final editBonus = payload['edit'] as int? ?? 0;
+    if (generateBonus <= 0 && editBonus <= 0) {
+      _showMessage('请至少填写一种福利额度。', isError: true);
+      return;
+    }
+    setState(() => _isGrantingWelfare = true);
+    try {
+      final result = await ref.read(gatewayClientProvider).grantAdminWelfare(
+            title: _text(payload['title'], fallback: '全员福利'),
+            body: _text(payload['body'], fallback: ''),
+            generateBonus: generateBonus,
+            editBonus: editBonus,
+            notify: payload['notify'] == true,
+          );
+      if (!mounted) return;
+      _showMessage(
+          '已给 ${_text(result['recipient_count'], fallback: '0')} 个用户发放福利。');
+      _reload();
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage(friendlyError(error, fallback: '发放福利失败。'), isError: true);
+    } finally {
+      if (mounted) setState(() => _isGrantingWelfare = false);
+    }
   }
 
   Future<Map<String, dynamic>?> _basicEntityDialog({

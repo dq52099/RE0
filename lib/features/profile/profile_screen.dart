@@ -11,6 +11,7 @@ import '../../core/app_update_service.dart';
 import '../../core/brand_background.dart';
 import '../../core/compact_dropdown_field.dart';
 import '../../core/compact_save_notice.dart';
+import '../../core/gateway_avatar.dart';
 import '../../core/level_rewards_sheet.dart';
 import '../../core/points_sheet.dart';
 import '../../core/providers.dart';
@@ -829,6 +830,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   onTap: () => _openAdmin(targetView: systemTargetView),
                 ),
               ),
+            if (hasSystemManagement)
+              _menuCard(
+                child: ListTile(
+                  leading: Icon(
+                    Icons.campaign_outlined,
+                    color: brand.warningColor,
+                  ),
+                  title: const Text('公告福利'),
+                  subtitle: _menuSubtitle('发布公告，给全员发放生图和改图额度'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _openAdmin(targetView: 'announcements'),
+                ),
+              ),
             _menuCard(
               child: ListTile(
                 leading:
@@ -1028,6 +1042,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     context,
                     levelInfo,
                     accentColor: brand.primaryColor,
+                    client: ref.read(gatewayClientProvider),
                   ),
                 ),
                 _chip(
@@ -1154,24 +1169,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         shape: BoxShape.circle,
       ),
       clipBehavior: Clip.antiAlias,
-      child: avatarUrl.isEmpty
-          ? Center(
-              child: Text(
-                initial,
-                style: const TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            )
-          : Image.network(
-              avatarUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Icon(
-                Icons.person,
-                color: brand.primaryColor,
-              ),
-            ),
+      child: GatewayAvatar(
+        avatarUrl: avatarUrl,
+        displayName: displayName,
+        radius: 40,
+        fallback: initial,
+        backgroundColor: Colors.transparent,
+        textStyle: const TextStyle(
+          fontSize: 26,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
     );
   }
 
@@ -1348,6 +1356,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       'api_key.view',
       'audit.view',
       'feedback.view',
+      'announcement.view',
     }).isNotEmpty) {
       return true;
     }
@@ -1366,6 +1375,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       'apiKeys',
       'audit',
       'feedback',
+      'announcements',
     }).isNotEmpty;
   }
 
@@ -1385,6 +1395,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       'roles',
       'apiKeys',
       'feedback',
+      'announcements',
       'audit',
       'permissions',
     ]) {
@@ -1402,6 +1413,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     if (permissions.contains('role.view')) return 'roles';
     if (permissions.contains('api_key.view')) return 'apiKeys';
     if (permissions.contains('feedback.view')) return 'feedback';
+    if (permissions.contains('announcement.view')) return 'announcements';
     if (permissions.contains('audit.view')) return 'audit';
     if (permissions.contains('permission.view')) return 'permissions';
     return null;

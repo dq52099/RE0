@@ -7,6 +7,7 @@ import '../../core/brand_background.dart';
 import '../../core/cached_gateway_image.dart';
 import '../../core/compact_dropdown_field.dart';
 import '../../core/compact_save_notice.dart';
+import '../../core/gateway_avatar.dart';
 import '../../core/local_time_format.dart';
 import '../../core/providers.dart';
 import '../../core/value_parsers.dart';
@@ -887,16 +888,13 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
   }) {
     final avatarUrl = item['author_avatar_url']?.toString().trim() ?? '';
     final displayName = item['display_name']?.toString() ?? '画';
-    final avatar = CircleAvatar(
+    final avatar = GatewayAvatar(
+      avatarUrl: avatarUrl,
+      displayName: displayName,
       radius: radius,
       backgroundColor: brand.primaryColor.withValues(alpha: 0.14),
-      backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
-      child: avatarUrl.isEmpty
-          ? Text(
-              displayName.isEmpty ? '画' : displayName.substring(0, 1),
-              style: TextStyle(fontSize: fontSize),
-            )
-          : null,
+      fallback: '画',
+      textStyle: TextStyle(fontSize: fontSize),
     );
     if (avatarUrl.isEmpty) return avatar;
     return InkWell(

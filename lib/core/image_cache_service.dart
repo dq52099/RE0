@@ -17,8 +17,10 @@ class SavedImage {
 }
 
 class ImageCacheService {
-  ImageCacheService()
-      : _dio = Dio(
+  ImageCacheService({
+    Future<void> Function(String url, String savePath)? downloader,
+  })  : _downloader = downloader,
+        _dio = Dio(
           BaseOptions(
             connectTimeout: const Duration(seconds: 30),
             receiveTimeout: const Duration(minutes: 5),
@@ -28,6 +30,7 @@ class ImageCacheService {
   static const MethodChannel _downloadsChannel = MethodChannel('re0/downloads');
 
   final Dio _dio;
+  final Future<void> Function(String url, String savePath)? _downloader;
 
   Future<File> cachedFileFor(String url, {bool forceRefresh = false}) async {
     final directory = await _cacheDirectory();
@@ -41,12 +44,16 @@ class ImageCacheService {
       await tempFile.delete();
     }
 
-    await _dio.download(
-      url,
-      tempFile.path,
-      deleteOnError: true,
-      options: Options(responseType: ResponseType.bytes),
-    );
+    if (_downloader != null) {
+      await _downloader!(url, tempFile.path);
+    } else {
+      await _dio.download(
+        url,
+        tempFile.path,
+        deleteOnError: true,
+        options: Options(responseType: ResponseType.bytes),
+      );
+    }
 
     if (await file.exists()) {
       await file.delete();

@@ -728,6 +728,55 @@ class GatewayClient {
     }, fallback: '生成邀请码失败。');
   }
 
+  Future<Map<String, dynamic>> getLevelRewards() async {
+    return _getMap('/api/me/level-rewards', fallback: '读取等级奖励失败。');
+  }
+
+  Future<Map<String, dynamic>> claimLevelReward(int level) async {
+    return _guard(() async {
+      final res = await _dio.post('/api/me/level-rewards/$level/claim');
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '领取等级奖励失败。');
+  }
+
+  Future<Map<String, dynamic>> adminAnnouncements() async {
+    return _getMap('/api/admin/announcements', fallback: '读取公告福利失败。');
+  }
+
+  Future<Map<String, dynamic>> publishAdminAnnouncement({
+    required String title,
+    required String body,
+    required bool notify,
+  }) async {
+    return _guard(() async {
+      final res = await _dio.post('/api/admin/announcements', data: {
+        'title': title,
+        'body': body,
+        'notify': notify,
+      });
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '发布公告失败。');
+  }
+
+  Future<Map<String, dynamic>> grantAdminWelfare({
+    required String title,
+    required String body,
+    required int generateBonus,
+    required int editBonus,
+    required bool notify,
+  }) async {
+    return _guard(() async {
+      final res = await _dio.post('/api/admin/welfare-grants', data: {
+        'title': title,
+        if (body.trim().isNotEmpty) 'body': body.trim(),
+        'generate_bonus': generateBonus,
+        'edit_bonus': editBonus,
+        'notify': notify,
+      });
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '发放福利失败。');
+  }
+
   Future<dynamic> saveAdminUser(
       String? id, Map<String, dynamic> payload) async {
     return _guard(() async {
