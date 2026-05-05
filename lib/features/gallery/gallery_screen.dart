@@ -524,8 +524,12 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (imageUrl.isNotEmpty)
-            GestureDetector(
-              onTap: () => Navigator.of(context).push(
+            _imageWithSourcePreview(
+              brand: brand,
+              imageUrl: imageUrl,
+              sourceUrl: item['source_image_url']?.toString() ?? '',
+              height: imageHeight,
+              onMainTap: () => Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => ImagePreviewScreen(
                     items: previewItems,
@@ -537,14 +541,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                   ),
                 ),
               ),
-              child: CachedGatewayImage(
-                url: imageUrl,
-                width: double.infinity,
-                height: imageHeight,
-                fit: BoxFit.cover,
-                showDownload: false,
-                accentColor: brand.primaryColor,
-              ),
+              caption: _promptSummary(item),
             ),
           Padding(
             padding: EdgeInsets.all(cardPadding),
@@ -746,6 +743,88 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
 
   Color _actionAccent(AppBrand brand, String action) {
     return action == 'edit' ? brand.warningColor : brand.primaryColor;
+  }
+
+  Widget _imageWithSourcePreview({
+    required AppBrand brand,
+    required String imageUrl,
+    required String sourceUrl,
+    required double height,
+    required VoidCallback onMainTap,
+    String? caption,
+  }) {
+    final hasSource = sourceUrl.isNotEmpty && sourceUrl != imageUrl;
+    return Stack(
+      children: [
+        GestureDetector(
+          onTap: onMainTap,
+          child: CachedGatewayImage(
+            url: imageUrl,
+            width: double.infinity,
+            height: height,
+            fit: BoxFit.cover,
+            showDownload: false,
+            accentColor: brand.primaryColor,
+          ),
+        ),
+        if (hasSource)
+          Positioned(
+            left: 10,
+            top: 10,
+            child: Material(
+              color: Colors.black.withValues(alpha: 0.42),
+              borderRadius: BorderRadius.circular(8),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ImagePreviewScreen(
+                      showDownload: false,
+                      items: [
+                        PreviewImageEntry(
+                          url: sourceUrl,
+                          title: '原图',
+                          caption: caption,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                child: SizedBox(
+                  width: 70,
+                  height: 70,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      CachedGatewayImage(
+                        url: sourceUrl,
+                        fit: BoxFit.cover,
+                        showDownload: false,
+                        accentColor: brand.warningColor,
+                        cacheWidth: 180,
+                      ),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          color: Colors.black.withValues(alpha: 0.58),
+                          alignment: Alignment.center,
+                          child: const Text(
+                            '原图',
+                            style: TextStyle(color: Colors.white, fontSize: 11),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   Widget _actionPill({

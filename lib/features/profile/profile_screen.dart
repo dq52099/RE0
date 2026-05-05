@@ -591,9 +591,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 showCenterNotice(context, '请填写邮箱和验证码。');
                 return;
               }
-              if (!RegExp(r'^[^@\s]+@(qq\.com|163\.com|163\.cm)$')
+              if (!RegExp(r'^[^@\s]+@(qq\.com|163\.com)$')
                   .hasMatch(emailText.toLowerCase())) {
-                showCenterNotice(context, '当前仅支持 qq.com、163.com 和 163.cm 邮箱。');
+                showCenterNotice(context, '当前仅支持 qq.com 和 163.com 邮箱。');
                 return;
               }
               setDialogState(() => binding = true);

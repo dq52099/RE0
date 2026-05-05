@@ -1891,21 +1891,23 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 const Divider(),
                 const SizedBox(height: 8),
                 Text(
-                  '邮件验证码',
+                  '邮件',
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: hermesBase,
-                  decoration:
-                      const InputDecoration(labelText: 'HTTP 邮件服务 base_url'),
+                  decoration: const InputDecoration(
+                    labelText: 'OpenClaw/Hermes 通知服务 base_url',
+                    helperText: '用于系统通知备用 HTTP 发信；验证码只走 Resend',
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: hermesKey,
                   obscureText: true,
                   decoration: const InputDecoration(
-                    labelText: 'HTTP 邮件服务 Key，留空不修改',
+                    labelText: 'OpenClaw/Hermes 通知服务 Key，留空不修改',
                     helperText: '支持 Bearer；填写 user:password 时使用 Basic',
                   ),
                 ),
@@ -2208,7 +2210,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 TextField(
                   controller: openlistPrimaryPassword,
                   obscureText: true,
-                  decoration: const InputDecoration(labelText: '密码，留空不修改'),
+                  decoration: const InputDecoration(
+                    labelText: 'WebDAV 密码，留空不修改',
+                    helperText: '用于备份上传；OpenList 后台登录密码需在 OpenList 内单独设置',
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -2241,7 +2246,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 TextField(
                   controller: openlistSecondaryPassword,
                   obscureText: true,
-                  decoration: const InputDecoration(labelText: '密码，留空不修改'),
+                  decoration: const InputDecoration(
+                    labelText: 'WebDAV 密码，留空不修改',
+                    helperText: '用于备份上传；OpenList 后台登录密码需在 OpenList 内单独设置',
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -2928,12 +2936,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       {
         'key': 'hermes_base_url',
         'value': '',
-        'description': 'HTTP 邮件服务地址，用于发送验证码',
+        'description': 'OpenClaw/Hermes 通知服务地址；验证码只走 Resend',
       },
       {
         'key': 'hermes_api_key',
         'value': 'xxx',
-        'description': 'HTTP 邮件服务 Key',
+        'description': 'OpenClaw/Hermes 通知服务 Key',
       },
       {
         'key': 'resend_base_url',

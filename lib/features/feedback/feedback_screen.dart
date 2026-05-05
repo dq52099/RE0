@@ -616,7 +616,6 @@ class _FeedbackComposeScreenState
   void initState() {
     super.initState();
     _type = widget.initialType == 'wish' ? 'wish' : 'feedback';
-    _titleFocusNode.addListener(() => _ensureFieldVisible(_titleFieldKey));
     _contentFocusNode.addListener(() => _ensureFieldVisible(_contentFieldKey));
   }
 
@@ -632,7 +631,7 @@ class _FeedbackComposeScreenState
 
   void _ensureFieldVisible(GlobalKey key) {
     if (!mounted) return;
-    if (!(_titleFocusNode.hasFocus || _contentFocusNode.hasFocus)) return;
+    if (!_contentFocusNode.hasFocus) return;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await Future<void>.delayed(const Duration(milliseconds: 260));
       final context = key.currentContext;

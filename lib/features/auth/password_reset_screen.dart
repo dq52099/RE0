@@ -118,9 +118,9 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
 
     if (email.isEmpty) {
       emailError = '请先发送验证码获取收件邮箱。';
-    } else if (!RegExp(r'^[^@\s]+@(qq\.com|163\.com|163\.cm)$')
+    } else if (!RegExp(r'^[^@\s]+@(qq\.com|163\.com)$')
         .hasMatch(email.toLowerCase())) {
-      emailError = '当前仅支持 qq.com、163.com 和 163.cm 邮箱。';
+      emailError = '当前仅支持 qq.com 和 163.com 邮箱。';
     }
     if (code.isEmpty) {
       codeError = '请输入验证码。';

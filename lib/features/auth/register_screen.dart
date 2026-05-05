@@ -84,9 +84,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
 
     if (email.isNotEmpty &&
-        !RegExp(r'^[^@\s]+@(qq\.com|163\.com|163\.cm)$')
+        !RegExp(r'^[^@\s]+@(qq\.com|163\.com)$')
             .hasMatch(email.toLowerCase())) {
-      emailError = '当前仅支持 qq.com、163.com 和 163.cm 邮箱。';
+      emailError = '当前仅支持 qq.com 和 163.com 邮箱。';
     }
     if (email.isNotEmpty && emailCode.isEmpty) {
       emailCodeError = '请先获取并填写邮箱验证码。';
@@ -135,9 +135,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       setState(() => _emailError = '请先填写邮箱。');
       return;
     }
-    if (!RegExp(r'^[^@\s]+@(qq\.com|163\.com|163\.cm)$')
+    if (!RegExp(r'^[^@\s]+@(qq\.com|163\.com)$')
         .hasMatch(email.toLowerCase())) {
-      setState(() => _emailError = '当前仅支持 qq.com、163.com 和 163.cm 邮箱。');
+      setState(() => _emailError = '当前仅支持 qq.com 和 163.com 邮箱。');
       return;
     }
 

@@ -749,9 +749,12 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (imageUrl != null && imageUrl.isNotEmpty)
-            GestureDetector(
-              onLongPress: _dismissKeyboard,
-              onTap: () {
+            _imageWithSourcePreview(
+              brand: brand,
+              imageUrl: imageUrl,
+              sourceUrl: item['source_image_url']?.toString() ?? '',
+              height: 238,
+              onMainTap: () {
                 _dismissKeyboard();
                 Navigator.of(context).push(
                   MaterialPageRoute(
@@ -762,15 +765,8 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                   ),
                 );
               },
-              child: CachedGatewayImage(
-                url: imageUrl,
-                width: double.infinity,
-                height: 238,
-                borderRadius: brand.historyImageRadius,
-                fit: BoxFit.cover,
-                accentColor: brand.primaryColor,
-                cacheWidth: 720,
-              ),
+              onLongPress: _dismissKeyboard,
+              caption: item['prompt']?.toString(),
             ),
           Padding(
             padding: const EdgeInsets.all(16),
@@ -1135,6 +1131,106 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
         )
         .where((entry) => entry.url.isNotEmpty)
         .toList();
+  }
+
+  Widget _imageWithSourcePreview({
+    required AppBrand brand,
+    required String imageUrl,
+    required String sourceUrl,
+    required double height,
+    required VoidCallback onMainTap,
+    required VoidCallback onLongPress,
+    String? caption,
+  }) {
+    final hasSource = sourceUrl.isNotEmpty && sourceUrl != imageUrl;
+    return Stack(
+      children: [
+        GestureDetector(
+          onLongPress: onLongPress,
+          onTap: onMainTap,
+          child: CachedGatewayImage(
+            url: imageUrl,
+            width: double.infinity,
+            height: height,
+            borderRadius: brand.historyImageRadius,
+            fit: BoxFit.cover,
+            accentColor: brand.primaryColor,
+            cacheWidth: 720,
+          ),
+        ),
+        if (hasSource)
+          Positioned(
+            left: 10,
+            top: 10,
+            child: _sourceThumb(
+              brand: brand,
+              sourceUrl: sourceUrl,
+              caption: caption,
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _sourceThumb({
+    required AppBrand brand,
+    required String sourceUrl,
+    String? caption,
+  }) {
+    return Material(
+      color: Colors.black.withValues(alpha: 0.42),
+      borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () {
+          _dismissKeyboard();
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ImagePreviewScreen(
+                showDownload: false,
+                items: [
+                  PreviewImageEntry(
+                    url: sourceUrl,
+                    title: '原图',
+                    caption: caption,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+        child: SizedBox(
+          width: 70,
+          height: 70,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CachedGatewayImage(
+                url: sourceUrl,
+                fit: BoxFit.cover,
+                showDownload: false,
+                accentColor: brand.warningColor,
+                cacheWidth: 180,
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  color: Colors.black.withValues(alpha: 0.58),
+                  alignment: Alignment.center,
+                  child: const Text(
+                    '原图',
+                    style: TextStyle(color: Colors.white, fontSize: 11),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Map<String, dynamic> _quotaSummaryFromResponse(dynamic value) {

@@ -280,6 +280,88 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
     );
   }
 
+  Widget _imageWithSourcePreview({
+    required AppBrand brand,
+    required String imageUrl,
+    required String sourceUrl,
+    required double height,
+    required VoidCallback onMainTap,
+    String? caption,
+  }) {
+    final hasSource = sourceUrl.isNotEmpty && sourceUrl != imageUrl;
+    return Stack(
+      children: [
+        GestureDetector(
+          onTap: onMainTap,
+          child: CachedGatewayImage(
+            url: imageUrl,
+            width: double.infinity,
+            height: height,
+            fit: BoxFit.cover,
+            showDownload: false,
+            accentColor: brand.primaryColor,
+          ),
+        ),
+        if (hasSource)
+          Positioned(
+            left: 10,
+            top: 10,
+            child: Material(
+              color: Colors.black.withValues(alpha: 0.42),
+              borderRadius: BorderRadius.circular(8),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ImagePreviewScreen(
+                      showDownload: false,
+                      items: [
+                        PreviewImageEntry(
+                          url: sourceUrl,
+                          title: '原图',
+                          caption: caption,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                child: SizedBox(
+                  width: 70,
+                  height: 70,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      CachedGatewayImage(
+                        url: sourceUrl,
+                        fit: BoxFit.cover,
+                        showDownload: false,
+                        accentColor: brand.warningColor,
+                        cacheWidth: 180,
+                      ),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          color: Colors.black.withValues(alpha: 0.58),
+                          alignment: Alignment.center,
+                          child: const Text(
+                            '原图',
+                            style: TextStyle(color: Colors.white, fontSize: 11),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final brand = ref.watch(brandProvider);
@@ -321,16 +403,13 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                GestureDetector(
-                  onTap: _openImage,
-                  child: CachedGatewayImage(
-                    url: _post['image_url']?.toString() ?? '',
-                    width: double.infinity,
-                    height: 280,
-                    fit: BoxFit.cover,
-                    showDownload: false,
-                    accentColor: brand.primaryColor,
-                  ),
+                _imageWithSourcePreview(
+                  brand: brand,
+                  imageUrl: _post['image_url']?.toString() ?? '',
+                  sourceUrl: _post['source_image_url']?.toString() ?? '',
+                  height: 280,
+                  onMainTap: _openImage,
+                  caption: _post['prompt']?.toString(),
                 ),
                 Padding(
                   padding: const EdgeInsets.all(14),
