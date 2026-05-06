@@ -1740,6 +1740,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         _settingValue(byKey, 'allow_public_registration', fallback: 'true')
                 .toLowerCase() ==
             'true';
+    var protectFileAccess =
+        _settingValue(byKey, 'protect_file_access', fallback: 'false')
+                .toLowerCase() ==
+            'true';
     var activeProviderSlot =
         _settingValue(byKey, 'provider_active_slot', fallback: 'primary');
     if (!const ['primary', 'backup'].contains(activeProviderSlot)) {
@@ -1868,6 +1872,14 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   onChanged: (value) =>
                       setDialogState(() => providerHealthcheckEnabled = value),
                   title: const Text('每小时探活并自动切换主备'),
+                ),
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  value: protectFileAccess,
+                  onChanged: (value) =>
+                      setDialogState(() => protectFileAccess = value),
+                  title: const Text('图片访问需要登录'),
+                  subtitle: const Text('关闭时头像、历史图和分享链接可直接查看；开启后未登录会跳转登录'),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -2147,6 +2159,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                       double.tryParse(editCheckinMultiplier.text),
                   'provider_instructions': instructions.text.trim(),
                   'allow_public_registration': allowRegistration,
+                  'protect_file_access': protectFileAccess,
                 }),
                 child: const Text('保存'),
               ),
@@ -3140,6 +3153,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         'key': 'provider_healthcheck_interval_minutes',
         'value': '60',
         'description': '上游文本和图片探活间隔分钟',
+      },
+      {
+        'key': 'protect_file_access',
+        'value': 'false',
+        'description': '是否要求登录后才能查看图片文件与分享链接',
       },
       {
         'key': 'general_provider_base_url',

@@ -37,6 +37,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   final Set<String> _hiddenKeys = {};
   final Set<String> _deletingKeys = {};
   final Set<String> _publishingKeys = {};
+  final Set<String> _sharingKeys = {};
   final Set<String> _retryingKeys = {};
   Timer? _searchDebounce;
   int _page = 1;
@@ -503,6 +504,43 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     }
   }
 
+  Future<void> _shareHistoryItem(Map<String, dynamic> item) async {
+    final key = _historyKey(item);
+    if (_sharingKeys.contains(key)) return;
+    final historyId = item['id']?.toString();
+    final imageUrl = item['url']?.toString();
+    if ((historyId == null || historyId.isEmpty) &&
+        (imageUrl == null || imageUrl.isEmpty)) {
+      showCenterNotice(context, '这张图片暂时不能分享');
+      return;
+    }
+    _dismissKeyboard();
+    setState(() => _sharingKeys.add(key));
+    try {
+      final result = await ref.read(gatewayClientProvider).createImageShareLink(
+            historyId: historyId,
+            url: imageUrl,
+          );
+      final shareUrl =
+          result['share_url']?.toString() ?? result['url']?.toString() ?? '';
+      if (shareUrl.isEmpty) {
+        throw const GatewayException('后端没有返回分享链接。');
+      }
+      await Clipboard.setData(ClipboardData(text: shareUrl));
+      if (!mounted) return;
+      showCenterNotice(context, '分享链接已复制');
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(error, fallback: '分享失败。'))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _sharingKeys.remove(key));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -727,6 +765,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     final key = _historyKey(item);
     final isDeleting = _deletingKeys.contains(key);
     final isPublishing = _publishingKeys.contains(key);
+    final isSharing = _sharingKeys.contains(key);
     final isRetrying = _retryingKeys.contains(key);
     final isSuccess = _isSuccessful(item);
     final action = item['action']?.toString() == 'edit' ? 'edit' : 'generate';
@@ -823,6 +862,21 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                         color: brand.primaryColor,
                         onPressed:
                             isPublishing ? null : () => _publishToGallery(item),
+                      ),
+                    if (isSuccess)
+                      IconButton(
+                        tooltip: '复制分享链接',
+                        icon: isSharing
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.ios_share_outlined),
+                        color: brand.primaryColor,
+                        onPressed:
+                            isSharing ? null : () => _shareHistoryItem(item),
                       ),
                     IconButton(
                       tooltip: '删除',

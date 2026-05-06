@@ -341,6 +341,24 @@ class GatewayClient {
     }, fallback: '删除图片记录失败。');
   }
 
+  Future<Map<String, dynamic>> createImageShareLink({
+    String? historyId,
+    String? relativeUrl,
+    String? url,
+  }) async {
+    return _guard(() async {
+      final data = <String, dynamic>{
+        if (historyId != null && historyId.trim().isNotEmpty)
+          'history_id': historyId.trim(),
+        if (relativeUrl != null && relativeUrl.trim().isNotEmpty)
+          'relative_url': relativeUrl.trim(),
+        if (url != null && url.trim().isNotEmpty) 'url': url.trim(),
+      };
+      final res = await _dio.post('/api/images/share-links', data: data);
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '创建分享链接失败。');
+  }
+
   Future<Map<String, dynamic>> updateMyProfile(
     String username,
     String displayName,
