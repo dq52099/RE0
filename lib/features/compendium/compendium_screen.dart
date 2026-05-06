@@ -502,16 +502,35 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     );
   }
 
-  Future<void> _publishToGallery(Map<String, dynamic> item) async {
+  Future<void> _toggleGalleryPublish(Map<String, dynamic> item) async {
     final key = _historyKey(item);
     if (_publishingKeys.contains(key)) return;
     final historyId = item['id']?.toString();
     if (historyId == null || historyId.isEmpty) return;
+    final postId = item['gallery_post_id']?.toString() ?? '';
+    final isPublished = item['is_published'] == true && postId.isNotEmpty;
     setState(() => _publishingKeys.add(key));
     try {
-      await ref.read(gatewayClientProvider).publishGalleryPost(historyId);
+      if (isPublished) {
+        await ref.read(gatewayClientProvider).unpublishGalleryPost(postId);
+        if (mounted) {
+          setState(() {
+            item['is_published'] = false;
+            item['gallery_post_id'] = null;
+          });
+        }
+      } else {
+        final post =
+            await ref.read(gatewayClientProvider).publishGalleryPost(historyId);
+        if (mounted) {
+          setState(() {
+            item['is_published'] = true;
+            item['gallery_post_id'] = post['id'];
+          });
+        }
+      }
       if (!mounted) return;
-      showCenterNotice(context, '已发布到画廊');
+      showCenterNotice(context, isPublished ? '已取消发布' : '已发布到画廊');
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -864,6 +883,8 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     final isSharing = _sharingKeys.contains(key);
     final isRetrying = _retryingKeys.contains(key);
     final isSuccess = _isSuccessful(item);
+    final isPublished = item['is_published'] == true &&
+        (item['gallery_post_id']?.toString().isNotEmpty ?? false);
     final action = item['action']?.toString() == 'edit' ? 'edit' : 'generate';
     final actionColor =
         action == 'edit' ? brand.warningColor : brand.primaryColor;
@@ -978,11 +999,16 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                     if (isSuccess)
                       _metaActionButton(
                         brand: brand,
-                        tooltip: '发布到画廊',
-                        icon: Icons.publish_outlined,
-                        label: '发布',
+                        tooltip: isPublished ? '取消发布' : '发布到画廊',
+                        icon: isPublished
+                            ? Icons.remove_circle_outline
+                            : Icons.publish_outlined,
+                        label: isPublished ? '取消发布' : '发布',
+                        color: isPublished
+                            ? brand.warningColor
+                            : brand.primaryColor,
                         isBusy: isPublishing,
-                        onPressed: () => _publishToGallery(item),
+                        onPressed: () => _toggleGalleryPublish(item),
                       ),
                     if (isSuccess)
                       _metaActionButton(
@@ -990,6 +1016,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                         tooltip: '分享图片链接',
                         icon: Icons.publish_outlined,
                         label: '分享',
+                        color: brand.primaryColor,
                         isBusy: isSharing,
                         onPressed: () => _shareHistoryItem(item),
                       ),
@@ -1196,13 +1223,14 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     required String tooltip,
     required IconData icon,
     required String label,
+    required Color color,
     required bool isBusy,
     required VoidCallback onPressed,
   }) {
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: brand.primaryColor.withValues(alpha: 0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
         child: InkWell(
           borderRadius: BorderRadius.circular(999),
@@ -1218,20 +1246,20 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                     height: 14,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: brand.primaryColor,
+                      color: color,
                     ),
                   )
                 else
                   Icon(
                     icon,
                     size: 14,
-                    color: brand.primaryColor,
+                    color: color,
                   ),
                 const SizedBox(width: 6),
                 Text(
                   label,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: brand.primaryColor,
+                        color: color,
                         fontWeight: FontWeight.w700,
                       ),
                 ),
