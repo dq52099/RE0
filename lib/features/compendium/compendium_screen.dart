@@ -29,6 +29,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     with AutomaticKeepAliveClientMixin {
   static const _pageSize = 30;
   static const _hiddenStorageKey = 'hidden_history_items';
+  static const MethodChannel _shareChannel = MethodChannel('re0/downloads');
 
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
@@ -527,8 +528,26 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
         throw const GatewayException('后端没有返回分享链接。');
       }
       await Clipboard.setData(ClipboardData(text: shareUrl));
+      var openedShareSheet = false;
+      try {
+        openedShareSheet = await _shareChannel.invokeMethod<bool>(
+              'shareText',
+              {
+                'text': shareUrl,
+                'subject': '分享图片链接',
+              },
+            ) ??
+            false;
+      } on MissingPluginException {
+        openedShareSheet = false;
+      } on PlatformException {
+        openedShareSheet = false;
+      }
       if (!mounted) return;
-      showCenterNotice(context, '分享链接已复制');
+      showCenterNotice(
+        context,
+        openedShareSheet ? '已复制链接，可选择应用分享' : '分享链接已复制',
+      );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -865,7 +884,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                       ),
                     if (isSuccess)
                       IconButton(
-                        tooltip: '复制分享链接',
+                        tooltip: '分享图片链接',
                         icon: isSharing
                             ? const SizedBox(
                                 width: 18,

@@ -36,6 +36,11 @@ class MainActivity : FlutterActivity() {
                     path = call.argument<String>("path"),
                     result = result,
                 )
+                "shareText" -> shareText(
+                    text = call.argument<String>("text"),
+                    subject = call.argument<String>("subject") ?: "分享图片链接",
+                    result = result,
+                )
                 else -> result.notImplemented()
             }
         }
@@ -155,6 +160,26 @@ class MainActivity : FlutterActivity() {
             result.success(true)
         } catch (error: Exception) {
             result.error("OPEN_APK_FAILED", error.message, null)
+        }
+    }
+
+    private fun shareText(text: String?, subject: String, result: MethodChannel.Result) {
+        if (text.isNullOrBlank()) {
+            result.error("INVALID_TEXT", "Share text is empty.", null)
+            return
+        }
+
+        try {
+            val title = subject.ifBlank { "分享图片链接" }
+            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+                putExtra(Intent.EXTRA_SUBJECT, title)
+            }
+            startActivity(Intent.createChooser(sendIntent, title))
+            result.success(true)
+        } catch (error: Exception) {
+            result.error("SHARE_FAILED", error.message, null)
         }
     }
 
