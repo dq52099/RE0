@@ -74,7 +74,10 @@ class _StartupGateState extends ConsumerState<_StartupGate> {
       ref.read(authStateProvider.notifier).state = auth;
       ref.read(energyProvider.notifier).state = auth['quota_summary'];
       ref.read(historyRetentionProvider.notifier).state =
-          historyRetentionSummaryFromUser(auth);
+          historyRetentionSummaryFromUser(
+        auth,
+        fallback: ref.read(historyRetentionProvider),
+      );
       return const _StartupResult.home();
     } catch (_) {
       final client = ref.read(gatewayClientProvider);

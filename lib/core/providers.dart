@@ -121,7 +121,10 @@ class GenerateImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
       ref.read(energyProvider.notifier).state =
           _quotaSummary(res['quota_summary']);
       ref.read(historyRetentionProvider.notifier).state =
-          _historyRetentionSummary(res['history_retention_quota_summary']);
+          _historyRetentionSummary(
+        res['history_retention_quota_summary'],
+        fallback: ref.read(historyRetentionProvider),
+      );
       final items = _resultItems(res['data'] ?? res);
       if (items.isEmpty) {
         throw GatewayException(_imageFailureMessage(res, '图片生成失败。'));
@@ -180,7 +183,10 @@ class EditImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
       ref.read(energyProvider.notifier).state =
           _quotaSummary(res['quota_summary']);
       ref.read(historyRetentionProvider.notifier).state =
-          _historyRetentionSummary(res['history_retention_quota_summary']);
+          _historyRetentionSummary(
+        res['history_retention_quota_summary'],
+        fallback: ref.read(historyRetentionProvider),
+      );
       final items = _resultItems(res['data'] ?? res);
       if (items.isEmpty) {
         throw GatewayException(_imageFailureMessage(res, '图片修改失败。'));
@@ -230,7 +236,10 @@ Map<String, dynamic> _quotaSummary(dynamic value) {
   };
 }
 
-Map<String, dynamic> historyRetentionSummaryFromUser(dynamic user) {
+Map<String, dynamic> historyRetentionSummaryFromUser(
+  dynamic user, {
+  Map<String, dynamic>? fallback,
+}) {
   if (user is! Map) return _emptyHistoryRetentionSummary();
   final rich = user['history_retention_quota_summary'];
   if (rich is Map) {
@@ -243,14 +252,19 @@ Map<String, dynamic> historyRetentionSummaryFromUser(dynamic user) {
       'edit': _retentionEntry(caps['edit'], used: 0),
     };
   }
-  return _emptyHistoryRetentionSummary();
+  final safeFallback = _usableHistoryRetentionSummary(fallback);
+  return safeFallback ?? _defaultHistoryRetentionSummary();
 }
 
-Map<String, dynamic> _historyRetentionSummary(dynamic value) {
+Map<String, dynamic> _historyRetentionSummary(
+  dynamic value, {
+  Map<String, dynamic>? fallback,
+}) {
   if (value is Map) {
     return Map<String, dynamic>.from(value);
   }
-  return _emptyHistoryRetentionSummary();
+  final safeFallback = _usableHistoryRetentionSummary(fallback);
+  return safeFallback ?? _defaultHistoryRetentionSummary();
 }
 
 Map<String, dynamic> _emptyHistoryRetentionSummary() {
@@ -258,6 +272,26 @@ Map<String, dynamic> _emptyHistoryRetentionSummary() {
     'generate': {'remaining': 0, 'total': 0, 'used': 0},
     'edit': {'remaining': 0, 'total': 0, 'used': 0},
   };
+}
+
+Map<String, dynamic> _defaultHistoryRetentionSummary() {
+  return {
+    'generate': _retentionEntry(50, used: 0),
+    'edit': _retentionEntry(20, used: 0),
+  };
+}
+
+Map<String, dynamic>? _usableHistoryRetentionSummary(
+  Map<String, dynamic>? value,
+) {
+  if (value == null) return null;
+  final generate = value['generate'];
+  final edit = value['edit'];
+  if (generate is! Map || edit is! Map) return null;
+  final generateTotal = int.tryParse(generate['total']?.toString() ?? '') ?? 0;
+  final editTotal = int.tryParse(edit['total']?.toString() ?? '') ?? 0;
+  if (generateTotal <= 0 && editTotal <= 0) return null;
+  return Map<String, dynamic>.from(value);
 }
 
 Map<String, dynamic> _retentionEntry(dynamic total, {required int used}) {

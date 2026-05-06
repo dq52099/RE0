@@ -553,7 +553,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                   size: 18, color: brand.primaryColor),
               const SizedBox(width: 12),
               Text(
-                '记忆保留: $retentionText',
+                '记忆: $retentionText',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ],
@@ -572,7 +572,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     if (quota['is_unlimited'] == true) {
       return '无限';
     }
-    return '${quota['used'] ?? 0}/${quota['total'] ?? 0}';
+    return '${quota['remaining'] ?? 0}/${quota['total'] ?? 0}';
   }
 
   String? _retentionLimitMessage(Map quota, int requested) {

@@ -1023,6 +1023,15 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                           runSpacing: 8,
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
+                            _actionPill(
+                              label: action == 'generate'
+                                  ? brand.generateActionLabel
+                                  : brand.editActionLabel,
+                              color: actionColor,
+                              icon: action == 'generate'
+                                  ? Icons.auto_awesome_outlined
+                                  : Icons.brush_outlined,
+                            ),
                             if (isSuccess)
                               _metaActionButton(
                                 brand: brand,
@@ -1034,27 +1043,16 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                                 color: isPublished
                                     ? brand.warningColor
                                     : brand.primaryColor,
+                                filled: isPublished,
                                 isBusy: isPublishing,
                                 onPressed: () => _toggleGalleryPublish(item),
                               ),
-                            _actionPill(
-                              label: action == 'generate'
-                                  ? brand.generateActionLabel
-                                  : brand.editActionLabel,
-                              color: actionColor,
-                              icon: action == 'generate'
-                                  ? Icons.auto_awesome_outlined
-                                  : Icons.brush_outlined,
-                            ),
+                            _qualityPill(item),
                           ],
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      _qualityLabel(item),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
                     IconButton(
                       tooltip: '删除',
                       icon: isDeleting
@@ -1093,6 +1091,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                         icon: Icons.image_outlined,
                         label: '图片分享',
                         color: brand.primaryColor,
+                        filled: false,
                         isBusy: isSharing,
                         onPressed: () => _shareHistoryItem(item),
                       ),
@@ -1300,19 +1299,26 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     required IconData icon,
     required String label,
     required Color color,
+    bool filled = false,
     required bool isBusy,
     required VoidCallback onPressed,
   }) {
+    final foreground = filled ? Colors.white : color;
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: color.withValues(alpha: 0.12),
+        color: filled
+            ? color
+            : Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(999),
+        shape: StadiumBorder(
+          side: BorderSide(color: color.withValues(alpha: 0.62)),
+        ),
         child: InkWell(
           borderRadius: BorderRadius.circular(999),
           onTap: isBusy ? null : onPressed,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -1322,20 +1328,20 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                     height: 14,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: color,
+                      color: foreground,
                     ),
                   )
                 else
                   Icon(
                     icon,
                     size: 14,
-                    color: color,
+                    color: foreground,
                   ),
                 const SizedBox(width: 6),
                 Text(
                   label,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: color,
+                        color: foreground,
                         fontWeight: FontWeight.w700,
                       ),
                 ),
@@ -1355,9 +1361,9 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1372,6 +1378,28 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                 ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _qualityPill(Map<String, dynamic> item) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: Theme.of(context)
+              .colorScheme
+              .outlineVariant
+              .withValues(alpha: 0.7),
+        ),
+      ),
+      child: Text(
+        _qualityLabel(item),
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
       ),
     );
   }
@@ -1398,15 +1426,31 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   }
 
   String _qualityLabel(Map<String, dynamic> item) {
-    final quality = item['quality']?.toString().trim();
-    if (quality != null && quality.isNotEmpty && quality != 'auto') {
-      return '清晰度 $quality';
-    }
-    final size = item['size']?.toString().trim();
-    if (size != null && size.isNotEmpty) {
-      return '清晰度 $size';
-    }
-    return '清晰度 auto';
+    final size = item['size']?.toString().trim().toLowerCase();
+    final sizeTier = _sizeTierLabel(size);
+    if (sizeTier != null) return sizeTier;
+    final quality = item['quality']?.toString().trim().toLowerCase();
+    if (quality == '1k') return '1K';
+    if (quality == '2k') return '2K';
+    if (quality == '4k') return '4K';
+    return 'Auto';
+  }
+
+  String? _sizeTierLabel(String? value) {
+    if (value == null || value.isEmpty) return null;
+    if (value == 'auto') return 'Auto';
+    if (value == '1k') return '1K';
+    if (value == '2k') return '2K';
+    if (value == '4k') return '4K';
+    final match = RegExp(r'^(\d+)[x*×](\d+)$').firstMatch(value);
+    if (match == null) return null;
+    final width = int.tryParse(match.group(1) ?? '') ?? 0;
+    final height = int.tryParse(match.group(2) ?? '') ?? 0;
+    final longest = width > height ? width : height;
+    if (longest <= 0) return null;
+    if (longest >= 3840) return '4K';
+    if (longest >= 2048) return '2K';
+    return '1K';
   }
 
   bool _canRetryFailedGenerate(Map<String, dynamic> item) {

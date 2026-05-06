@@ -26,7 +26,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ref.listen<Map<String, dynamic>?>(authStateProvider, (previous, next) {
       if (next != null) {
         ref.read(historyRetentionProvider.notifier).state =
-            historyRetentionSummaryFromUser(next);
+            historyRetentionSummaryFromUser(
+          next,
+          fallback: ref.read(historyRetentionProvider),
+        );
       }
     });
     final screens = [

@@ -208,7 +208,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       ref.read(authStateProvider.notifier).state = res['user'];
       ref.read(energyProvider.notifier).state = res['user']['quota_summary'];
       ref.read(historyRetentionProvider.notifier).state =
-          historyRetentionSummaryFromUser(res['user']);
+          historyRetentionSummaryFromUser(
+        res['user'],
+        fallback: ref.read(historyRetentionProvider),
+      );
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const HomeScreen()),

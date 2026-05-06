@@ -119,7 +119,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ref.read(authStateProvider.notifier).state = result['user'];
       ref.read(energyProvider.notifier).state = result['user']['quota_summary'];
       ref.read(historyRetentionProvider.notifier).state =
-          historyRetentionSummaryFromUser(result['user']);
+          historyRetentionSummaryFromUser(
+        result['user'],
+        fallback: ref.read(historyRetentionProvider),
+      );
       if (!mounted) return;
       setState(_refreshCacheSize);
       final reward = result['checkin']['today_reward'] as Map? ?? {};
@@ -176,7 +179,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ref.read(authStateProvider.notifier).state = updated;
       ref.read(energyProvider.notifier).state = updated['quota_summary'];
       ref.read(historyRetentionProvider.notifier).state =
-          historyRetentionSummaryFromUser(updated);
+          historyRetentionSummaryFromUser(
+        updated,
+        fallback: ref.read(historyRetentionProvider),
+      );
       if (!mounted) return;
       showCenterNotice(context, '头像已更新');
     } catch (error) {
@@ -426,7 +432,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ref.read(authStateProvider.notifier).state = updated;
       ref.read(energyProvider.notifier).state = updated['quota_summary'];
       ref.read(historyRetentionProvider.notifier).state =
-          historyRetentionSummaryFromUser(updated);
+          historyRetentionSummaryFromUser(
+        updated,
+        fallback: ref.read(historyRetentionProvider),
+      );
       if (!mounted) return;
       showCenterNotice(context, '个人资料已保存');
     } catch (error) {
@@ -620,7 +629,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ref.read(energyProvider.notifier).state =
                     updated['quota_summary'];
                 ref.read(historyRetentionProvider.notifier).state =
-                    historyRetentionSummaryFromUser(updated);
+                    historyRetentionSummaryFromUser(
+                  updated,
+                  fallback: ref.read(historyRetentionProvider),
+                );
                 if (mounted) showCenterNotice(this.context, '邮箱已绑定');
               } catch (error) {
                 if (!context.mounted) return;
@@ -713,7 +725,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ref.read(authStateProvider.notifier).state = updated;
       ref.read(energyProvider.notifier).state = updated['quota_summary'];
       ref.read(historyRetentionProvider.notifier).state =
-          historyRetentionSummaryFromUser(updated);
+          historyRetentionSummaryFromUser(
+        updated,
+        fallback: ref.read(historyRetentionProvider),
+      );
       if (!mounted) return;
       showCenterNotice(context, '邮箱已绑定');
     } catch (error) {
@@ -1457,7 +1472,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     if (quota['is_unlimited'] == true) {
       return '无限';
     }
-    return '${quota['used'] ?? 0}/${quota['total'] ?? 0}';
+    return '${quota['remaining'] ?? 0}/${quota['total'] ?? 0}';
   }
 
   String _formatBytes(int bytes) {
