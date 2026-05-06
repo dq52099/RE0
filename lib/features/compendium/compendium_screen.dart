@@ -511,8 +511,10 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     final isPublished = item['is_published'] == true && postId.isNotEmpty;
     setState(() => _publishingKeys.add(key));
     try {
+      Map<String, dynamic>? quotaSource;
       if (isPublished) {
-        await ref.read(gatewayClientProvider).unpublishGalleryPost(postId);
+        quotaSource =
+            await ref.read(gatewayClientProvider).unpublishGalleryPost(postId);
         if (mounted) {
           setState(() {
             item['is_published'] = false;
@@ -528,9 +530,18 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
             item['gallery_post_id'] = post['id'];
           });
         }
+        quotaSource = post;
+      }
+      final retentionSummary = quotaSource['history_retention_quota_summary'];
+      if (retentionSummary != null) {
+        ref.read(historyRetentionProvider.notifier).state =
+            _quotaSummaryFromResponse(retentionSummary);
       }
       if (!mounted) return;
-      showCenterNotice(context, isPublished ? '已取消发布' : '已发布到画廊');
+      showCenterNotice(
+        context,
+        isPublished ? '已取消发布' : '已发布到画廊，发布作品不占记忆保留上限',
+      );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -996,7 +1007,14 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                         Icons.timelapse_outlined,
                         _formatDuration(item['duration_ms'])!,
                       ),
-                    if (isSuccess)
+                  ],
+                ),
+                if (isSuccess) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
                       _metaActionButton(
                         brand: brand,
                         tooltip: isPublished ? '取消发布' : '发布到画廊',
@@ -1010,18 +1028,18 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                         isBusy: isPublishing,
                         onPressed: () => _toggleGalleryPublish(item),
                       ),
-                    if (isSuccess)
                       _metaActionButton(
                         brand: brand,
-                        tooltip: '分享图片链接',
-                        icon: Icons.publish_outlined,
-                        label: '分享',
+                        tooltip: '图片分享',
+                        icon: Icons.image_outlined,
+                        label: '图片分享',
                         color: brand.primaryColor,
                         isBusy: isSharing,
                         onPressed: () => _shareHistoryItem(item),
                       ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
                 if (!isSuccess) ...[
                   const SizedBox(height: 8),
                   Container(

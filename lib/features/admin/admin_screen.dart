@@ -1535,10 +1535,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final editQuota = TextEditingController(
         text: _text(group?['default_edit_quota'], fallback: '5'));
     final generateHistoryRetention = TextEditingController(
-      text: _text(group?['default_generate_history_retention'], fallback: '20'),
+      text: _text(group?['default_generate_history_retention'], fallback: '50'),
     );
     final editHistoryRetention = TextEditingController(
-      text: _text(group?['default_edit_history_retention'], fallback: '12'),
+      text: _text(group?['default_edit_history_retention'], fallback: '20'),
     );
     var imageMode = _text(group?['image_mode'], fallback: 'vip');
     if (!const ['vip', 'general'].contains(imageMode)) {

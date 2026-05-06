@@ -719,9 +719,10 @@ class GatewayClient {
     }, fallback: '删除作品失败。');
   }
 
-  Future<void> unpublishGalleryPost(String postId) async {
-    await _guard(() async {
-      await _dio.delete('/api/gallery/posts/$postId');
+  Future<Map<String, dynamic>> unpublishGalleryPost(String postId) async {
+    return _guard(() async {
+      final res = await _dio.delete('/api/gallery/posts/$postId');
+      return Map<String, dynamic>.from(res.data as Map);
     }, fallback: '取消发布失败。');
   }
 
