@@ -640,6 +640,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       builder: (data) {
         final settings = _settingsWithAiDefaults(_mapList(data['settings']));
         final runtime = _map(data['runtime_status']);
+        final groups = _settingGroups(settings);
         return _adminList(
           action: canManage
               ? Wrap(
@@ -675,13 +676,28 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   .map((item) => '${item.key}: ${_text(item.value)}')
                   .toList(),
             ),
-            ...settings.map((setting) {
-              return _infoCard(
-                title: _text(setting['key']),
-                subtitle: _text(setting['description']),
-                lines: ['当前值: ${_displaySettingValue(setting)}'],
-              );
-            }),
+            ...groups.entries.map(
+              (entry) => _infoCard(
+                title: entry.key,
+                subtitle: '${entry.value.length} 项设置',
+                badge: '分类',
+                trailing: canManage
+                    ? IconButton(
+                        tooltip: '编辑${entry.key}',
+                        icon: const Icon(Icons.edit_outlined),
+                        onPressed: () =>
+                            _editSettings(data, category: entry.key),
+                      )
+                    : null,
+                lines: entry.value
+                    .take(6)
+                    .map(
+                      (setting) =>
+                          '${_settingLabel(_text(setting['key']))}: ${_displaySettingValue(setting)}',
+                    )
+                    .toList(),
+              ),
+            ),
           ],
         );
       },
@@ -723,8 +739,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               active: runtime['local_backup_enabled'] == true,
               lines: [
                 '定时备份: ${_enabledLabel(runtime['local_backup_enabled'])}',
-                '间隔: ${_settingValue(byKey, 'local_backup_interval_hours', fallback: '24')} 小时',
+                '间隔: ${_backupIntervalLabel(_settingValue(byKey, 'local_backup_interval_minutes', fallback: '1440'))}',
                 '保留: ${_settingValue(byKey, 'local_backup_retention_days', fallback: '14')} 天',
+                '通知: ${_enabledLabel(runtime['backup_notification_enabled'])}',
               ],
             ),
             _infoCard(
@@ -837,15 +854,40 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               lines: const ['系统公告', '全员通知', '福利到账'],
             ),
             ...announcements.map(
-              (item) => _infoCard(
-                title: _text(item['title']),
-                subtitle: _text(item['body']),
-                badge: '公告',
-                lines: [
-                  '发布者: ${_text(item['created_by_display_name'], fallback: _text(item['created_by_username']))}',
-                  '时间: ${formatLocalTime(_text(item['created_at']))}',
-                ],
-              ),
+              (item) {
+                final active = item['is_published'] != false;
+                return _infoCard(
+                  title: _text(item['title']),
+                  subtitle: _text(item['body']),
+                  badge: active ? '公告' : '已下线',
+                  active: active,
+                  trailing: canManage
+                      ? Wrap(
+                          spacing: 2,
+                          children: [
+                            IconButton(
+                              tooltip: '编辑公告',
+                              icon: const Icon(Icons.edit_outlined),
+                              onPressed: () => _editAnnouncement(item),
+                            ),
+                            IconButton(
+                              tooltip: '删除公告',
+                              icon: const Icon(Icons.delete_outline),
+                              onPressed: active
+                                  ? () => _deleteAnnouncement(item)
+                                  : null,
+                            ),
+                          ],
+                        )
+                      : null,
+                  lines: [
+                    '发布者: ${_text(item['created_by_display_name'], fallback: _text(item['created_by_username']))}',
+                    '时间: ${formatLocalTime(_text(item['created_at']))}',
+                    if (_text(item['updated_at']).isNotEmpty)
+                      '更新: ${formatLocalTime(_text(item['updated_at']))}',
+                  ],
+                );
+              },
             ),
             ...grants.map(
               (item) => _infoCard(
@@ -1607,7 +1649,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     }, '密钥已保存。');
   }
 
-  Future<void> _editSettings(Map<String, dynamic> data) async {
+  Future<void> _editSettings(
+    Map<String, dynamic> data, {
+    String? category,
+  }) async {
     final byKey = {
       for (final item in _settingsWithAiDefaults(_mapList(data['settings'])))
         _text(item['key']): item,
@@ -1689,9 +1734,28 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         fallback: _promptAiModel,
       ),
     );
-    final hermesBase =
-        TextEditingController(text: _settingValue(byKey, 'hermes_base_url'));
-    final hermesKey = TextEditingController();
+    var openclawMailEnabled = _settingBool(byKey, 'openclaw_mail_enabled');
+    final openclawMailUser = TextEditingController(
+      text: _settingValue(byKey, 'openclaw_mail_user'),
+    );
+    final openclawMailApiKey = TextEditingController();
+    final emailSenderName = TextEditingController(
+      text: _settingValue(byKey, 'email_sender_name', fallback: '从零开始生图'),
+    );
+    var emailPrimaryProvider = _settingValue(
+      byKey,
+      'email_code_primary_provider',
+      fallback: 'claw163',
+    );
+    var emailBackupProvider = _settingValue(
+      byKey,
+      'email_code_backup_provider',
+      fallback: 'resend',
+    );
+    var emailActiveSlot =
+        _settingValue(byKey, 'email_code_active_slot', fallback: 'primary');
+    var emailAutoSwitchEnabled =
+        _settingBool(byKey, 'email_auto_switch_enabled');
     final resendBase = TextEditingController(
       text: _settingValue(
         byKey,
@@ -1710,6 +1774,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final systemNoticeEmailTo = TextEditingController(
       text: _settingValue(byKey, 'system_notice_email_to'),
     );
+    final hermesBase =
+        TextEditingController(text: _settingValue(byKey, 'hermes_base_url'));
+    final hermesKey = TextEditingController();
     final smtpHost =
         TextEditingController(text: _settingValue(byKey, 'email_smtp_host'));
     final smtpPort = TextEditingController(
@@ -1755,332 +1822,431 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           fallback: 'true',
         ).toLowerCase() ==
         'true';
+    final notificationCategoryLimit = TextEditingController(
+      text: _settingValue(byKey, 'notification_category_limit', fallback: '50'),
+    );
+    var forceUpdateEnabled = _settingBool(byKey, 'force_app_update_enabled');
+    var forceReloginEnabled = _settingBool(byKey, 'force_relogin_enabled');
+    final dialogCategory = category ?? '全部设置';
 
     final payload = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
+          final showBasic = category == null || category == '基础设置';
+          final showProvider = category == null || category == '上游生成';
+          final showAi = category == null || category == 'AI 辅助';
+          final showMail = category == null || category == '通知邮件';
+          final showPolicy = category == null || category == '系统策略';
           return _adminDialog(
-            title: '系统设置',
+            title: dialogCategory,
             icon: Icons.tune,
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(
-                    controller: uiTitle,
-                    decoration: const InputDecoration(labelText: '界面标题')),
-                const SizedBox(height: 12),
-                TextField(
-                    controller: externalBase,
-                    decoration: const InputDecoration(labelText: '外部访问地址')),
-                const SizedBox(height: 12),
-                _settingsSectionTitle('VIP 模式上游'),
-                const SizedBox(height: 8),
-                TextField(
-                    controller: providerBase,
+                if (showBasic) ...[
+                  TextField(
+                      controller: uiTitle,
+                      decoration: const InputDecoration(labelText: '界面标题')),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: externalBase,
+                      decoration: const InputDecoration(labelText: '外部访问地址')),
+                  const SizedBox(height: 12),
+                  CheckboxListTile(
+                    value: allowRegistration,
+                    onChanged: (value) =>
+                        setDialogState(() => allowRegistration = value ?? true),
+                    title: const Text('允许公开注册'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: generateCheckinMultiplier,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: '签到生图倍率'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: editCheckinMultiplier,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: '签到改图倍率'),
+                  ),
+                  const SizedBox(height: 18),
+                ],
+                if (showProvider) ...[
+                  _settingsSectionTitle('VIP 模式上游'),
+                  const SizedBox(height: 8),
+                  TextField(
+                      controller: providerBase,
+                      decoration:
+                          const InputDecoration(labelText: '主用上游 base_url')),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: providerKey,
+                      obscureText: true,
+                      decoration:
+                          const InputDecoration(labelText: '主用上游 Key 1，留空不修改')),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: providerSecondaryKey,
+                      obscureText: true,
+                      decoration:
+                          const InputDecoration(labelText: '主用上游 Key 2，留空不修改')),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: providerBackupBase,
+                      decoration:
+                          const InputDecoration(labelText: '备用上游 base_url')),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: providerBackupKey,
+                      obscureText: true,
+                      decoration:
+                          const InputDecoration(labelText: '备用上游 Key 1，留空不修改')),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: providerBackupSecondaryKey,
+                      obscureText: true,
+                      decoration:
+                          const InputDecoration(labelText: '备用上游 Key 2，留空不修改')),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: providerModel,
+                      decoration: const InputDecoration(
+                        labelText: 'VIP 模型',
+                        helperText: '用于 VIP 模式的 Responses 文本调度和图片工具调用',
+                      )),
+                  const SizedBox(height: 12),
+                  _stringDropdown(
+                      'VIP 图片档位',
+                      profile,
+                      const ['gpt-image-2', 'codex-gpt-image-2', 'gpt-image-1'],
+                      (value) => setDialogState(() => profile = value)),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: providerTimeout,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: '超时时间秒')),
+                  const SizedBox(height: 18),
+                  _settingsSectionTitle('一般模式上游'),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: generalProviderBase,
                     decoration:
-                        const InputDecoration(labelText: '主用上游 base_url')),
-                const SizedBox(height: 12),
-                TextField(
-                    controller: providerKey,
+                        const InputDecoration(labelText: '一般模式 base_url'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: generalProviderKey,
                     obscureText: true,
                     decoration:
-                        const InputDecoration(labelText: '主用上游 Key 1，留空不修改')),
-                const SizedBox(height: 12),
-                TextField(
-                    controller: providerSecondaryKey,
-                    obscureText: true,
-                    decoration:
-                        const InputDecoration(labelText: '主用上游 Key 2，留空不修改')),
-                const SizedBox(height: 12),
-                TextField(
-                    controller: providerBackupBase,
-                    decoration:
-                        const InputDecoration(labelText: '备用上游 base_url')),
-                const SizedBox(height: 12),
-                TextField(
-                    controller: providerBackupKey,
-                    obscureText: true,
-                    decoration:
-                        const InputDecoration(labelText: '备用上游 Key 1，留空不修改')),
-                const SizedBox(height: 12),
-                TextField(
-                    controller: providerBackupSecondaryKey,
-                    obscureText: true,
-                    decoration:
-                        const InputDecoration(labelText: '备用上游 Key 2，留空不修改')),
-                const SizedBox(height: 12),
-                TextField(
-                    controller: providerModel,
+                        const InputDecoration(labelText: '一般模式 Key，留空不修改'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: generalProviderModel,
                     decoration: const InputDecoration(
-                      labelText: 'VIP 模型',
-                      helperText: '用于 VIP 模式的 Responses 文本调度和图片工具调用',
-                    )),
-                const SizedBox(height: 12),
-                _stringDropdown(
-                    'VIP 图片档位',
-                    profile,
-                    const ['gpt-image-2', 'codex-gpt-image-2', 'gpt-image-1'],
-                    (value) => setDialogState(() => profile = value)),
-                const SizedBox(height: 12),
-                TextField(
-                    controller: providerTimeout,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: '超时时间秒')),
-                const SizedBox(height: 18),
-                _settingsSectionTitle('一般模式上游'),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: generalProviderBase,
-                  decoration: const InputDecoration(labelText: '一般模式 base_url'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: generalProviderKey,
-                  obscureText: true,
-                  decoration:
-                      const InputDecoration(labelText: '一般模式 Key，留空不修改'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: generalProviderModel,
-                  decoration: const InputDecoration(
-                    labelText: '一般模式文本模型',
-                    helperText: '用于普通模式文本探活；图片生成实际使用下面的图片模型',
+                      labelText: '一般模式文本模型',
+                      helperText: '用于普通模式文本探活；图片生成实际使用下面的图片模型',
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: generalProviderImageModel,
-                  decoration: const InputDecoration(
-                    labelText: '一般模式图片模型',
-                    helperText: '用于普通模式 /v1/images 生图和改图',
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: generalProviderImageModel,
+                    decoration: const InputDecoration(
+                      labelText: '一般模式图片模型',
+                      helperText: '用于普通模式 /v1/images 生图和改图',
+                    ),
                   ),
-                ),
-                const SizedBox(height: 18),
-                _settingsSectionTitle('通用生成设置'),
-                const SizedBox(height: 8),
-                _stringDropdown(
-                    '当前线路',
-                    activeProviderSlot,
-                    const ['primary', 'backup'],
+                  const SizedBox(height: 18),
+                  _settingsSectionTitle('通用生成设置'),
+                  const SizedBox(height: 8),
+                  _stringDropdown(
+                      '当前线路',
+                      activeProviderSlot,
+                      const ['primary', 'backup'],
+                      (value) =>
+                          setDialogState(() => activeProviderSlot = value)),
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    value: providerHealthcheckEnabled,
+                    onChanged: (value) => setDialogState(
+                        () => providerHealthcheckEnabled = value),
+                    title: const Text('每小时探活并自动切换主备'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: providerHealthcheckInterval,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: '探活间隔分钟')),
+                  const SizedBox(height: 12),
+                  _stringDropdown(
+                      '响应格式',
+                      responseFormat,
+                      const ['url', 'b64_json'],
+                      (value) => setDialogState(() => responseFormat = value)),
+                  const SizedBox(height: 12),
+                  _stringDropdown(
+                      '默认质量',
+                      quality,
+                      const ['auto', 'low', 'medium', 'high'],
+                      (value) => setDialogState(() => quality = value)),
+                  const SizedBox(height: 12),
+                  _stringDropdown(
+                      '默认背景',
+                      background,
+                      const ['auto', 'opaque', 'transparent'],
+                      (value) => setDialogState(() => background = value)),
+                  const SizedBox(height: 12),
+                  _stringDropdown(
+                      '输出格式',
+                      outputFormat,
+                      const ['png', 'jpeg', 'webp'],
+                      (value) => setDialogState(() => outputFormat = value)),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: instructions,
+                      maxLines: 3,
+                      decoration: const InputDecoration(labelText: '上游指令')),
+                  const SizedBox(height: 16),
+                ],
+                if (showAi) ...[
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  Text(
+                    '反馈 AI 整理',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: feedbackAiBase,
+                    decoration: const InputDecoration(labelText: 'base_url'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: feedbackAiKey,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'api_key，留空不修改',
+                      helperText: '展示时会打码；请求应由后端代理执行',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: feedbackAiModel,
+                    decoration: const InputDecoration(labelText: 'model'),
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  Text(
+                    '提示词 AI / 图片识别 AI',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: promptAiBase,
+                    decoration: const InputDecoration(labelText: 'base_url'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: promptAiKey,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'api_key，留空不修改',
+                      helperText: '与反馈 AI 分开保存，避免混淆',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: promptAiModel,
+                    decoration: const InputDecoration(labelText: 'model'),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                if (showMail) ...[
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Claw163 / Resend 邮件',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    value: openclawMailEnabled,
+                    onChanged: (value) =>
+                        setDialogState(() => openclawMailEnabled = value),
+                    title: const Text('启用 Claw163 主通道'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: openclawMailUser,
+                    decoration: const InputDecoration(
+                      labelText: 'Claw163 发件邮箱',
+                      helperText: '例如：bot.image@claw.163.com',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: openclawMailApiKey,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Claw163 API Key，留空不修改',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: emailSenderName,
+                    decoration: const InputDecoration(
+                      labelText: '发件人显示名',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _stringDropdown(
+                    '主用邮件通道',
+                    emailPrimaryProvider,
+                    const ['claw163', 'resend', 'smtp', 'none'],
                     (value) =>
-                        setDialogState(() => activeProviderSlot = value)),
-                const SizedBox(height: 12),
-                SwitchListTile(
-                  value: providerHealthcheckEnabled,
-                  onChanged: (value) =>
-                      setDialogState(() => providerHealthcheckEnabled = value),
-                  title: const Text('每小时探活并自动切换主备'),
-                ),
-                const SizedBox(height: 12),
-                SwitchListTile(
-                  value: protectFileAccess,
-                  onChanged: (value) =>
-                      setDialogState(() => protectFileAccess = value),
-                  title: const Text('图片访问需要登录'),
-                  subtitle: const Text('关闭时头像、历史图和分享链接可直接查看；开启后未登录会跳转登录'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                    controller: providerHealthcheckInterval,
+                        setDialogState(() => emailPrimaryProvider = value),
+                  ),
+                  const SizedBox(height: 12),
+                  _stringDropdown(
+                    '备用邮件通道',
+                    emailBackupProvider,
+                    const ['resend', 'claw163', 'smtp', 'none'],
+                    (value) =>
+                        setDialogState(() => emailBackupProvider = value),
+                  ),
+                  const SizedBox(height: 12),
+                  _stringDropdown(
+                    '当前邮件线路',
+                    emailActiveSlot,
+                    const ['primary', 'backup'],
+                    (value) => setDialogState(() => emailActiveSlot = value),
+                  ),
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    value: emailAutoSwitchEnabled,
+                    onChanged: (value) =>
+                        setDialogState(() => emailAutoSwitchEnabled = value),
+                    title: const Text('邮件失败后自动切换线路'),
+                    subtitle: const Text('关闭时本次可走备用，但不会保存为当前线路'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: resendBase,
+                    decoration: const InputDecoration(
+                      labelText: 'Resend base_url',
+                      helperText: '默认 https://api.resend.com',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: resendFrom,
+                    decoration: const InputDecoration(
+                      labelText: 'Resend 发件人',
+                      helperText: '例如：从零开始生图 <noreply@mail.6688667.xyz>',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: resendKey,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Resend API Key，留空不修改',
+                      helperText: '默认作为备用邮件通道',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  Text(
+                    '系统通知邮件与兼容兜底',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: systemNoticeEmailTo,
+                    decoration: const InputDecoration(
+                      labelText: '系统通知收件人',
+                      helperText: '多个邮箱用英文逗号分隔；系统通知按主备邮件通道发送',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: hermesBase,
+                    decoration: const InputDecoration(
+                      labelText: 'Hermes base_url（兼容兜底）',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: hermesKey,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Hermes Key，留空不修改',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: smtpHost,
+                    decoration: const InputDecoration(labelText: 'SMTP 服务器'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: smtpPort,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: '探活间隔分钟')),
-                const SizedBox(height: 12),
-                _stringDropdown(
-                    '响应格式',
-                    responseFormat,
-                    const ['url', 'b64_json'],
-                    (value) => setDialogState(() => responseFormat = value)),
-                const SizedBox(height: 12),
-                _stringDropdown(
-                    '默认质量',
-                    quality,
-                    const ['auto', 'low', 'medium', 'high'],
-                    (value) => setDialogState(() => quality = value)),
-                const SizedBox(height: 12),
-                _stringDropdown(
-                    '默认背景',
-                    background,
-                    const ['auto', 'opaque', 'transparent'],
-                    (value) => setDialogState(() => background = value)),
-                const SizedBox(height: 12),
-                _stringDropdown(
-                    '输出格式',
-                    outputFormat,
-                    const ['png', 'jpeg', 'webp'],
-                    (value) => setDialogState(() => outputFormat = value)),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: generateCheckinMultiplier,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: '签到生图倍率'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: editCheckinMultiplier,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: '签到改图倍率'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                    controller: instructions,
-                    maxLines: 3,
-                    decoration: const InputDecoration(labelText: '上游指令')),
-                const SizedBox(height: 16),
-                const Divider(),
-                const SizedBox(height: 8),
-                Text(
-                  '反馈 AI 整理',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: feedbackAiBase,
-                  decoration: const InputDecoration(labelText: 'base_url'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: feedbackAiKey,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'api_key，留空不修改',
-                    helperText: '展示时会打码；请求应由后端代理执行',
+                    decoration: const InputDecoration(labelText: 'SMTP 端口'),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: feedbackAiModel,
-                  decoration: const InputDecoration(labelText: 'model'),
-                ),
-                const SizedBox(height: 16),
-                const Divider(),
-                const SizedBox(height: 8),
-                Text(
-                  '提示词 AI / 图片识别 AI',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: promptAiBase,
-                  decoration: const InputDecoration(labelText: 'base_url'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: promptAiKey,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'api_key，留空不修改',
-                    helperText: '与反馈 AI 分开保存，避免混淆',
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: smtpUsername,
+                    decoration: const InputDecoration(labelText: 'SMTP 用户名/邮箱'),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: promptAiModel,
-                  decoration: const InputDecoration(labelText: 'model'),
-                ),
-                const SizedBox(height: 16),
-                const Divider(),
-                const SizedBox(height: 8),
-                Text(
-                  '邮件',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: hermesBase,
-                  decoration: const InputDecoration(
-                    labelText: 'OpenClaw/Hermes 通知服务 base_url',
-                    helperText: '用于系统通知备用 HTTP 发信；验证码只走 Resend',
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: smtpPassword,
+                    obscureText: true,
+                    decoration:
+                        const InputDecoration(labelText: 'SMTP 密码/授权码，留空不修改'),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: hermesKey,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'OpenClaw/Hermes 通知服务 Key，留空不修改',
-                    helperText: '支持 Bearer；填写 user:password 时使用 Basic',
+                  SwitchListTile(
+                    value: smtpUseSsl,
+                    onChanged: (value) =>
+                        setDialogState(() => smtpUseSsl = value),
+                    title: const Text('SMTP 使用 SSL'),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: resendKey,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Resend API Key，留空不修改',
-                    helperText: '配置后优先使用 Resend 发送验证码',
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: notificationCategoryLimit,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: '每类通知最多条数'),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: resendBase,
-                  decoration: const InputDecoration(
-                    labelText: 'Resend base_url',
-                    helperText: '默认 https://api.resend.com',
+                  const SizedBox(height: 12),
+                ],
+                if (showPolicy) ...[
+                  SwitchListTile(
+                    value: protectFileAccess,
+                    onChanged: (value) =>
+                        setDialogState(() => protectFileAccess = value),
+                    title: const Text('图片访问需要登录'),
+                    subtitle: const Text('关闭时头像、历史图和分享链接可直接查看；开启后未登录会跳转登录'),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: resendFrom,
-                  decoration: const InputDecoration(
-                    labelText: 'Resend 发件人',
-                    helperText: '例如：从零开始生图 <noreply@mail.6688667.xyz>',
+                  SwitchListTile(
+                    value: forceUpdateEnabled,
+                    onChanged: (value) =>
+                        setDialogState(() => forceUpdateEnabled = value),
+                    title: const Text('强制更新'),
                   ),
-                ),
-                const SizedBox(height: 16),
-                const Divider(),
-                const SizedBox(height: 8),
-                Text(
-                  '系统通知邮件',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: systemNoticeEmailTo,
-                  decoration: const InputDecoration(
-                    labelText: '系统通知收件人',
-                    helperText: '多个邮箱用英文逗号分隔；系统通知通过 OpenClaw/SMTP 发送',
+                  SwitchListTile(
+                    value: forceReloginEnabled,
+                    onChanged: (value) =>
+                        setDialogState(() => forceReloginEnabled = value),
+                    title: const Text('强制重新登录'),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: smtpHost,
-                  decoration: const InputDecoration(labelText: 'SMTP 服务器'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: smtpPort,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'SMTP 端口'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: smtpUsername,
-                  decoration: const InputDecoration(labelText: 'SMTP 用户名/邮箱'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: smtpPassword,
-                  obscureText: true,
-                  decoration:
-                      const InputDecoration(labelText: 'SMTP 密码/授权码，留空不修改'),
-                ),
-                SwitchListTile(
-                  value: smtpUseSsl,
-                  onChanged: (value) =>
-                      setDialogState(() => smtpUseSsl = value),
-                  title: const Text('SMTP 使用 SSL'),
-                ),
-                const SizedBox(height: 8),
-                CheckboxListTile(
-                  value: allowRegistration,
-                  onChanged: (value) =>
-                      setDialogState(() => allowRegistration = value ?? true),
-                  title: const Text('允许公开注册'),
-                ),
+                ],
               ],
             ),
             actions: [
@@ -2088,79 +2254,106 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   onPressed: () => Navigator.pop(context),
                   child: const Text('取消')),
               FilledButton(
-                onPressed: () => Navigator.pop(context, {
-                  'ui_title': uiTitle.text.trim(),
-                  'external_access_base_url': externalBase.text.trim(),
-                  'provider_base_url': providerBase.text.trim(),
-                  if (providerKey.text.trim().isNotEmpty)
-                    'provider_api_key': providerKey.text.trim(),
-                  if (providerSecondaryKey.text.trim().isNotEmpty)
-                    'provider_secondary_api_key':
-                        providerSecondaryKey.text.trim(),
-                  'provider_backup_base_url': providerBackupBase.text.trim(),
-                  if (providerBackupKey.text.trim().isNotEmpty)
-                    'provider_backup_api_key': providerBackupKey.text.trim(),
-                  if (providerBackupSecondaryKey.text.trim().isNotEmpty)
-                    'provider_backup_secondary_api_key':
-                        providerBackupSecondaryKey.text.trim(),
-                  'provider_active_slot': activeProviderSlot,
-                  'provider_healthcheck_enabled': providerHealthcheckEnabled,
-                  'provider_healthcheck_interval_minutes':
-                      int.tryParse(providerHealthcheckInterval.text),
-                  'provider_model': providerModel.text.trim(),
-                  'general_provider_base_url': generalProviderBase.text.trim(),
-                  if (generalProviderKey.text.trim().isNotEmpty)
-                    'general_provider_api_key': generalProviderKey.text.trim(),
-                  'general_provider_model': generalProviderModel.text.trim(),
-                  'general_provider_image_model':
-                      generalProviderImageModel.text.trim(),
-                  'provider_image_profile': profile,
-                  'provider_timeout_seconds':
-                      int.tryParse(providerTimeout.text),
-                  'default_response_format': responseFormat,
-                  'default_image_quality': quality,
-                  'default_image_background': background,
-                  'default_image_output_format': outputFormat,
-                  'feedback_ai_base_url': feedbackAiBase.text.trim().isEmpty
-                      ? _defaultAiBaseUrl
-                      : feedbackAiBase.text.trim(),
-                  if (feedbackAiKey.text.trim().isNotEmpty)
-                    'feedback_ai_api_key': feedbackAiKey.text.trim(),
-                  'feedback_ai_model': feedbackAiModel.text.trim().isEmpty
-                      ? _feedbackAiModel
-                      : feedbackAiModel.text.trim(),
-                  'prompt_ai_base_url': promptAiBase.text.trim().isEmpty
-                      ? null
-                      : promptAiBase.text.trim(),
-                  if (promptAiKey.text.trim().isNotEmpty)
-                    'prompt_ai_api_key': promptAiKey.text.trim(),
-                  'prompt_ai_model': promptAiModel.text.trim().isEmpty
-                      ? _promptAiModel
-                      : promptAiModel.text.trim(),
-                  'hermes_base_url': hermesBase.text.trim(),
-                  if (hermesKey.text.trim().isNotEmpty)
-                    'hermes_api_key': hermesKey.text.trim(),
-                  if (resendKey.text.trim().isNotEmpty)
-                    'resend_api_key': resendKey.text.trim(),
-                  'resend_base_url': resendBase.text.trim().isEmpty
-                      ? 'https://api.resend.com'
-                      : resendBase.text.trim(),
-                  'resend_from': resendFrom.text.trim(),
-                  'system_notice_email_to': systemNoticeEmailTo.text.trim(),
-                  'email_smtp_host': smtpHost.text.trim(),
-                  'email_smtp_port': int.tryParse(smtpPort.text.trim()),
-                  'email_smtp_username': smtpUsername.text.trim(),
-                  if (smtpPassword.text.trim().isNotEmpty)
-                    'email_smtp_password': smtpPassword.text.trim(),
-                  'email_smtp_use_ssl': smtpUseSsl,
-                  'daily_checkin_generate_multiplier':
-                      double.tryParse(generateCheckinMultiplier.text),
-                  'daily_checkin_edit_multiplier':
-                      double.tryParse(editCheckinMultiplier.text),
-                  'provider_instructions': instructions.text.trim(),
-                  'allow_public_registration': allowRegistration,
-                  'protect_file_access': protectFileAccess,
-                }),
+                onPressed: () => Navigator.pop(
+                    context,
+                    {
+                      'ui_title': uiTitle.text.trim(),
+                      'external_access_base_url': externalBase.text.trim(),
+                      'provider_base_url': providerBase.text.trim(),
+                      if (providerKey.text.trim().isNotEmpty)
+                        'provider_api_key': providerKey.text.trim(),
+                      if (providerSecondaryKey.text.trim().isNotEmpty)
+                        'provider_secondary_api_key':
+                            providerSecondaryKey.text.trim(),
+                      'provider_backup_base_url':
+                          providerBackupBase.text.trim(),
+                      if (providerBackupKey.text.trim().isNotEmpty)
+                        'provider_backup_api_key':
+                            providerBackupKey.text.trim(),
+                      if (providerBackupSecondaryKey.text.trim().isNotEmpty)
+                        'provider_backup_secondary_api_key':
+                            providerBackupSecondaryKey.text.trim(),
+                      'provider_active_slot': activeProviderSlot,
+                      'provider_healthcheck_enabled':
+                          providerHealthcheckEnabled,
+                      'provider_healthcheck_interval_minutes':
+                          int.tryParse(providerHealthcheckInterval.text),
+                      'provider_model': providerModel.text.trim(),
+                      'general_provider_base_url':
+                          generalProviderBase.text.trim(),
+                      if (generalProviderKey.text.trim().isNotEmpty)
+                        'general_provider_api_key':
+                            generalProviderKey.text.trim(),
+                      'general_provider_model':
+                          generalProviderModel.text.trim(),
+                      'general_provider_image_model':
+                          generalProviderImageModel.text.trim(),
+                      'provider_image_profile': profile,
+                      'provider_timeout_seconds':
+                          int.tryParse(providerTimeout.text),
+                      'default_response_format': responseFormat,
+                      'default_image_quality': quality,
+                      'default_image_background': background,
+                      'default_image_output_format': outputFormat,
+                      'feedback_ai_base_url': feedbackAiBase.text.trim().isEmpty
+                          ? _defaultAiBaseUrl
+                          : feedbackAiBase.text.trim(),
+                      if (feedbackAiKey.text.trim().isNotEmpty)
+                        'feedback_ai_api_key': feedbackAiKey.text.trim(),
+                      'feedback_ai_model': feedbackAiModel.text.trim().isEmpty
+                          ? _feedbackAiModel
+                          : feedbackAiModel.text.trim(),
+                      'prompt_ai_base_url': promptAiBase.text.trim().isEmpty
+                          ? null
+                          : promptAiBase.text.trim(),
+                      if (promptAiKey.text.trim().isNotEmpty)
+                        'prompt_ai_api_key': promptAiKey.text.trim(),
+                      'prompt_ai_model': promptAiModel.text.trim().isEmpty
+                          ? _promptAiModel
+                          : promptAiModel.text.trim(),
+                      'openclaw_mail_enabled': openclawMailEnabled,
+                      'openclaw_mail_user': openclawMailUser.text.trim(),
+                      if (openclawMailApiKey.text.trim().isNotEmpty)
+                        'openclaw_mail_api_key': openclawMailApiKey.text.trim(),
+                      'email_sender_name': emailSenderName.text.trim().isEmpty
+                          ? '从零开始生图'
+                          : emailSenderName.text.trim(),
+                      'email_code_primary_provider': emailPrimaryProvider,
+                      'email_code_backup_provider': emailBackupProvider,
+                      'email_code_active_slot': emailActiveSlot,
+                      'email_auto_switch_enabled': emailAutoSwitchEnabled,
+                      'hermes_base_url': hermesBase.text.trim(),
+                      if (hermesKey.text.trim().isNotEmpty)
+                        'hermes_api_key': hermesKey.text.trim(),
+                      if (resendKey.text.trim().isNotEmpty)
+                        'resend_api_key': resendKey.text.trim(),
+                      'resend_base_url': resendBase.text.trim().isEmpty
+                          ? 'https://api.resend.com'
+                          : resendBase.text.trim(),
+                      'resend_from': resendFrom.text.trim(),
+                      'system_notice_email_to': systemNoticeEmailTo.text.trim(),
+                      'email_smtp_host': smtpHost.text.trim(),
+                      'email_smtp_port': int.tryParse(smtpPort.text.trim()),
+                      'email_smtp_username': smtpUsername.text.trim(),
+                      if (smtpPassword.text.trim().isNotEmpty)
+                        'email_smtp_password': smtpPassword.text.trim(),
+                      'email_smtp_use_ssl': smtpUseSsl,
+                      'daily_checkin_generate_multiplier':
+                          double.tryParse(generateCheckinMultiplier.text),
+                      'daily_checkin_edit_multiplier':
+                          double.tryParse(editCheckinMultiplier.text),
+                      'provider_instructions': instructions.text.trim(),
+                      'allow_public_registration': allowRegistration,
+                      'protect_file_access': protectFileAccess,
+                      'notification_category_limit':
+                          int.tryParse(notificationCategoryLimit.text.trim()),
+                      'force_app_update_enabled': forceUpdateEnabled,
+                      'force_relogin_enabled': forceReloginEnabled,
+                    }..removeWhere(
+                        (key, value) =>
+                            category != null &&
+                            !_settingKeyBelongsToCategory(key, category),
+                      )),
                 child: const Text('保存'),
               ),
             ],
@@ -2168,6 +2361,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         },
       ),
     );
+    notificationCategoryLimit.dispose();
     if (payload == null) return;
     await _save(
         () => ref.read(gatewayClientProvider).saveAdminSystemSettings(payload),
@@ -2180,8 +2374,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         _text(item['key']): item,
     };
     var localEnabled = _settingBool(byKey, 'local_backup_enabled');
+    var backupNotificationEnabled =
+        _settingBool(byKey, 'backup_notification_enabled', fallback: true);
     final localInterval = TextEditingController(
-      text: _settingValue(byKey, 'local_backup_interval_hours', fallback: '24'),
+      text: _settingValue(byKey, 'local_backup_interval_minutes',
+          fallback: '1440'),
     );
     final localRetention = TextEditingController(
       text: _settingValue(byKey, 'local_backup_retention_days', fallback: '14'),
@@ -2250,13 +2447,19 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 TextField(
                   controller: localInterval,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: '备份间隔小时'),
+                  decoration: const InputDecoration(labelText: '备份间隔分钟'),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: localRetention,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(labelText: '本地保留天数'),
+                ),
+                SwitchListTile(
+                  value: backupNotificationEnabled,
+                  onChanged: (value) =>
+                      setDialogState(() => backupNotificationEnabled = value),
+                  title: const Text('备份结果通知'),
                 ),
                 const SizedBox(height: 18),
                 _settingsSectionTitle('Google Drive'),
@@ -2361,10 +2564,13 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               FilledButton(
                 onPressed: () => Navigator.pop(context, {
                   'local_backup_enabled': localEnabled,
-                  'local_backup_interval_hours':
+                  'local_backup_interval_minutes':
                       int.tryParse(localInterval.text.trim()),
+                  'local_backup_interval_hours':
+                      _minutesToHours(localInterval.text.trim()),
                   'local_backup_retention_days':
                       int.tryParse(localRetention.text.trim()),
+                  'backup_notification_enabled': backupNotificationEnabled,
                   'google_drive_backup_enabled': googleEnabled,
                   'google_drive_backup_folder_id': googleFolder.text.trim(),
                   if (googleServiceAccount.text.trim().isNotEmpty)
@@ -2641,6 +2847,108 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     } finally {
       if (mounted) setState(() => _isPublishingAnnouncement = false);
     }
+  }
+
+  Future<void> _editAnnouncement(Map<String, dynamic> item) async {
+    final id = _text(item['id']);
+    if (id.isEmpty) return;
+    final title =
+        TextEditingController(text: _text(item['title'], fallback: ''));
+    final body = TextEditingController(text: _text(item['body'], fallback: ''));
+    var isPublished = item['is_published'] != false;
+    final payload = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return _adminDialog(
+            title: '编辑公告',
+            icon: Icons.edit_outlined,
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: title,
+                  decoration: const InputDecoration(labelText: '公告标题'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: body,
+                  minLines: 4,
+                  maxLines: 8,
+                  decoration: const InputDecoration(labelText: '公告内容'),
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  value: isPublished,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('公告上线'),
+                  onChanged: (value) =>
+                      setDialogState(() => isPublished = value),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, {
+                  'title': title.text.trim(),
+                  'body': body.text.trim(),
+                  'is_published': isPublished,
+                }),
+                child: const Text('保存'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    title.dispose();
+    body.dispose();
+    if (payload == null) return;
+    if (_text(payload['title'], fallback: '').length < 2 ||
+        _text(payload['body'], fallback: '').length < 2) {
+      _showMessage('请填写公告标题和内容。', isError: true);
+      return;
+    }
+    await _save(
+      () => ref.read(gatewayClientProvider).updateAdminAnnouncement(
+            id: id,
+            title: _text(payload['title'], fallback: ''),
+            body: _text(payload['body'], fallback: ''),
+            isPublished: payload['is_published'] == true,
+          ),
+      '公告已保存。',
+    );
+  }
+
+  Future<void> _deleteAnnouncement(Map<String, dynamic> item) async {
+    final id = _text(item['id']);
+    if (id.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除公告'),
+        content: Text('确认删除“${_text(item['title'])}”？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _save(
+      () => ref.read(gatewayClientProvider).deleteAdminAnnouncement(id),
+      '公告已删除。',
+    );
   }
 
   Future<void> _grantWelfare() async {
@@ -2974,6 +3282,26 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     return value == true ? '开启' : '关闭';
   }
 
+  String _backupIntervalLabel(String value) {
+    final minutes = int.tryParse(value) ?? 1440;
+    if (minutes % 1440 == 0) {
+      return '${minutes ~/ 1440} 天';
+    }
+    if (minutes % 60 == 0) {
+      return '${minutes ~/ 60} 小时';
+    }
+    return '$minutes 分钟';
+  }
+
+  int? _minutesToHours(String value) {
+    final minutes = int.tryParse(value.trim());
+    if (minutes == null) return null;
+    final hours = (minutes / 60).round();
+    if (hours < 1) return 1;
+    if (hours > 168) return 168;
+    return hours;
+  }
+
   String _backupTargetLabel(String target) {
     switch (target) {
       case 'local':
@@ -3025,6 +3353,89 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final value =
         _settingValue(settings, key, fallback: fallback ? 'true' : 'false');
     return const {'1', 'true', 'yes', 'on'}.contains(value.toLowerCase());
+  }
+
+  Map<String, List<Map<String, dynamic>>> _settingGroups(
+    List<Map<String, dynamic>> settings,
+  ) {
+    final groups = <String, List<Map<String, dynamic>>>{};
+    for (final setting in settings) {
+      final key = _text(setting['key']);
+      final category = _text(
+        setting['category'],
+        fallback: _settingCategoryForKey(key),
+      );
+      groups.putIfAbsent(category, () => []).add(setting);
+    }
+    const order = ['基础设置', '上游生成', 'AI 辅助', '通知邮件', '系统策略', '数据备份'];
+    final sorted = <String, List<Map<String, dynamic>>>{};
+    for (final key in order) {
+      final values = groups.remove(key);
+      if (values != null && values.isNotEmpty) sorted[key] = values;
+    }
+    sorted.addAll(groups);
+    return sorted;
+  }
+
+  bool _settingKeyBelongsToCategory(String key, String category) {
+    return _settingCategoryForKey(key) == category;
+  }
+
+  String _settingCategoryForKey(String key) {
+    if (key == 'ui_title' ||
+        key == 'external_access_base_url' ||
+        key == 'allow_public_registration' ||
+        key.startsWith('daily_checkin_')) {
+      return '基础设置';
+    }
+    if (key.startsWith('feedback_ai_') || key.startsWith('prompt_ai_')) {
+      return 'AI 辅助';
+    }
+    if (key.startsWith('hermes_') ||
+        key.startsWith('openclaw_mail_') ||
+        key.startsWith('resend_') ||
+        key.startsWith('email_code_') ||
+        key.startsWith('email_smtp_') ||
+        key == 'email_sender_name' ||
+        key == 'email_auto_switch_enabled' ||
+        key.startsWith('system_notice') ||
+        key.startsWith('notification_')) {
+      return '通知邮件';
+    }
+    if (key == 'protect_file_access' ||
+        key.startsWith('force_app_update') ||
+        key.startsWith('force_relogin')) {
+      return '系统策略';
+    }
+    if (key.contains('backup') ||
+        key.startsWith('google_drive_') ||
+        key.startsWith('openlist_')) {
+      return '数据备份';
+    }
+    if (key.startsWith('provider_') ||
+        key.startsWith('general_provider_') ||
+        key.startsWith('default_')) {
+      return '上游生成';
+    }
+    return '基础设置';
+  }
+
+  String _settingLabel(String key) {
+    const labels = {
+      'ui_title': '标题',
+      'external_access_base_url': '外部地址',
+      'provider_active_slot': '线路',
+      'provider_model': 'VIP 模型',
+      'general_provider_image_model': '普通图片模型',
+      'notification_category_limit': '分类条数',
+      'openclaw_mail_enabled': 'Claw163',
+      'email_code_active_slot': '邮件线路',
+      'email_auto_switch_enabled': '自动切换',
+      'force_app_update_enabled': '强制更新',
+      'force_relogin_enabled': '强制重登',
+      'protect_file_access': '图片登录访问',
+    };
+    return labels[key] ?? key;
   }
 
   Future<void> _copyText(String text, String success) async {
@@ -3220,24 +3631,54 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         'description': '提示词生成与图片识别 AI 模型',
       },
       {
-        'key': 'hermes_base_url',
-        'value': '',
-        'description': 'OpenClaw/Hermes 通知服务地址；验证码只走 Resend',
+        'key': 'email_sender_name',
+        'value': '从零开始生图',
+        'description': '邮件发件人显示名',
       },
       {
-        'key': 'hermes_api_key',
+        'key': 'email_code_primary_provider',
+        'value': 'claw163',
+        'description': '验证码和系统通知主用邮件通道',
+      },
+      {
+        'key': 'email_code_backup_provider',
+        'value': 'resend',
+        'description': '验证码和系统通知备用邮件通道',
+      },
+      {
+        'key': 'email_code_active_slot',
+        'value': 'primary',
+        'description': '当前邮件线路',
+      },
+      {
+        'key': 'email_auto_switch_enabled',
+        'value': 'false',
+        'description': '备用通道成功后是否自动保存当前线路',
+      },
+      {
+        'key': 'openclaw_mail_enabled',
+        'value': 'false',
+        'description': '是否启用 Claw163 邮件通道',
+      },
+      {
+        'key': 'openclaw_mail_user',
+        'value': '',
+        'description': 'Claw163 发件邮箱',
+      },
+      {
+        'key': 'openclaw_mail_api_key',
         'value': 'xxx',
-        'description': 'OpenClaw/Hermes 通知服务 Key',
+        'description': 'Claw163 API Key',
       },
       {
         'key': 'resend_base_url',
         'value': 'https://api.resend.com',
-        'description': 'Resend API 地址，用于发送验证码邮件',
+        'description': 'Resend API 地址，默认备用通道',
       },
       {
         'key': 'resend_api_key',
         'value': 'xxx',
-        'description': 'Resend API Key，用于发送验证码邮件',
+        'description': 'Resend API Key，默认备用通道',
       },
       {
         'key': 'resend_from',
@@ -3248,6 +3689,16 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         'key': 'system_notice_email_to',
         'value': '',
         'description': '系统通知邮件收件人，多个邮箱用英文逗号分隔',
+      },
+      {
+        'key': 'hermes_base_url',
+        'value': '',
+        'description': 'Hermes 兼容兜底通知服务地址',
+      },
+      {
+        'key': 'hermes_api_key',
+        'value': 'xxx',
+        'description': 'Hermes 兼容兜底通知服务 Key',
       },
       {
         'key': 'email_smtp_host',

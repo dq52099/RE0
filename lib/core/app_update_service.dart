@@ -17,6 +17,7 @@ class AppUpdateInfo {
     required this.sha256,
     required this.releaseNotes,
     required this.releaseUrl,
+    this.forceUpdate = false,
   });
 
   final String appName;
@@ -30,6 +31,7 @@ class AppUpdateInfo {
   final String sha256;
   final String releaseNotes;
   final String releaseUrl;
+  final bool forceUpdate;
 }
 
 class AppUpdateService {

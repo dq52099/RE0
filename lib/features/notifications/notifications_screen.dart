@@ -21,6 +21,7 @@ class NotificationsScreen extends ConsumerStatefulWidget {
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   Future<Map<String, dynamic>>? _future;
   final Set<String> _busyIds = {};
+  String _category = 'all';
 
   @override
   void initState() {
@@ -29,7 +30,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   }
 
   void _reload() {
-    _future = ref.read(gatewayClientProvider).getMyNotifications();
+    _future = _category == 'all'
+        ? ref.read(gatewayClientProvider).getMyNotifications()
+        : ref
+            .read(gatewayClientProvider)
+            .getMyNotificationsByCategory(_category);
   }
 
   Future<void> _refresh() async {
@@ -107,11 +112,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 .whereType<Map>()
                 .map((item) => Map<String, dynamic>.from(item))
                 .toList();
+            final categories = _categories(snapshot.data);
             return RefreshIndicator(
               onRefresh: _refresh,
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  if (categories.isNotEmpty) ...[
+                    _categorySelector(categories),
+                    const SizedBox(height: 12),
+                  ],
                   if (snapshot.connectionState != ConnectionState.done)
                     const Padding(
                       padding: EdgeInsets.only(top: 120),
@@ -142,6 +152,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final id = item['id']?.toString() ?? '';
     final colorScheme = Theme.of(context).colorScheme;
     final welfareBadges = _welfareBadges(item);
+    final categoryLabel = item['category_label']?.toString().trim() ?? '';
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: unread ? 1 : 0,
@@ -185,18 +196,21 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
+                            Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 6,
+                              runSpacing: 4,
                               children: [
-                                Expanded(
-                                  child: Text(
-                                    item['title']?.toString() ?? '通知',
-                                    style: TextStyle(
-                                      fontWeight: unread
-                                          ? FontWeight.w800
-                                          : FontWeight.w600,
-                                    ),
+                                Text(
+                                  item['title']?.toString() ?? '通知',
+                                  style: TextStyle(
+                                    fontWeight: unread
+                                        ? FontWeight.w800
+                                        : FontWeight.w600,
                                   ),
                                 ),
+                                if (categoryLabel.isNotEmpty)
+                                  _categoryPill(categoryLabel),
                                 _readStatePill(unread),
                               ],
                             ),
@@ -241,6 +255,80 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _categorySelector(List<Map<String, dynamic>> categories) {
+    final selected = _category;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: categories.map((category) {
+          final key = category['key']?.toString() ?? '';
+          final label = category['label']?.toString() ?? key;
+          final unread = _intValue(category['unread_count']);
+          final count = _intValue(category['count']);
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              selected: selected == key,
+              label: Text(
+                unread > 0
+                    ? '$label $unread'
+                    : (count > 0 && key != 'all' ? '$label $count' : label),
+              ),
+              onSelected: (_) {
+                if (selected == key) return;
+                setState(() {
+                  _category = key;
+                  _reload();
+                });
+              },
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _categories(Map<String, dynamic>? data) {
+    final raw = (data?['categories'] as List? ?? [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .where((item) => (item['key']?.toString() ?? '').isNotEmpty)
+        .toList();
+    if (raw.isEmpty) return const [];
+    final totalCount =
+        raw.fold<int>(0, (sum, item) => sum + _intValue(item['count']));
+    final totalUnread =
+        raw.fold<int>(0, (sum, item) => sum + _intValue(item['unread_count']));
+    return [
+      {
+        'key': 'all',
+        'label': '全部',
+        'count': totalCount,
+        'unread_count': totalUnread,
+      },
+      ...raw,
+    ];
+  }
+
+  Widget _categoryPill(String label) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: colorScheme.secondary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: colorScheme.secondary,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

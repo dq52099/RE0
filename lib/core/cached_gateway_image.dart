@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -39,8 +40,12 @@ class CachedGatewayImage extends ConsumerStatefulWidget {
 
 class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage>
     with AutomaticKeepAliveClientMixin {
+  static const int _maxAutoRetries = 2;
+
   late Future<File> _imageFuture;
   bool _isSaving = false;
+  int _retryCount = 0;
+  Timer? _retryTimer;
 
   @override
   bool get wantKeepAlive => true;
@@ -48,15 +53,51 @@ class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage>
   @override
   void initState() {
     super.initState();
-    _imageFuture = ref.read(imageCacheProvider).cachedFileFor(widget.url);
+    _imageFuture = _loadImage();
   }
 
   @override
   void didUpdateWidget(CachedGatewayImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url != widget.url) {
-      _imageFuture = ref.read(imageCacheProvider).cachedFileFor(widget.url);
+      _retryTimer?.cancel();
+      _retryCount = 0;
+      _imageFuture = _loadImage();
     }
+  }
+
+  @override
+  void dispose() {
+    _retryTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<File> _loadImage({bool forceRefresh = false}) {
+    return ref
+        .read(imageCacheProvider)
+        .cachedFileFor(widget.url, forceRefresh: forceRefresh);
+  }
+
+  void _scheduleRetry() {
+    if (_retryCount >= _maxAutoRetries || _retryTimer?.isActive == true) {
+      return;
+    }
+    final nextRetry = _retryCount + 1;
+    _retryTimer = Timer(Duration(milliseconds: 600 * nextRetry), () {
+      if (!mounted) return;
+      setState(() {
+        _retryCount = nextRetry;
+        _imageFuture = _loadImage(forceRefresh: true);
+      });
+    });
+  }
+
+  void _retryNow() {
+    _retryTimer?.cancel();
+    setState(() {
+      _retryCount = 0;
+      _imageFuture = _loadImage(forceRefresh: true);
+    });
   }
 
   Future<void> _saveImage() async {
@@ -121,6 +162,7 @@ class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage>
         }
 
         if (snapshot.hasError) {
+          _scheduleRetry();
           return _networkFallback();
         }
 
@@ -189,12 +231,18 @@ class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage>
   }
 
   Widget _networkFallback() {
-    return Container(
-      width: widget.width,
-      height: widget.height ?? 220,
-      alignment: Alignment.center,
-      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.25),
-      child: const Icon(Icons.broken_image_outlined),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _retryNow,
+        child: Container(
+          width: widget.width,
+          height: widget.height ?? 220,
+          alignment: Alignment.center,
+          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.25),
+          child: const Icon(Icons.broken_image_outlined),
+        ),
+      ),
     );
   }
 

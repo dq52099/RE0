@@ -148,6 +148,10 @@ class GatewayClient {
     }, fallback: '退出登录失败。');
   }
 
+  Future<void> clearLocalSession() async {
+    await cookieJar?.deleteAll();
+  }
+
   Future<Map<String, dynamic>> checkAppUpdate(
     String appId,
     int currentVersionCode,
@@ -609,6 +613,22 @@ class GatewayClient {
     }, fallback: '读取通知失败。');
   }
 
+  Future<Map<String, dynamic>> getMyNotificationsByCategory(
+    String category, {
+    int limit = 50,
+  }) async {
+    return _guard(() async {
+      final res = await _dio.get(
+        '/api/me/notifications',
+        queryParameters: {
+          'limit': limit,
+          'category': category,
+        },
+      );
+      return _mapResponse(res.data);
+    }, fallback: '读取通知失败。');
+  }
+
   Future<Map<String, dynamic>> markNotificationRead(String id) async {
     return _guard(() async {
       final res = await _dio.post('/api/me/notifications/$id/read');
@@ -784,6 +804,29 @@ class GatewayClient {
       });
       return Map<String, dynamic>.from(res.data as Map);
     }, fallback: '发布公告失败。');
+  }
+
+  Future<Map<String, dynamic>> updateAdminAnnouncement({
+    required String id,
+    required String title,
+    required String body,
+    required bool isPublished,
+  }) async {
+    return _guard(() async {
+      final res = await _dio.put('/api/admin/announcements/$id', data: {
+        'title': title,
+        'body': body,
+        'is_published': isPublished,
+      });
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '修改公告失败。');
+  }
+
+  Future<Map<String, dynamic>> deleteAdminAnnouncement(String id) async {
+    return _guard(() async {
+      final res = await _dio.delete('/api/admin/announcements/$id');
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '删除公告失败。');
   }
 
   Future<Map<String, dynamic>> grantAdminWelfare({
