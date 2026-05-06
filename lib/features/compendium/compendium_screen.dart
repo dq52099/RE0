@@ -27,10 +27,12 @@ class CompendiumScreen extends ConsumerStatefulWidget {
 
 class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     with AutomaticKeepAliveClientMixin {
-  static const _historyPageSize = 20;
+  static const _historyPageSizeOptions = [10, 20, 30, 50];
+  static const _historyPageSizeStorageKey = 'history_page_size';
   static const _hiddenStorageKey = 'hidden_history_items';
   static const MethodChannel _shareChannel = MethodChannel('re0/downloads');
 
+  final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   final List<Map<String, dynamic>> _items = [];
@@ -41,6 +43,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   final Set<String> _retryingKeys = {};
   Timer? _searchDebounce;
   int _page = 1;
+  int _pageSize = 10;
   int _total = 0;
   int _totalPages = 1;
   bool _hasMore = true;
@@ -61,6 +64,12 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     _hiddenKeys.addAll(
       ref.read(sharedPrefsProvider).getStringList(_hiddenStorageKey) ?? [],
     );
+    final storedPageSize =
+        ref.read(sharedPrefsProvider).getInt(_historyPageSizeStorageKey);
+    if (storedPageSize != null &&
+        _historyPageSizeOptions.contains(storedPageSize)) {
+      _pageSize = storedPageSize;
+    }
     _searchController.addListener(_onSearchChanged);
     _load(reset: true);
   }
@@ -68,6 +77,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    _scrollController.dispose();
     _searchController.removeListener(_onSearchChanged);
     _searchFocusNode.dispose();
     _searchController.dispose();
@@ -115,7 +125,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     try {
       final response = await ref.read(gatewayClientProvider).getHistory(
             _page,
-            pageSize: _historyPageSize,
+            pageSize: _pageSize,
             keyword: _query,
             action: _actionFilter,
             status: _statusFilter,
@@ -160,10 +170,36 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
       _error = null;
     });
     await _load(reset: true);
+    _scrollToTop();
   }
 
   Future<void> _refresh() async {
     await _load(reset: true);
+  }
+
+  Future<void> _setPageSize(int value) async {
+    if (_pageSize == value || _isLoading) return;
+    _dismissKeyboard();
+    setState(() {
+      _pageSize = value;
+      _page = 1;
+      _error = null;
+    });
+    await ref.read(sharedPrefsProvider).setInt(
+          _historyPageSizeStorageKey,
+          value,
+        );
+    await _load(reset: true);
+    _scrollToTop();
+  }
+
+  void _scrollToTop() {
+    if (!_scrollController.hasClients) return;
+    _scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   Future<void> _resetFiltersAndReload() async {
@@ -304,9 +340,8 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
           if (id != null && id.isNotEmpty) {
             final result =
                 await ref.read(gatewayClientProvider).deleteHistoryItem(id);
-            ref.read(historyRetentionProvider.notifier).state =
-                _quotaSummaryFromResponse(
-                    result['history_retention_quota_summary']);
+            _updateRetentionIfPresent(
+                result['history_retention_quota_summary']);
           }
         } catch (_) {
           // Fall back to local hide if server-side delete is unavailable.
@@ -321,7 +356,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
         _items.removeWhere((entry) => keys.contains(_historyKey(entry)));
         _deletingKeys.removeAll(keys);
         _total = (_total - keys.length).clamp(0, _total).toInt();
-        _totalPages = (_total + _historyPageSize - 1) ~/ _historyPageSize;
+        _totalPages = (_total + _pageSize - 1) ~/ _pageSize;
         if (_totalPages < 1) _totalPages = 1;
         if (_page > _totalPages) _page = _totalPages;
       });
@@ -400,9 +435,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
           );
       ref.read(energyProvider.notifier).state =
           _quotaSummaryFromResponse(response['quota_summary']);
-      ref.read(historyRetentionProvider.notifier).state =
-          _quotaSummaryFromResponse(
-              response['history_retention_quota_summary']);
+      _updateRetentionIfPresent(response['history_retention_quota_summary']);
       if (!mounted) return;
       await _hideHistoryItems([item], deletingKeys: {key});
       await _refresh();
@@ -508,13 +541,16 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     final historyId = item['id']?.toString();
     if (historyId == null || historyId.isEmpty) return;
     final postId = item['gallery_post_id']?.toString() ?? '';
-    final isPublished = item['is_published'] == true && postId.isNotEmpty;
+    final isPublished = _isPublished(item);
     setState(() => _publishingKeys.add(key));
     try {
       Map<String, dynamic>? quotaSource;
       if (isPublished) {
-        quotaSource =
-            await ref.read(gatewayClientProvider).unpublishGalleryPost(postId);
+        quotaSource = postId.isNotEmpty
+            ? await ref.read(gatewayClientProvider).unpublishGalleryPost(postId)
+            : await ref
+                .read(gatewayClientProvider)
+                .unpublishGalleryPostByHistory(historyId);
         if (mounted) {
           setState(() {
             item['is_published'] = false;
@@ -533,10 +569,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
         quotaSource = post;
       }
       final retentionSummary = quotaSource['history_retention_quota_summary'];
-      if (retentionSummary != null) {
-        ref.read(historyRetentionProvider.notifier).state =
-            _quotaSummaryFromResponse(retentionSummary);
-      }
+      _updateRetentionIfPresent(retentionSummary);
       if (!mounted) return;
       showCenterNotice(
         context,
@@ -677,6 +710,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
         child: RefreshIndicator(
           onRefresh: _refresh,
           child: CustomScrollView(
+            controller: _scrollController,
             cacheExtent: 1200,
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             slivers: [
@@ -741,9 +775,8 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   }
 
   Widget _pageControls() {
-    final start = _total == 0 ? 0 : ((_page - 1) * _historyPageSize) + 1;
-    final end =
-        (_page * _historyPageSize) > _total ? _total : _page * _historyPageSize;
+    final start = _total == 0 ? 0 : ((_page - 1) * _pageSize) + 1;
+    final end = (_page * _pageSize) > _total ? _total : _page * _pageSize;
     return Column(
       children: [
         if (_isLoading)
@@ -758,8 +791,34 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
         Text(
           _total == 0
               ? '暂无记录'
-              : '第 $_page / $_totalPages 页 · $start-$end / $_total',
+              : '第 $_page / $_totalPages 页 · $start-$end / $_total · 每页 $_pageSize 张',
           style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            Text('每页', style: Theme.of(context).textTheme.bodySmall),
+            DropdownButton<int>(
+              value: _pageSize,
+              onChanged: _isLoading
+                  ? null
+                  : (value) {
+                      if (value != null) unawaited(_setPageSize(value));
+                    },
+              items: _historyPageSizeOptions
+                  .map(
+                    (value) => DropdownMenuItem<int>(
+                      value: value,
+                      child: Text('$value 张'),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         Row(
@@ -894,8 +953,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     final isSharing = _sharingKeys.contains(key);
     final isRetrying = _retryingKeys.contains(key);
     final isSuccess = _isSuccessful(item);
-    final isPublished = item['is_published'] == true &&
-        (item['gallery_post_id']?.toString().isNotEmpty ?? false);
+    final isPublished = _isPublished(item);
     final action = item['action']?.toString() == 'edit' ? 'edit' : 'generate';
     final actionColor =
         action == 'edit' ? brand.warningColor : brand.primaryColor;
@@ -960,20 +1018,41 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                     Expanded(
                       child: Align(
                         alignment: Alignment.centerLeft,
-                        child: _actionPill(
-                          label: action == 'generate'
-                              ? brand.generateActionLabel
-                              : brand.editActionLabel,
-                          color: actionColor,
-                          icon: action == 'generate'
-                              ? Icons.auto_awesome_outlined
-                              : Icons.brush_outlined,
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            if (isSuccess)
+                              _metaActionButton(
+                                brand: brand,
+                                tooltip: isPublished ? '取消发布' : '发布到画廊',
+                                icon: isPublished
+                                    ? Icons.remove_circle_outline
+                                    : Icons.publish_outlined,
+                                label: isPublished ? '取消发布' : '发布',
+                                color: isPublished
+                                    ? brand.warningColor
+                                    : brand.primaryColor,
+                                isBusy: isPublishing,
+                                onPressed: () => _toggleGalleryPublish(item),
+                              ),
+                            _actionPill(
+                              label: action == 'generate'
+                                  ? brand.generateActionLabel
+                                  : brand.editActionLabel,
+                              color: actionColor,
+                              icon: action == 'generate'
+                                  ? Icons.auto_awesome_outlined
+                                  : Icons.brush_outlined,
+                            ),
+                          ],
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      item['size']?.toString() ?? '',
+                      _qualityLabel(item),
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     IconButton(
@@ -1007,27 +1086,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                         Icons.timelapse_outlined,
                         _formatDuration(item['duration_ms'])!,
                       ),
-                  ],
-                ),
-                if (isSuccess) ...[
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _metaActionButton(
-                        brand: brand,
-                        tooltip: isPublished ? '取消发布' : '发布到画廊',
-                        icon: isPublished
-                            ? Icons.remove_circle_outline
-                            : Icons.publish_outlined,
-                        label: isPublished ? '取消发布' : '发布',
-                        color: isPublished
-                            ? brand.warningColor
-                            : brand.primaryColor,
-                        isBusy: isPublishing,
-                        onPressed: () => _toggleGalleryPublish(item),
-                      ),
+                    if (isSuccess)
                       _metaActionButton(
                         brand: brand,
                         tooltip: '图片分享',
@@ -1037,9 +1096,8 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                         isBusy: isSharing,
                         onPressed: () => _shareHistoryItem(item),
                       ),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
                 if (!isSuccess) ...[
                   const SizedBox(height: 8),
                   Container(
@@ -1339,6 +1397,18 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     return '$minutes 分 $remain 秒';
   }
 
+  String _qualityLabel(Map<String, dynamic> item) {
+    final quality = item['quality']?.toString().trim();
+    if (quality != null && quality.isNotEmpty && quality != 'auto') {
+      return '清晰度 $quality';
+    }
+    final size = item['size']?.toString().trim();
+    if (size != null && size.isNotEmpty) {
+      return '清晰度 $size';
+    }
+    return '清晰度 auto';
+  }
+
   bool _canRetryFailedGenerate(Map<String, dynamic> item) {
     return !_isSuccessful(item) && item['action']?.toString() == 'generate';
   }
@@ -1477,5 +1547,22 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
       'generate': {'remaining': 0, 'total': 0, 'used': 0},
       'edit': {'remaining': 0, 'total': 0, 'used': 0},
     };
+  }
+
+  bool _isPublished(Map<String, dynamic> item) {
+    final postId = item['gallery_post_id']?.toString().trim() ?? '';
+    return item['is_published'] == true || postId.isNotEmpty;
+  }
+
+  void _updateRetentionIfPresent(dynamic value) {
+    if (value is! Map) return;
+    final summary = Map<String, dynamic>.from(value);
+    final generate = summary['generate'];
+    final edit = summary['edit'];
+    if (generate is! Map || edit is! Map) return;
+    final hasTotals =
+        generate.containsKey('total') && edit.containsKey('total');
+    if (!hasTotals) return;
+    ref.read(historyRetentionProvider.notifier).state = summary;
   }
 }

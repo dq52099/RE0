@@ -604,11 +604,18 @@ class GatewayClient {
     }, fallback: '导出反馈需求清单失败。');
   }
 
-  Future<Map<String, dynamic>> getMyNotifications({int limit = 80}) async {
+  Future<Map<String, dynamic>> getMyNotifications({
+    int limit = 80,
+    String? readState,
+  }) async {
     return _guard(() async {
+      final queryParameters = <String, dynamic>{'limit': limit};
+      if (readState != null && readState.isNotEmpty) {
+        queryParameters['read_state'] = readState;
+      }
       final res = await _dio.get(
         '/api/me/notifications',
-        queryParameters: {'limit': limit},
+        queryParameters: queryParameters,
       );
       return _mapResponse(res.data);
     }, fallback: '读取通知失败。');
@@ -617,14 +624,19 @@ class GatewayClient {
   Future<Map<String, dynamic>> getMyNotificationsByCategory(
     String category, {
     int limit = 50,
+    String? readState,
   }) async {
     return _guard(() async {
+      final queryParameters = <String, dynamic>{
+        'limit': limit,
+        'category': category,
+      };
+      if (readState != null && readState.isNotEmpty) {
+        queryParameters['read_state'] = readState;
+      }
       final res = await _dio.get(
         '/api/me/notifications',
-        queryParameters: {
-          'limit': limit,
-          'category': category,
-        },
+        queryParameters: queryParameters,
       );
       return _mapResponse(res.data);
     }, fallback: '读取通知失败。');
@@ -722,6 +734,14 @@ class GatewayClient {
   Future<Map<String, dynamic>> unpublishGalleryPost(String postId) async {
     return _guard(() async {
       final res = await _dio.delete('/api/gallery/posts/$postId');
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '取消发布失败。');
+  }
+
+  Future<Map<String, dynamic>> unpublishGalleryPostByHistory(
+      String historyId) async {
+    return _guard(() async {
+      final res = await _dio.delete('/api/gallery/posts/history/$historyId');
       return Map<String, dynamic>.from(res.data as Map);
     }, fallback: '取消发布失败。');
   }

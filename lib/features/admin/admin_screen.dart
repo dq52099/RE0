@@ -31,14 +31,14 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   static const _invitesPageSize = 30;
   static const _backupRecordsPageSize = 5;
   static const _mailProviderLabels = {
-    'claw163': '163 邮箱通道',
-    'resend': 'Resend 备用通道',
-    'smtp': 'SMTP 兼容通道',
-    'none': '关闭',
+    'claw163': '网易 163 邮件服务',
+    'resend': 'Resend 邮件服务',
+    'smtp': 'SMTP 邮件服务',
+    'none': '不发送',
   };
   static const _mailSlotLabels = {
-    'primary': '主用线路',
-    'backup': '备用线路',
+    'primary': '使用主通道',
+    'backup': '使用备用通道',
   };
   static const _providerSlotLabels = {
     'primary': '主用线路',
@@ -54,6 +54,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   bool _isRunningBackup = false;
   bool _isPublishingAnnouncement = false;
   bool _isGrantingWelfare = false;
+  String _announcementTypeFilter = 'all';
+  String _announcementStatusFilter = 'all';
 
   @override
   Widget build(BuildContext context) {
@@ -150,6 +152,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     if (isAdmin ||
         permissions.contains('settings.view') ||
         menus.contains('settings')) {
+      sections.add(const _AdminSection('mail', '邮件设置'));
+    }
+    if (isAdmin ||
+        permissions.contains('settings.view') ||
+        menus.contains('settings')) {
       sections.add(const _AdminSection('settings', '设置'));
     }
     if (isAdmin ||
@@ -223,6 +230,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         );
       case 'backups':
         return _backupsPage(brand, canManage: _can(user, 'settings.manage'));
+      case 'mail':
+        return _mailSettingsPage(brand,
+            canManage: _can(user, 'settings.manage'));
       case 'settings':
         return _settingsPage(brand, canManage: _can(user, 'settings.manage'));
       case 'audit':
@@ -659,17 +669,14 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         final settings = _settingsWithAiDefaults(_mapList(data['settings']));
         final runtime = _map(data['runtime_status']);
         final groups = _settingGroups(settings);
+        groups.remove('邮件通道');
+        groups.remove('数据备份');
         return _adminList(
           action: canManage
               ? Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    FilledButton.icon(
-                      onPressed: () => _editSettings(data),
-                      icon: const Icon(Icons.save_as),
-                      label: const Text('编辑设置'),
-                    ),
                     OutlinedButton.icon(
                       onPressed: _probeCapabilities,
                       icon: const Icon(Icons.radar),
@@ -703,8 +710,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     ? IconButton(
                         tooltip: '编辑${entry.key}',
                         icon: const Icon(Icons.edit_outlined),
-                        onPressed: () =>
-                            _editSettings(data, category: entry.key),
+                        onPressed: entry.key == '数据备份'
+                            ? () => _editBackupSettings(settings)
+                            : () => _editSettings(data, category: entry.key),
                       )
                     : null,
                 lines: entry.value
@@ -790,7 +798,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               ],
             ),
             _infoCard(
-              title: 'OpenList 主用备份',
+              title: 'OpenList 云端备份 A',
               subtitle: '通过 WebDAV 上传，外网地址用于打开远端文件。',
               active: runtime['openlist_backup_primary_enabled'] == true,
               lines: [
@@ -802,8 +810,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               ],
             ),
             _infoCard(
-              title: 'OpenList 备用备份',
-              subtitle: '主备独立开关，备用未配置时不会上传。',
+              title: 'OpenList 云端备份 B',
+              subtitle: '两组云端备份独立开关，未配置时不会上传。',
               active: runtime['openlist_backup_secondary_enabled'] == true,
               lines: [
                 '开关: ${_enabledLabel(runtime['openlist_backup_secondary_enabled'])}',
@@ -890,12 +898,87 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     );
   }
 
+  Widget _mailSettingsPage(AppBrand brand, {required bool canManage}) {
+    return _futureSection<Map<String, dynamic>>(
+      future: ref.read(gatewayClientProvider).adminSystemSettings(),
+      builder: (data) {
+        final settings = _settingsWithAiDefaults(_mapList(data['settings']));
+        final byKey = {
+          for (final item in settings) _text(item['key']): item,
+        };
+        final runtime = _map(data['runtime_status']);
+        return _adminList(
+          action: canManage
+              ? FilledButton.icon(
+                  onPressed: () => _editSettings(data, category: '邮件通道'),
+                  icon: const Icon(Icons.mail_outline),
+                  label: const Text('编辑邮件设置'),
+                )
+              : null,
+          children: [
+            _infoCard(
+              title: '发送策略',
+              subtitle: '验证码和系统通知共用这套邮件发送策略。',
+              lines: [
+                '当前使用: ${_mailSlotLabels[_text(runtime['email_code_active_slot'], fallback: 'primary')] ?? _text(runtime['email_code_active_slot'])}',
+                '主通道服务: ${_mailProviderLabels[_settingValue(byKey, 'email_code_primary_provider', fallback: 'claw163')] ?? _settingValue(byKey, 'email_code_primary_provider', fallback: 'claw163')}',
+                '备用通道服务: ${_mailProviderLabels[_settingValue(byKey, 'email_code_backup_provider', fallback: 'resend')] ?? _settingValue(byKey, 'email_code_backup_provider', fallback: 'resend')}',
+                '失败后自动切换: ${_enabledLabel(runtime['email_auto_switch_enabled'])}',
+              ],
+            ),
+            _infoCard(
+              title: '网易 163 邮件服务',
+              subtitle: '服务开关和账号配置；是否作为主通道由发送策略决定。',
+              active: runtime['openclaw_mail_configured'] == true,
+              lines: [
+                '服务状态: ${runtime['openclaw_mail_configured'] == true ? '已启用并配置' : '未完整配置'}',
+                '发件邮箱: ${_settingValue(byKey, 'openclaw_mail_user')}',
+              ],
+            ),
+            _infoCard(
+              title: 'Resend 邮件服务',
+              subtitle: '可作为备用，也可在发送策略中设为主通道。',
+              active: runtime['resend_configured'] == true,
+              lines: [
+                '服务状态: ${runtime['resend_configured'] == true ? '已配置' : '未完整配置'}',
+                'API 地址: ${_settingValue(byKey, 'resend_base_url', fallback: 'https://api.resend.com')}',
+                '发件人: ${_settingValue(byKey, 'resend_from')}',
+              ],
+            ),
+            _infoCard(
+              title: 'SMTP 邮件服务',
+              subtitle: '兼容邮箱服务，按需放入主通道或备用通道。',
+              active: runtime['email_smtp_configured'] == true,
+              lines: [
+                '服务状态: ${runtime['email_smtp_configured'] == true ? '已配置' : '未完整配置'}',
+                '服务器: ${_settingValue(byKey, 'email_smtp_host')}',
+                '账号: ${_settingValue(byKey, 'email_smtp_username')}',
+              ],
+            ),
+            _infoCard(
+              title: '系统通知收件人',
+              subtitle: '后端线路告警、备份结果等系统通知会发到这里。',
+              lines: [
+                '收件人: ${_settingValue(byKey, 'system_notice_email_to')}',
+                '发件人显示名: ${_settingValue(byKey, 'email_sender_name', fallback: '从零开始生图')}',
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _announcementsPage(AppBrand brand, {required bool canManage}) {
     return _futureSection<Map<String, dynamic>>(
       future: ref.read(gatewayClientProvider).adminAnnouncements(),
       builder: (data) {
-        final announcements = _mapList(data['announcements']);
-        final grants = _mapList(data['welfare_grants']);
+        final announcements = _filteredAnnouncements(
+          _mapList(data['announcements']),
+        );
+        final grants = _announcementTypeFilter == 'announcement'
+            ? <Map<String, dynamic>>[]
+            : _mapList(data['welfare_grants']);
         return _adminList(
           action: canManage
               ? Wrap(
@@ -920,10 +1003,16 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               : null,
           children: [
             _infoCard(
-              title: '展示位置',
-              subtitle: '公告会进入每个用户的通知中心；未读通知会在“我的”页显示红点。',
-              lines: const ['系统公告', '全员通知', '福利到账'],
+              title: '公告与福利管理',
+              subtitle: '公告负责运营消息，福利负责发放额度；两类都会进入用户通知中心。',
+              lines: [
+                '类型: ${_announcementTypeLabel(_announcementTypeFilter)}',
+                '状态: ${_announcementStatusLabel(_announcementStatusFilter)}',
+                '公告: ${announcements.length} 条',
+                '福利: ${grants.length} 次',
+              ],
             ),
+            _announcementFilters(),
             ...announcements.map(
               (item) {
                 final active = item['is_published'] != false;
@@ -944,9 +1033,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                             IconButton(
                               tooltip: '删除公告',
                               icon: const Icon(Icons.delete_outline),
-                              onPressed: active
-                                  ? () => _deleteAnnouncement(item)
-                                  : null,
+                              onPressed: () => _deleteAnnouncement(item),
                             ),
                           ],
                         )
@@ -977,6 +1064,126 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         );
       },
     );
+  }
+
+  Widget _announcementFilters() {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '筛选',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _adminChoiceChip(
+                  label: '全部类型',
+                  selected: _announcementTypeFilter == 'all',
+                  onSelected: () => setState(
+                    () => _announcementTypeFilter = 'all',
+                  ),
+                ),
+                _adminChoiceChip(
+                  label: '公告',
+                  selected: _announcementTypeFilter == 'announcement',
+                  onSelected: () => setState(
+                    () => _announcementTypeFilter = 'announcement',
+                  ),
+                ),
+                _adminChoiceChip(
+                  label: '福利',
+                  selected: _announcementTypeFilter == 'welfare',
+                  onSelected: () => setState(
+                    () => _announcementTypeFilter = 'welfare',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _adminChoiceChip(
+                  label: '全部状态',
+                  selected: _announcementStatusFilter == 'all',
+                  onSelected: () => setState(
+                    () => _announcementStatusFilter = 'all',
+                  ),
+                ),
+                _adminChoiceChip(
+                  label: '已发布',
+                  selected: _announcementStatusFilter == 'published',
+                  onSelected: () => setState(
+                    () => _announcementStatusFilter = 'published',
+                  ),
+                ),
+                _adminChoiceChip(
+                  label: '已下线',
+                  selected: _announcementStatusFilter == 'offline',
+                  onSelected: () => setState(
+                    () => _announcementStatusFilter = 'offline',
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _adminChoiceChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onSelected,
+  }) {
+    return ChoiceChip(
+      selected: selected,
+      label: Text(label),
+      onSelected: (_) => onSelected(),
+    );
+  }
+
+  List<Map<String, dynamic>> _filteredAnnouncements(
+    List<Map<String, dynamic>> announcements,
+  ) {
+    if (_announcementTypeFilter == 'welfare') return const [];
+    return announcements.where((item) {
+      final active = item['is_published'] != false;
+      if (_announcementStatusFilter == 'published') return active;
+      if (_announcementStatusFilter == 'offline') return !active;
+      return true;
+    }).toList();
+  }
+
+  String _announcementTypeLabel(String value) {
+    switch (value) {
+      case 'announcement':
+        return '公告';
+      case 'welfare':
+        return '福利';
+      default:
+        return '全部类型';
+    }
+  }
+
+  String _announcementStatusLabel(String value) {
+    switch (value) {
+      case 'published':
+        return '已发布';
+      case 'offline':
+        return '已下线';
+      default:
+        return '全部状态';
+    }
   }
 
   Widget _auditPage(AppBrand brand) {
@@ -2202,13 +2409,14 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     value: openclawMailEnabled,
                     onChanged: (value) =>
                         setDialogState(() => openclawMailEnabled = value),
-                    title: const Text('启用 163 邮箱主通道'),
+                    title: const Text('启用网易 163 邮件服务'),
+                    subtitle: const Text('这是服务开关；是否走主通道或备用通道由下方发送策略决定'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: openclawMailUser,
                     decoration: const InputDecoration(
-                      labelText: '主通道发件邮箱',
+                      labelText: '网易 163 发件邮箱',
                       helperText: '例如：bot.image@claw.163.com',
                     ),
                   ),
@@ -2217,7 +2425,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     controller: openclawMailApiKey,
                     obscureText: true,
                     decoration: const InputDecoration(
-                      labelText: '主通道密钥，留空不修改',
+                      labelText: '网易 163 服务密钥，留空不修改',
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -2229,7 +2437,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   ),
                   const SizedBox(height: 12),
                   _stringDropdown(
-                    '主用邮件通道',
+                    '主通道服务',
                     emailPrimaryProvider,
                     const ['claw163', 'resend', 'smtp', 'none'],
                     (value) =>
@@ -2238,7 +2446,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   ),
                   const SizedBox(height: 12),
                   _stringDropdown(
-                    '备用邮件通道',
+                    '备用通道服务',
                     emailBackupProvider,
                     const ['resend', 'claw163', 'smtp', 'none'],
                     (value) =>
@@ -2247,7 +2455,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   ),
                   const SizedBox(height: 12),
                   _stringDropdown(
-                    '当前邮件线路',
+                    '当前使用线路',
                     emailActiveSlot,
                     const ['primary', 'backup'],
                     (value) => setDialogState(() => emailActiveSlot = value),
@@ -2265,7 +2473,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   TextField(
                     controller: resendBase,
                     decoration: const InputDecoration(
-                      labelText: '备用通道 API 地址',
+                      labelText: 'Resend API 地址',
                       helperText: '默认 https://api.resend.com',
                     ),
                   ),
@@ -2273,7 +2481,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   TextField(
                     controller: resendFrom,
                     decoration: const InputDecoration(
-                      labelText: '备用通道发件人',
+                      labelText: 'Resend 发件人',
                       helperText: '例如：从零开始生图 <noreply@mail.6688667.xyz>',
                     ),
                   ),
@@ -2282,8 +2490,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     controller: resendKey,
                     obscureText: true,
                     decoration: const InputDecoration(
-                      labelText: '备用通道密钥，留空不修改',
-                      helperText: '默认作为备用邮件通道',
+                      labelText: 'Resend 密钥，留空不修改',
+                      helperText: '可在上方发送策略中设为主通道或备用通道',
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -2608,12 +2816,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   ),
                 ),
                 const SizedBox(height: 18),
-                _settingsSectionTitle('OpenList 主用'),
+                _settingsSectionTitle('OpenList 云端备份 A'),
                 SwitchListTile(
                   value: openlistPrimaryEnabled,
                   onChanged: (value) =>
                       setDialogState(() => openlistPrimaryEnabled = value),
-                  title: const Text('启用主用 OpenList'),
+                  title: const Text('启用 OpenList 云端备份 A'),
                 ),
                 TextField(
                   controller: openlistPrimaryWebdav,
@@ -2644,12 +2852,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   decoration: const InputDecoration(labelText: '远端目录'),
                 ),
                 const SizedBox(height: 18),
-                _settingsSectionTitle('OpenList 备用'),
+                _settingsSectionTitle('OpenList 云端备份 B'),
                 SwitchListTile(
                   value: openlistSecondaryEnabled,
                   onChanged: (value) =>
                       setDialogState(() => openlistSecondaryEnabled = value),
-                  title: const Text('启用备用 OpenList'),
+                  title: const Text('启用 OpenList 云端备份 B'),
                 ),
                 TextField(
                   controller: openlistSecondaryWebdav,
@@ -3473,9 +3681,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       case 'google_drive':
         return 'Google Drive';
       case 'openlist_primary':
-        return 'OpenList 主用';
+        return 'OpenList A';
       case 'openlist_secondary':
-        return 'OpenList 备用';
+        return 'OpenList B';
       default:
         return target == '-' ? '备份' : target;
     }
@@ -3603,11 +3811,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       'general_provider_image_model': '普通图片模型',
       'notification_retention_days': '已读通知清理',
       'notification_category_limit': '每类显示上限',
-      'openclaw_mail_enabled': '主邮件通道',
-      'openclaw_mail_user': '主通道邮箱',
-      'email_code_primary_provider': '主用通道',
-      'email_code_backup_provider': '备用通道',
-      'email_code_active_slot': '邮件线路',
+      'openclaw_mail_enabled': '网易 163 服务',
+      'openclaw_mail_user': '网易 163 发件邮箱',
+      'email_code_primary_provider': '主通道服务',
+      'email_code_backup_provider': '备用通道服务',
+      'email_code_active_slot': '当前使用线路',
       'email_auto_switch_enabled': '自动切换',
       'force_app_update_enabled': '强制更新',
       'force_relogin_enabled': '强制重登',
@@ -3827,17 +4035,17 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       {
         'key': 'email_code_primary_provider',
         'value': 'claw163',
-        'description': '验证码和系统通知主用邮件通道',
+        'description': '主通道使用的邮件服务',
       },
       {
         'key': 'email_code_backup_provider',
         'value': 'resend',
-        'description': '验证码和系统通知备用邮件通道',
+        'description': '备用通道使用的邮件服务',
       },
       {
         'key': 'email_code_active_slot',
         'value': 'primary',
-        'description': '当前邮件线路',
+        'description': '当前优先使用的邮件通道',
       },
       {
         'key': 'email_auto_switch_enabled',
@@ -3847,27 +4055,27 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       {
         'key': 'openclaw_mail_enabled',
         'value': 'false',
-        'description': '是否启用 163 邮箱主通道',
+        'description': '是否启用网易 163 邮件服务',
       },
       {
         'key': 'openclaw_mail_user',
         'value': '',
-        'description': '主通道发件邮箱',
+        'description': '网易 163 发件邮箱',
       },
       {
         'key': 'openclaw_mail_api_key',
         'value': 'xxx',
-        'description': '主通道密钥',
+        'description': '网易 163 服务密钥',
       },
       {
         'key': 'resend_base_url',
         'value': 'https://api.resend.com',
-        'description': 'Resend API 地址，默认备用通道',
+        'description': 'Resend API 地址',
       },
       {
         'key': 'resend_api_key',
         'value': 'xxx',
-        'description': '备用通道密钥',
+        'description': 'Resend 密钥',
       },
       {
         'key': 'resend_from',
@@ -3957,62 +4165,62 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       {
         'key': 'openlist_backup_primary_enabled',
         'value': 'false',
-        'description': '是否同步上传到 OpenList 主用备份',
+        'description': '是否同步上传到 OpenList 云端备份 A',
       },
       {
         'key': 'openlist_backup_primary_webdav_url',
         'value': 'http://openlist:5244/dav',
-        'description': 'OpenList 主用 WebDAV 地址',
+        'description': 'OpenList A WebDAV 地址',
       },
       {
         'key': 'openlist_backup_primary_public_url',
         'value': 'http://127.0.0.1:5244/dav',
-        'description': 'OpenList 主用外网打开地址',
+        'description': 'OpenList A 外网打开地址',
       },
       {
         'key': 'openlist_backup_primary_username',
         'value': 'admin',
-        'description': 'OpenList 主用 WebDAV 用户名',
+        'description': 'OpenList A WebDAV 用户名',
       },
       {
         'key': 'openlist_backup_primary_password',
         'value': 'xxx',
-        'description': 'OpenList 主用 WebDAV 密码',
+        'description': 'OpenList A WebDAV 密码',
       },
       {
         'key': 'openlist_backup_primary_path',
         'value': '/gateway-backups',
-        'description': 'OpenList 主用备份目录',
+        'description': 'OpenList A 备份目录',
       },
       {
         'key': 'openlist_backup_secondary_enabled',
         'value': 'false',
-        'description': '是否同步上传到 OpenList 备用备份',
+        'description': '是否同步上传到 OpenList 云端备份 B',
       },
       {
         'key': 'openlist_backup_secondary_webdav_url',
         'value': '',
-        'description': 'OpenList 备用 WebDAV 地址',
+        'description': 'OpenList B WebDAV 地址',
       },
       {
         'key': 'openlist_backup_secondary_public_url',
         'value': '',
-        'description': 'OpenList 备用外网打开地址',
+        'description': 'OpenList B 外网打开地址',
       },
       {
         'key': 'openlist_backup_secondary_username',
         'value': '',
-        'description': 'OpenList 备用 WebDAV 用户名',
+        'description': 'OpenList B WebDAV 用户名',
       },
       {
         'key': 'openlist_backup_secondary_password',
         'value': 'xxx',
-        'description': 'OpenList 备用 WebDAV 密码',
+        'description': 'OpenList B WebDAV 密码',
       },
       {
         'key': 'openlist_backup_secondary_path',
         'value': '/gateway-backups-secondary',
-        'description': 'OpenList 备用备份目录',
+        'description': 'OpenList B 备份目录',
       },
     ];
     return [

@@ -22,6 +22,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   Future<Map<String, dynamic>>? _future;
   final Set<String> _busyIds = {};
   String _category = 'all';
+  String _readState = 'all';
 
   @override
   void initState() {
@@ -31,10 +32,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
   void _reload() {
     _future = _category == 'all'
-        ? ref.read(gatewayClientProvider).getMyNotifications()
+        ? ref
+            .read(gatewayClientProvider)
+            .getMyNotifications(readState: _readState)
         : ref
             .read(gatewayClientProvider)
-            .getMyNotificationsByCategory(_category);
+            .getMyNotificationsByCategory(_category, readState: _readState);
   }
 
   Future<void> _refresh() async {
@@ -122,6 +125,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     _categorySelector(categories),
                     const SizedBox(height: 12),
                   ],
+                  _readStateSelector(),
+                  const SizedBox(height: 12),
                   if (snapshot.connectionState != ConnectionState.done)
                     const Padding(
                       padding: EdgeInsets.only(top: 120),
@@ -287,6 +292,35 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 });
               },
             ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _readStateSelector() {
+    const states = <Map<String, String>>[
+      {'key': 'all', 'label': '全部'},
+      {'key': 'unread', 'label': '未读'},
+      {'key': 'read', 'label': '已读'},
+    ];
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: states.map((state) {
+          final key = state['key']!;
+          return ChoiceChip(
+            selected: _readState == key,
+            label: Text(state['label']!),
+            onSelected: (_) {
+              if (_readState == key) return;
+              setState(() {
+                _readState = key;
+                _reload();
+              });
+            },
           );
         }).toList(),
       ),
