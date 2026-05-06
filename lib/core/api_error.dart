@@ -48,10 +48,10 @@ String _messageFromDio(DioException error, {required String fallback}) {
   if (error.type == DioExceptionType.connectionTimeout ||
       error.type == DioExceptionType.receiveTimeout ||
       error.type == DioExceptionType.sendTimeout) {
-    return '连接超时，请检查网络后重试。';
+    return '与网关连接超时，请稍后再试。';
   }
   if (error.type == DioExceptionType.connectionError) {
-    return '无法连接服务器，请检查网络或网关地址。';
+    return '暂时连接不上网关，请检查网络后重试。';
   }
   if (error.type == DioExceptionType.cancel) {
     return '请求已取消。';
@@ -81,7 +81,7 @@ String _messageFromDio(DioException error, {required String fallback}) {
     return '当前请求与已有数据冲突。';
   }
   if (statusCode != null && statusCode >= 500) {
-    return '服务器暂时不可用，请稍后重试。';
+    return '网关暂时不可用，请稍后重试。';
   }
   return fallback;
 }
@@ -104,14 +104,19 @@ String _polishMessage(String message, String fallback) {
   if (normalized.contains('quota') ||
       normalized.contains('insufficient credits') ||
       normalized.contains('not enough credits')) {
-    return '当前额度不足，请检查剩余额度或联系管理员。';
+    return '当前玛那不足，请检查剩余额度或联系管理员。';
   }
   if (normalized.contains('usage_limit_exceeded') ||
       normalized.contains('daily_limit_exceeded') ||
       normalized.contains('daily usage limit exceeded') ||
+      normalized.contains('上游额度或频率限制') ||
       normalized.contains('code=429') ||
       normalized.contains('http 429')) {
-    return '今日生图通道额度已用尽，请稍后再试，或联系管理员切换备用线路。';
+    return '今日咏唱线路的玛那已耗尽，请稍后再试，或联系管理员切换备用线路。';
+  }
+  final providerMessage = _providerMessage(text, normalized);
+  if (providerMessage != null) {
+    return providerMessage;
   }
   final minLengthMatch = _minLengthPattern.firstMatch(normalized);
   if (minLengthMatch != null) {
@@ -148,7 +153,7 @@ String _polishMessage(String message, String fallback) {
     return '已经签到过了，明天再来。';
   }
   if (normalized == 'not found') {
-    return '接口或资源不存在，请确认后端已部署最新版本。';
+    return '所需资源不存在，请确认后端已部署最新版本。';
   }
   if (normalized.contains('timed out') || normalized.contains('timeout')) {
     return '请求超时，请稍后重试。';
@@ -158,14 +163,51 @@ String _polishMessage(String message, String fallback) {
     return '请求过于频繁，请稍后再试。';
   }
   if (normalized.contains('prompt') && normalized.contains('invalid')) {
-    return '提示词格式不正确，请调整后再试。';
+    return '咒文格式不正确，请调整后再试。';
   }
   if (normalized.contains('image') &&
       (normalized.contains('failed') || normalized.contains('error'))) {
-    return '图片处理失败，请更换图片或稍后重试。';
+    return '画面处理失败，请更换图片或稍后重试。';
   }
 
   return text;
+}
+
+String? _providerMessage(String text, String normalized) {
+  if (normalized.contains('base_url 或 key 未配置') ||
+      normalized.contains('线路未完整配置')) {
+    return '咏唱线路尚未准备好，请联系管理员处理。';
+  }
+  if (normalized.contains('上游认证失败') ||
+      normalized.contains('上游拒绝访问') ||
+      normalized.contains('unauthorized') ||
+      normalized.contains('forbidden')) {
+    return '咏唱线路暂时无法通行，请联系管理员检查线路权限。';
+  }
+  if (normalized.contains('上游响应超时') ||
+      normalized.contains('无法连接上游') ||
+      normalized.contains('network') ||
+      normalized.contains('dns')) {
+    return '暂时连接不上咏唱线路，请稍后再试。';
+  }
+  if (normalized.contains('上游模型或接口不存在') ||
+      normalized.contains('not_found') ||
+      normalized.contains('not found')) {
+    return '咏唱线路暂不可用，请联系管理员检查系统设置。';
+  }
+  if (normalized.contains('上游返回格式异常') ||
+      normalized.contains('上游未返回可用图片') ||
+      normalized.contains('未返回图片')) {
+    return '世界根源没有返回可用画面，请稍后再试。';
+  }
+  if (normalized.contains('provider returned http') ||
+      normalized.contains('key1:') ||
+      normalized.contains('key2:') ||
+      normalized.contains('上游返回异常') ||
+      normalized.contains('探活失败')) {
+    return '咏唱线路暂时不可用，请稍后再试，或联系管理员查看系统通知。';
+  }
+  return null;
 }
 
 String? _extractDetail(dynamic data) {

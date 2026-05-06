@@ -8,8 +8,18 @@ void main() {
 
     final message = friendlyError(raw);
 
-    expect(message, contains('今日生图通道额度已用尽'));
+    expect(message, contains('今日咏唱线路的玛那已耗尽'));
     expect(message, isNot(contains('USAGE_LIMIT_EXCEEDED')));
     expect(message, isNot(contains('Provider returned HTTP')));
+  });
+
+  test('friendlyError hides provider key-level detail', () {
+    const raw = '文本：key1: 上游返回异常；图片：key2: 上游拒绝访问';
+
+    final message = friendlyError(raw);
+
+    expect(message, contains('咏唱线路'));
+    expect(message, isNot(contains('key1')));
+    expect(message, isNot(contains('key2')));
   });
 }

@@ -29,10 +29,26 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   static const _generalProviderImageModel = 'codex-gpt-image-2';
   static const _usersPageSize = 20;
   static const _invitesPageSize = 30;
+  static const _backupRecordsPageSize = 5;
+  static const _mailProviderLabels = {
+    'claw163': '163 邮箱通道',
+    'resend': 'Resend 备用通道',
+    'smtp': 'SMTP 兼容通道',
+    'none': '关闭',
+  };
+  static const _mailSlotLabels = {
+    'primary': '主用线路',
+    'backup': '备用线路',
+  };
+  static const _providerSlotLabels = {
+    'primary': '主用线路',
+    'backup': '备用线路',
+  };
 
   int _revision = 0;
   int _usersPageIndex = 1;
   int _invitesPageIndex = 1;
+  int _backupRecordsPageIndex = 1;
   String _inviteStatusFilter = '';
   bool _isProviderHealthChecking = false;
   bool _isRunningBackup = false;
@@ -713,6 +729,20 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
             _text(item['key']): item,
         };
         final runtime = data.runtime;
+        final sortedBackups = [...data.backups]..sort(
+            (a, b) => _backupCreatedAt(b).compareTo(_backupCreatedAt(a)),
+          );
+        final totalRecordPages =
+            _pageCount(sortedBackups.length, _backupRecordsPageSize);
+        final recordPage = _clampedPage(
+          _backupRecordsPageIndex,
+          totalRecordPages,
+        );
+        final visibleRecords = _pageItems(
+          sortedBackups,
+          recordPage,
+          _backupRecordsPageSize,
+        );
         return _adminList(
           action: canManage
               ? Wrap(
@@ -744,6 +774,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 '通知: ${_enabledLabel(runtime['backup_notification_enabled'])}',
               ],
             ),
+            const SizedBox(height: 4),
+            _settingsSectionTitle('备份上传通道'),
+            const SizedBox(height: 8),
             _infoCard(
               title: 'Google Drive 备份',
               subtitle: '使用 Service Account 上传备份包。',
@@ -778,41 +811,77 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 '目录: ${_settingValue(byKey, 'openlist_backup_secondary_path', fallback: '/gateway-backups-secondary')}',
               ],
             ),
-            ...data.backups.map((item) {
-              final target = _backupTargetLabel(_text(item['target']));
-              final status = _text(item['status']);
-              final url = _text(item['remote_file_url'], fallback: '');
-              return _infoCard(
-                title: '$target备份${status == 'success' ? '完成' : '异常'}',
-                subtitle: _text(item['message']),
-                badge: _backupStatusLabel(status),
-                trailing: Wrap(
-                  spacing: 4,
-                  children: [
-                    if (url.isNotEmpty)
-                      IconButton(
-                        tooltip: '复制远端地址',
-                        icon: const Icon(Icons.link),
-                        onPressed: () => _copyText(url, '远端备份地址已复制。'),
-                      ),
-                    if (canManage &&
-                        _text(item['target']) == 'local' &&
-                        status == 'success')
-                      IconButton(
-                        tooltip: '恢复此备份',
-                        icon: const Icon(Icons.restore),
-                        onPressed: () => _restoreLocalBackup(item),
-                      ),
-                  ],
-                ),
+            const SizedBox(height: 8),
+            _settingsSectionTitle('备份记录'),
+            const SizedBox(height: 8),
+            if (data.backups.isEmpty)
+              _infoCard(
+                title: '暂无备份记录',
+                subtitle: '执行一次备份后会在这里显示最近记录。',
+                lines: const [],
+              )
+            else ...[
+              _infoCard(
+                title: '记录分页',
+                subtitle: '默认每页显示 5 条备份记录。',
+                badge: 'size=5',
                 lines: [
-                  '时间: ${formatLocalTime(item['created_at'])}',
-                  '大小: ${_formatBytes(item['size_bytes'])}',
-                  if (url.isNotEmpty) '远端: $url',
-                  if (url.isEmpty) '文件: ${_text(item['file_path'])}',
+                  '当前页: $recordPage / $totalRecordPages',
+                  '本页记录: ${visibleRecords.length} 条',
+                  '全部记录: ${data.backups.length} 条',
                 ],
-              );
-            }),
+              ),
+              ...visibleRecords.map((item) {
+                final target = _backupTargetLabel(_text(item['target']));
+                final status = _text(item['status']);
+                final url = _text(item['remote_file_url'], fallback: '');
+                return _infoCard(
+                  title: '$target备份${status == 'success' ? '完成' : '异常'}',
+                  subtitle: _text(item['message']),
+                  badge: _backupStatusLabel(status),
+                  trailing: Wrap(
+                    spacing: 4,
+                    children: [
+                      if (url.isNotEmpty)
+                        IconButton(
+                          tooltip: '复制远端地址',
+                          icon: const Icon(Icons.link),
+                          onPressed: () => _copyText(url, '远端备份地址已复制。'),
+                        ),
+                      if (canManage &&
+                          _text(item['target']) == 'local' &&
+                          status == 'success')
+                        IconButton(
+                          tooltip: '恢复此备份',
+                          icon: const Icon(Icons.restore),
+                          onPressed: () => _restoreLocalBackup(item),
+                        ),
+                    ],
+                  ),
+                  lines: [
+                    '时间: ${formatLocalTime(item['created_at'])}',
+                    '大小: ${_formatBytes(item['size_bytes'])}',
+                    if (url.isNotEmpty) '远端: $url',
+                    if (url.isEmpty) '文件: ${_text(item['file_path'])}',
+                  ],
+                );
+              }),
+              _listPager(
+                page: recordPage,
+                totalPages: totalRecordPages,
+                totalItems: data.backups.length,
+                onPrevious: recordPage > 1
+                    ? () => setState(
+                          () => _backupRecordsPageIndex = recordPage - 1,
+                        )
+                    : null,
+                onNext: recordPage < totalRecordPages
+                    ? () => setState(
+                          () => _backupRecordsPageIndex = recordPage + 1,
+                        )
+                    : null,
+              ),
+            ],
           ],
         );
       },
@@ -1822,6 +1891,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           fallback: 'true',
         ).toLowerCase() ==
         'true';
+    final notificationRetentionDays = TextEditingController(
+      text: _settingValue(byKey, 'notification_retention_days', fallback: '30'),
+    );
     final notificationCategoryLimit = TextEditingController(
       text: _settingValue(byKey, 'notification_category_limit', fallback: '50'),
     );
@@ -1836,7 +1908,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           final showBasic = category == null || category == '基础设置';
           final showProvider = category == null || category == '上游生成';
           final showAi = category == null || category == 'AI 辅助';
-          final showMail = category == null || category == '通知邮件';
+          final showNotification = category == null || category == '通知设置';
+          final showMail = category == null || category == '邮件通道';
           final showPolicy = category == null || category == '系统策略';
           return _adminDialog(
             title: dialogCategory,
@@ -2066,11 +2139,38 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   ),
                   const SizedBox(height: 16),
                 ],
+                if (showNotification) ...[
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  Text(
+                    '通知中心',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: notificationRetentionDays,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '已读通知保留天数',
+                      helperText: '超过天数后自动清理已读通知',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: notificationCategoryLimit,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '每类通知最多条数',
+                      helperText: '通知中心每个分类最多保留展示的条数',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 if (showMail) ...[
                   const Divider(),
                   const SizedBox(height: 8),
                   Text(
-                    'Claw163 / Resend 邮件',
+                    '验证码和系统通知邮件',
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
                   const SizedBox(height: 12),
@@ -2078,13 +2178,13 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     value: openclawMailEnabled,
                     onChanged: (value) =>
                         setDialogState(() => openclawMailEnabled = value),
-                    title: const Text('启用 Claw163 主通道'),
+                    title: const Text('启用 163 邮箱主通道'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: openclawMailUser,
                     decoration: const InputDecoration(
-                      labelText: 'Claw163 发件邮箱',
+                      labelText: '主通道发件邮箱',
                       helperText: '例如：bot.image@claw.163.com',
                     ),
                   ),
@@ -2093,7 +2193,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     controller: openclawMailApiKey,
                     obscureText: true,
                     decoration: const InputDecoration(
-                      labelText: 'Claw163 API Key，留空不修改',
+                      labelText: '主通道 API Key，留空不修改',
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -2110,6 +2210,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     const ['claw163', 'resend', 'smtp', 'none'],
                     (value) =>
                         setDialogState(() => emailPrimaryProvider = value),
+                    labels: _mailProviderLabels,
                   ),
                   const SizedBox(height: 12),
                   _stringDropdown(
@@ -2118,6 +2219,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     const ['resend', 'claw163', 'smtp', 'none'],
                     (value) =>
                         setDialogState(() => emailBackupProvider = value),
+                    labels: _mailProviderLabels,
                   ),
                   const SizedBox(height: 12),
                   _stringDropdown(
@@ -2125,6 +2227,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     emailActiveSlot,
                     const ['primary', 'backup'],
                     (value) => setDialogState(() => emailActiveSlot = value),
+                    labels: _mailSlotLabels,
                   ),
                   const SizedBox(height: 12),
                   SwitchListTile(
@@ -2138,7 +2241,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   TextField(
                     controller: resendBase,
                     decoration: const InputDecoration(
-                      labelText: 'Resend base_url',
+                      labelText: '备用通道 API 地址',
                       helperText: '默认 https://api.resend.com',
                     ),
                   ),
@@ -2146,7 +2249,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   TextField(
                     controller: resendFrom,
                     decoration: const InputDecoration(
-                      labelText: 'Resend 发件人',
+                      labelText: '备用通道发件人',
                       helperText: '例如：从零开始生图 <noreply@mail.6688667.xyz>',
                     ),
                   ),
@@ -2155,7 +2258,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     controller: resendKey,
                     obscureText: true,
                     decoration: const InputDecoration(
-                      labelText: 'Resend API Key，留空不修改',
+                      labelText: '备用通道 API Key，留空不修改',
                       helperText: '默认作为备用邮件通道',
                     ),
                   ),
@@ -2163,7 +2266,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   const Divider(),
                   const SizedBox(height: 8),
                   Text(
-                    '系统通知邮件与兼容兜底',
+                    '系统通知收件人和兼容通道',
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
                   const SizedBox(height: 12),
@@ -2171,14 +2274,14 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     controller: systemNoticeEmailTo,
                     decoration: const InputDecoration(
                       labelText: '系统通知收件人',
-                      helperText: '多个邮箱用英文逗号分隔；系统通知按主备邮件通道发送',
+                      helperText: '多个邮箱用英文逗号分隔',
                     ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: hermesBase,
                     decoration: const InputDecoration(
-                      labelText: 'Hermes base_url（兼容兜底）',
+                      labelText: '旧 HTTP 邮件服务地址',
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -2186,7 +2289,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     controller: hermesKey,
                     obscureText: true,
                     decoration: const InputDecoration(
-                      labelText: 'Hermes Key，留空不修改',
+                      labelText: '旧 HTTP 邮件服务 Key，留空不修改',
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -2217,12 +2320,6 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     onChanged: (value) =>
                         setDialogState(() => smtpUseSsl = value),
                     title: const Text('SMTP 使用 SSL'),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: notificationCategoryLimit,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: '每类通知最多条数'),
                   ),
                   const SizedBox(height: 12),
                 ],
@@ -2345,6 +2442,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                       'provider_instructions': instructions.text.trim(),
                       'allow_public_registration': allowRegistration,
                       'protect_file_access': protectFileAccess,
+                      'notification_retention_days':
+                          int.tryParse(notificationRetentionDays.text.trim()),
                       'notification_category_limit':
                           int.tryParse(notificationCategoryLimit.text.trim()),
                       'force_app_update_enabled': forceUpdateEnabled,
@@ -2361,6 +2460,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         },
       ),
     );
+    notificationRetentionDays.dispose();
     notificationCategoryLimit.dispose();
     if (payload == null) return;
     await _save(
@@ -3214,7 +3314,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               const SizedBox(height: 8),
               _healthLine('备用', _map(checks['backup'])),
               const SizedBox(height: 12),
-              Text('当前线路: $current，建议线路: $recommended'),
+              Text(
+                '当前线路：${_providerSlotLabel(current)}\n建议线路：${_providerSlotLabel(recommended)}',
+              ),
             ],
           ),
         ),
@@ -3251,29 +3353,61 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   Widget _healthLine(String label, Map<String, dynamic> item) {
     final ok = item['ok'] == true;
     final configured = item['configured'] == true;
-    final detail = _compactHealthDetail(
-        _text(item['detail'], fallback: configured ? '-' : '未配置'));
     final textOk = item['text_ok'];
     final imageOk = item['image_ok'];
-    final textDetail =
-        _compactHealthDetail(_text(item['text_detail'], fallback: '-'));
+    final textDetail = _healthReason(_text(item['text_detail'], fallback: '-'));
     final imageDetail =
-        _compactHealthDetail(_text(item['image_detail'], fallback: '-'));
-    final statusLines = <String>[
-      '$label: ${ok ? '可用' : '不可用'} · ${_text(item['base_url'], fallback: '-')}',
-      if (textOk != null) '文本: ${textOk == true ? '可用' : '不可用'} · $textDetail',
-      if (imageOk != null)
-        '图片: ${imageOk == true ? '可用' : '不可用'} · $imageDetail',
-      if (textOk == null && imageOk == null) detail,
+        _healthReason(_text(item['image_detail'], fallback: '-'));
+    final detail = configured
+        ? _healthReason(_text(item['detail'], fallback: '-'))
+        : '线路未完整配置';
+    final lines = <String>[
+      '状态：${ok ? '可用' : '不可用'}',
+      if (textOk != null) '文本：${textOk == true ? '可用' : '不可用（$textDetail）'}',
+      if (imageOk != null) '图片：${imageOk == true ? '可用' : '不可用（$imageDetail）'}',
+      if (textOk == null && imageOk == null) '原因：$detail',
     ];
-    return Text(
-      statusLines.join('\n'),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '$label线路',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 4),
+        ...lines.map((line) => Text('- $line')),
+      ],
     );
   }
 
-  String _compactHealthDetail(String value) {
-    const maxLength = 220;
+  String _providerSlotLabel(String value) {
+    return _providerSlotLabels[value] ?? value;
+  }
+
+  String _healthReason(String value) {
     final normalized = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final lowered = normalized.toLowerCase();
+    final reasons = <String>[];
+    void addIf(String label, List<String> needles) {
+      if (needles.any((needle) => lowered.contains(needle.toLowerCase()))) {
+        reasons.add(label);
+      }
+    }
+
+    addIf('额度或频率限制', ['额度或频率限制', 'usage_limit', 'rate limit']);
+    addIf('权限或账号限制', ['拒绝访问', '认证失败', 'unauthorized', 'forbidden', '权限']);
+    addIf('模型或接口不存在', ['模型或接口不存在', 'not found']);
+    addIf('上游超时', ['响应超时', 'timeout']);
+    addIf('网络或地址不可达', ['无法连接上游', 'network', 'dns', 'base_url']);
+    addIf('安全策略拦截', ['安全策略', 'content_policy', 'safety']);
+    addIf('返回格式异常', ['返回格式异常', '空响应', '空图片', '未返回可用图片']);
+    addIf('线路未完整配置', ['未配置', 'base_url 或 key 未配置', '线路未完整配置']);
+    addIf('上游返回异常', ['上游返回异常', 'provider returned http']);
+    if (reasons.isNotEmpty) {
+      return reasons.toSet().join('、');
+    }
+    if (normalized.isEmpty || normalized == '-') return '未返回明确原因';
+    const maxLength = 80;
     if (normalized.length <= maxLength) return normalized;
     return '${normalized.substring(0, maxLength)}...';
   }
@@ -3300,6 +3434,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     if (hours < 1) return 1;
     if (hours > 168) return 168;
     return hours;
+  }
+
+  DateTime _backupCreatedAt(Map<String, dynamic> item) {
+    return DateTime.tryParse(_text(item['created_at'], fallback: '')) ??
+        DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
   }
 
   String _backupTargetLabel(String target) {
@@ -3367,7 +3506,15 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       );
       groups.putIfAbsent(category, () => []).add(setting);
     }
-    const order = ['基础设置', '上游生成', 'AI 辅助', '通知邮件', '系统策略', '数据备份'];
+    const order = [
+      '基础设置',
+      '上游生成',
+      'AI 辅助',
+      '通知设置',
+      '邮件通道',
+      '系统策略',
+      '数据备份',
+    ];
     final sorted = <String, List<Map<String, dynamic>>>{};
     for (final key in order) {
       final values = groups.remove(key);
@@ -3391,6 +3538,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     if (key.startsWith('feedback_ai_') || key.startsWith('prompt_ai_')) {
       return 'AI 辅助';
     }
+    if (key.startsWith('notification_')) {
+      return '通知设置';
+    }
     if (key.startsWith('hermes_') ||
         key.startsWith('openclaw_mail_') ||
         key.startsWith('resend_') ||
@@ -3398,9 +3548,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         key.startsWith('email_smtp_') ||
         key == 'email_sender_name' ||
         key == 'email_auto_switch_enabled' ||
-        key.startsWith('system_notice') ||
-        key.startsWith('notification_')) {
-      return '通知邮件';
+        key.startsWith('system_notice')) {
+      return '邮件通道';
     }
     if (key == 'protect_file_access' ||
         key.startsWith('force_app_update') ||
@@ -3427,8 +3576,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       'provider_active_slot': '线路',
       'provider_model': 'VIP 模型',
       'general_provider_image_model': '普通图片模型',
+      'notification_retention_days': '通知保留',
       'notification_category_limit': '分类条数',
-      'openclaw_mail_enabled': 'Claw163',
+      'openclaw_mail_enabled': '主邮件通道',
+      'openclaw_mail_user': '主通道邮箱',
+      'email_code_primary_provider': '主用通道',
+      'email_code_backup_provider': '备用通道',
       'email_code_active_slot': '邮件线路',
       'email_auto_switch_enabled': '自动切换',
       'force_app_update_enabled': '强制更新',
@@ -3658,17 +3811,17 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       {
         'key': 'openclaw_mail_enabled',
         'value': 'false',
-        'description': '是否启用 Claw163 邮件通道',
+        'description': '是否启用 163 邮箱主通道',
       },
       {
         'key': 'openclaw_mail_user',
         'value': '',
-        'description': 'Claw163 发件邮箱',
+        'description': '主通道发件邮箱',
       },
       {
         'key': 'openclaw_mail_api_key',
         'value': 'xxx',
-        'description': 'Claw163 API Key',
+        'description': '主通道 API Key',
       },
       {
         'key': 'resend_base_url',
@@ -3691,14 +3844,24 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         'description': '系统通知邮件收件人，多个邮箱用英文逗号分隔',
       },
       {
+        'key': 'notification_retention_days',
+        'value': '30',
+        'description': '已读通知保留天数',
+      },
+      {
+        'key': 'notification_category_limit',
+        'value': '50',
+        'description': '每类通知最多条数',
+      },
+      {
         'key': 'hermes_base_url',
         'value': '',
-        'description': 'Hermes 兼容兜底通知服务地址',
+        'description': '旧 HTTP 邮件服务地址',
       },
       {
         'key': 'hermes_api_key',
         'value': 'xxx',
-        'description': 'Hermes 兼容兜底通知服务 Key',
+        'description': '旧 HTTP 邮件服务 Key',
       },
       {
         'key': 'email_smtp_host',
