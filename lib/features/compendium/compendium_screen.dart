@@ -528,25 +528,53 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
         throw const GatewayException('后端没有返回分享链接。');
       }
       await Clipboard.setData(ClipboardData(text: shareUrl));
+      String? cachedImagePath;
+      if (imageUrl != null && imageUrl.isNotEmpty) {
+        try {
+          cachedImagePath =
+              (await ref.read(imageCacheProvider).cachedFileFor(imageUrl)).path;
+        } catch (_) {
+          cachedImagePath = null;
+        }
+      }
       var openedShareSheet = false;
-      try {
-        openedShareSheet = await _shareChannel.invokeMethod<bool>(
-              'shareText',
-              {
-                'text': shareUrl,
-                'subject': '分享图片链接',
-              },
-            ) ??
-            false;
-      } on MissingPluginException {
-        openedShareSheet = false;
-      } on PlatformException {
-        openedShareSheet = false;
+      if (cachedImagePath != null) {
+        try {
+          openedShareSheet = await _shareChannel.invokeMethod<bool>(
+                'shareImage',
+                {
+                  'path': cachedImagePath,
+                  'text': shareUrl,
+                  'subject': '分享图片',
+                },
+              ) ??
+              false;
+        } on MissingPluginException {
+          openedShareSheet = false;
+        } on PlatformException {
+          openedShareSheet = false;
+        }
+      }
+      if (!openedShareSheet) {
+        try {
+          openedShareSheet = await _shareChannel.invokeMethod<bool>(
+                'shareText',
+                {
+                  'text': shareUrl,
+                  'subject': '分享图片链接',
+                },
+              ) ??
+              false;
+        } on MissingPluginException {
+          openedShareSheet = false;
+        } on PlatformException {
+          openedShareSheet = false;
+        }
       }
       if (!mounted) return;
       showCenterNotice(
         context,
-        openedShareSheet ? '已复制链接，可选择应用分享' : '分享链接已复制',
+        openedShareSheet ? '已复制链接，可选择应用分享图片' : '分享链接已复制',
       );
     } catch (error) {
       if (!mounted) return;

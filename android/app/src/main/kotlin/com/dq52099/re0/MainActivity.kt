@@ -1,5 +1,6 @@
 package com.dq52099.re0
 
+import android.content.ClipData
 import android.content.ContentValues
 import android.content.ContentUris
 import android.content.Intent
@@ -39,6 +40,12 @@ class MainActivity : FlutterActivity() {
                 "shareText" -> shareText(
                     text = call.argument<String>("text"),
                     subject = call.argument<String>("subject") ?: "分享图片链接",
+                    result = result,
+                )
+                "shareImage" -> shareImage(
+                    path = call.argument<String>("path"),
+                    text = call.argument<String>("text"),
+                    subject = call.argument<String>("subject") ?: "分享图片",
                     result = result,
                 )
                 else -> result.notImplemented()
@@ -175,6 +182,42 @@ class MainActivity : FlutterActivity() {
                 type = "text/plain"
                 putExtra(Intent.EXTRA_TEXT, text)
                 putExtra(Intent.EXTRA_SUBJECT, title)
+            }
+            startActivity(Intent.createChooser(sendIntent, title))
+            result.success(true)
+        } catch (error: Exception) {
+            result.error("SHARE_FAILED", error.message, null)
+        }
+    }
+
+    private fun shareImage(path: String?, text: String?, subject: String, result: MethodChannel.Result) {
+        if (path.isNullOrBlank()) {
+            result.error("INVALID_PATH", "Image path is empty.", null)
+            return
+        }
+
+        try {
+            val image = File(path)
+            if (!image.exists()) {
+                result.error("MISSING_FILE", "Image file does not exist.", null)
+                return
+            }
+
+            val uri = FileProvider.getUriForFile(
+                applicationContext,
+                "${applicationContext.packageName}.fileprovider",
+                image,
+            )
+            val title = subject.ifBlank { "分享图片" }
+            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                type = mimeTypeFor(image.name)
+                putExtra(Intent.EXTRA_STREAM, uri)
+                if (!text.isNullOrBlank()) {
+                    putExtra(Intent.EXTRA_TEXT, text)
+                }
+                putExtra(Intent.EXTRA_SUBJECT, title)
+                clipData = ClipData.newUri(contentResolver, "shared_image", uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             startActivity(Intent.createChooser(sendIntent, title))
             result.success(true)
