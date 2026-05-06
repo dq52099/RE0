@@ -897,21 +897,6 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                     ),
                     if (isSuccess)
                       IconButton(
-                        tooltip: '发布到画廊',
-                        icon: isPublishing
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.publish_outlined),
-                        color: brand.primaryColor,
-                        onPressed:
-                            isPublishing ? null : () => _publishToGallery(item),
-                      ),
-                    if (isSuccess)
-                      IconButton(
                         tooltip: '分享图片链接',
                         icon: isSharing
                             ? const SizedBox(
@@ -955,6 +940,12 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                       _metaPill(
                         Icons.timelapse_outlined,
                         _formatDuration(item['duration_ms'])!,
+                      ),
+                    if (isSuccess)
+                      _publishMetaButton(
+                        brand: brand,
+                        isPublishing: isPublishing,
+                        onPressed: () => _publishToGallery(item),
                       ),
                   ],
                 ),
@@ -1150,6 +1141,55 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
           const SizedBox(width: 6),
           Text(text, style: Theme.of(context).textTheme.bodySmall),
         ],
+      ),
+    );
+  }
+
+  Widget _publishMetaButton({
+    required AppBrand brand,
+    required bool isPublishing,
+    required VoidCallback onPressed,
+  }) {
+    return Tooltip(
+      message: '发布到画廊',
+      child: Material(
+        color: brand.primaryColor.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: isPublishing ? null : onPressed,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isPublishing)
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: brand.primaryColor,
+                    ),
+                  )
+                else
+                  Icon(
+                    Icons.publish_outlined,
+                    size: 14,
+                    color: brand.primaryColor,
+                  ),
+                const SizedBox(width: 6),
+                Text(
+                  '发布',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: brand.primaryColor,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

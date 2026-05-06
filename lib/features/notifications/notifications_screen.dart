@@ -141,6 +141,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final actorAvatar = item['actor_avatar_url']?.toString().trim() ?? '';
     final id = item['id']?.toString() ?? '';
     final colorScheme = Theme.of(context).colorScheme;
+    final welfareBadges = _welfareBadges(item);
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: unread ? 1 : 0,
@@ -212,6 +213,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                                             .withValues(alpha: 0.68),
                                   ),
                             ),
+                            if (welfareBadges.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 6,
+                                children: welfareBadges,
+                              ),
+                            ],
                             const SizedBox(height: 6),
                             Text(
                               _formatTime(item['created_at']?.toString()),
@@ -260,6 +269,62 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     );
   }
 
+  List<Widget> _welfareBadges(Map<String, dynamic> item) {
+    if (item['type']?.toString() != 'welfare_grant') return const [];
+    final generateBonus = _intValue(item['generate_bonus']);
+    final editBonus = _intValue(item['edit_bonus']);
+    final badges = <Widget>[];
+    if (generateBonus > 0) {
+      badges.add(_bonusPill(Icons.auto_awesome_outlined, '生图 +$generateBonus'));
+    }
+    if (editBonus > 0) {
+      badges.add(_bonusPill(Icons.brush_outlined, '改图 +$editBonus'));
+    }
+    if (badges.isNotEmpty) return badges;
+
+    final body = item['body']?.toString() ?? '';
+    final generateMatch = RegExp(r'生图(?:额度)?\s*\+(\d+)').firstMatch(body);
+    final editMatch = RegExp(r'改图(?:额度)?\s*\+(\d+)').firstMatch(body);
+    final parsedGenerate = int.tryParse(generateMatch?.group(1) ?? '') ?? 0;
+    final parsedEdit = int.tryParse(editMatch?.group(1) ?? '') ?? 0;
+    if (parsedGenerate > 0) {
+      badges
+          .add(_bonusPill(Icons.auto_awesome_outlined, '生图 +$parsedGenerate'));
+    }
+    if (parsedEdit > 0) {
+      badges.add(_bonusPill(Icons.brush_outlined, '改图 +$parsedEdit'));
+    }
+    return badges;
+  }
+
+  Widget _bonusPill(IconData icon, String label) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: colorScheme.tertiary.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: colorScheme.tertiary.withValues(alpha: 0.28),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: colorScheme.tertiary),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.tertiary,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _errorState(Object? error) {
     return Padding(
       padding: const EdgeInsets.only(top: 120),
@@ -296,6 +361,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   String _initial(String? value) {
     final text = value?.trim() ?? '';
     return text.isEmpty ? '通' : text.substring(0, 1);
+  }
+
+  int _intValue(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   String _formatTime(String? raw) {

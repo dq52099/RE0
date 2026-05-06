@@ -36,7 +36,10 @@ class ImageCacheService {
     final directory = await _cacheDirectory();
     final file = File('${directory.path}/${_cacheFileName(url)}');
     if (!forceRefresh && await file.exists()) {
-      return file;
+      if (await _isLikelyImageFile(file)) {
+        return file;
+      }
+      await file.delete();
     }
 
     final tempFile = File('${file.path}.download');
@@ -52,6 +55,15 @@ class ImageCacheService {
         tempFile.path,
         deleteOnError: true,
         options: Options(responseType: ResponseType.bytes),
+      );
+    }
+    if (!await _isLikelyImageFile(tempFile)) {
+      if (await tempFile.exists()) {
+        await tempFile.delete();
+      }
+      throw FileSystemException(
+        'Downloaded file is not an image',
+        tempFile.path,
       );
     }
 
@@ -211,5 +223,54 @@ class ImageCacheService {
 
   String _baseName(String path) {
     return path.split(Platform.pathSeparator).last;
+  }
+
+  Future<bool> _isLikelyImageFile(File file) async {
+    try {
+      final header = await file.openRead(0, 12).fold<List<int>>(
+        <int>[],
+        (bytes, chunk) => bytes..addAll(chunk),
+      );
+      if (header.length >= 8 &&
+          header[0] == 0x89 &&
+          header[1] == 0x50 &&
+          header[2] == 0x4e &&
+          header[3] == 0x47 &&
+          header[4] == 0x0d &&
+          header[5] == 0x0a &&
+          header[6] == 0x1a &&
+          header[7] == 0x0a) {
+        return true;
+      }
+      if (header.length >= 3 &&
+          header[0] == 0xff &&
+          header[1] == 0xd8 &&
+          header[2] == 0xff) {
+        return true;
+      }
+      if (header.length >= 12 &&
+          header[0] == 0x52 &&
+          header[1] == 0x49 &&
+          header[2] == 0x46 &&
+          header[3] == 0x46 &&
+          header[8] == 0x57 &&
+          header[9] == 0x45 &&
+          header[10] == 0x42 &&
+          header[11] == 0x50) {
+        return true;
+      }
+      if (header.length >= 6 &&
+          header[0] == 0x47 &&
+          header[1] == 0x49 &&
+          header[2] == 0x46 &&
+          header[3] == 0x38 &&
+          (header[4] == 0x37 || header[4] == 0x39) &&
+          header[5] == 0x61) {
+        return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
   }
 }

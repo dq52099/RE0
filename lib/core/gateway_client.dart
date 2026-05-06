@@ -167,12 +167,22 @@ class GatewayClient {
     ProgressCallback? onReceiveProgress,
   }) async {
     await _guard(() async {
+      final downloadUrl = normalizeGatewayDownloadUrl(url, baseUrl);
       await _dio.download(
-        url,
+        downloadUrl,
         savePath,
         deleteOnError: true,
         onReceiveProgress: onReceiveProgress,
-        options: Options(responseType: ResponseType.bytes),
+        options: Options(
+          responseType: ResponseType.bytes,
+          followRedirects: false,
+          headers: {
+            'Accept':
+                'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+          },
+          validateStatus: (status) =>
+              status != null && status >= 200 && status < 300,
+        ),
       );
     }, fallback: '下载失败。');
   }
@@ -1024,4 +1034,39 @@ class GatewayClient {
       return List<dynamic>.from(res.data as List);
     }, fallback: fallback);
   }
+}
+
+String normalizeGatewayDownloadUrl(String url, String baseUrl) {
+  final trimmedUrl = url.trim();
+  final trimmedBase = baseUrl.trim();
+  if (trimmedUrl.isEmpty || trimmedBase.isEmpty) {
+    return trimmedUrl;
+  }
+
+  final parsed = Uri.tryParse(trimmedUrl);
+  final base = Uri.tryParse(trimmedBase);
+  if (parsed == null || base == null || !base.hasScheme || !base.hasAuthority) {
+    return trimmedUrl;
+  }
+
+  final path = parsed.path;
+  if (!_isGatewayMediaPath(path)) {
+    return trimmedUrl;
+  }
+
+  if (!parsed.hasScheme && !parsed.hasAuthority) {
+    return parsed.toString();
+  }
+
+  return base
+      .replace(
+        path: path,
+        query: parsed.hasQuery ? parsed.query : null,
+        fragment: parsed.hasFragment ? parsed.fragment : null,
+      )
+      .toString();
+}
+
+bool _isGatewayMediaPath(String path) {
+  return path.startsWith('/files/') || path.startsWith('/s/') || path == '/s';
 }
