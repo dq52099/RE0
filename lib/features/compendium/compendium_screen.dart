@@ -980,6 +980,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                         brand: brand,
                         tooltip: '发布到画廊',
                         icon: Icons.publish_outlined,
+                        label: '发布',
                         isBusy: isPublishing,
                         onPressed: () => _publishToGallery(item),
                       ),
@@ -987,7 +988,8 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                       _metaActionButton(
                         brand: brand,
                         tooltip: '分享图片链接',
-                        icon: Icons.ios_share_outlined,
+                        icon: Icons.publish_outlined,
+                        label: '分享',
                         isBusy: isSharing,
                         onPressed: () => _shareHistoryItem(item),
                       ),
@@ -1193,6 +1195,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     required AppBrand brand,
     required String tooltip,
     required IconData icon,
+    required String label,
     required bool isBusy,
     required VoidCallback onPressed,
   }) {
@@ -1205,21 +1208,35 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
           borderRadius: BorderRadius.circular(999),
           onTap: isBusy ? null : onPressed,
           child: Padding(
-            padding: const EdgeInsets.all(7),
-            child: isBusy
-                ? SizedBox(
-                    width: 16,
-                    height: 16,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isBusy)
+                  SizedBox(
+                    width: 14,
+                    height: 14,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
                       color: brand.primaryColor,
                     ),
                   )
-                : Icon(
+                else
+                  Icon(
                     icon,
-                    size: 16,
+                    size: 14,
                     color: brand.primaryColor,
                   ),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: brand.primaryColor,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

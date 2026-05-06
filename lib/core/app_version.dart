@@ -3,16 +3,16 @@ class AppVersion {
 
   static const name = String.fromEnvironment(
     'RE0_VERSION_NAME',
-    defaultValue: '1.2.3',
+    defaultValue: '1.2.4',
   );
 
   static const code = int.fromEnvironment(
     'RE0_VERSION_CODE',
-    defaultValue: 10203,
+    defaultValue: 10204,
   );
 
   static const releaseTag = String.fromEnvironment(
     'RE0_RELEASE_TAG',
-    defaultValue: 'v1.2.3',
+    defaultValue: 'v1.2.4',
   );
 }
