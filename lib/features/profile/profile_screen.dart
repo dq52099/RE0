@@ -96,6 +96,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       final client = ref.read(gatewayClientProvider);
       await client.logout();
       ref.read(authStateProvider.notifier).state = null;
+      ref.read(historyRetentionProvider.notifier).state =
+          historyRetentionSummaryFromUser(null);
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -116,6 +118,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           await ref.read(gatewayClientProvider).performDailyCheckIn();
       ref.read(authStateProvider.notifier).state = result['user'];
       ref.read(energyProvider.notifier).state = result['user']['quota_summary'];
+      ref.read(historyRetentionProvider.notifier).state =
+          historyRetentionSummaryFromUser(result['user']);
       if (!mounted) return;
       setState(_refreshCacheSize);
       final reward = result['checkin']['today_reward'] as Map? ?? {};
@@ -171,6 +175,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           );
       ref.read(authStateProvider.notifier).state = updated;
       ref.read(energyProvider.notifier).state = updated['quota_summary'];
+      ref.read(historyRetentionProvider.notifier).state =
+          historyRetentionSummaryFromUser(updated);
       if (!mounted) return;
       showCenterNotice(context, '头像已更新');
     } catch (error) {
@@ -419,6 +425,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           );
       ref.read(authStateProvider.notifier).state = updated;
       ref.read(energyProvider.notifier).state = updated['quota_summary'];
+      ref.read(historyRetentionProvider.notifier).state =
+          historyRetentionSummaryFromUser(updated);
       if (!mounted) return;
       showCenterNotice(context, '个人资料已保存');
     } catch (error) {
@@ -611,6 +619,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ref.read(authStateProvider.notifier).state = updated;
                 ref.read(energyProvider.notifier).state =
                     updated['quota_summary'];
+                ref.read(historyRetentionProvider.notifier).state =
+                    historyRetentionSummaryFromUser(updated);
                 if (mounted) showCenterNotice(this.context, '邮箱已绑定');
               } catch (error) {
                 if (!context.mounted) return;
@@ -702,6 +712,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           .bindMyEmail(payload['email']!, payload['code']!);
       ref.read(authStateProvider.notifier).state = updated;
       ref.read(energyProvider.notifier).state = updated['quota_summary'];
+      ref.read(historyRetentionProvider.notifier).state =
+          historyRetentionSummaryFromUser(updated);
       if (!mounted) return;
       showCenterNotice(context, '邮箱已绑定');
     } catch (error) {
@@ -938,6 +950,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final levelInfo = user?['level_info'] as Map? ?? {};
     final generateQuota = quota['generate'] as Map? ?? {};
     final editQuota = quota['edit'] as Map? ?? {};
+    final retention = ref.watch(historyRetentionProvider);
+    final generateRetention = retention['generate'] as Map? ?? {};
+    final editRetention = retention['edit'] as Map? ?? {};
 
     return Card(
       elevation: 0,
@@ -1058,6 +1073,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ),
                 _chip(brand, '生图', _quotaText(generateQuota)),
                 _chip(brand, '改图', _quotaText(editQuota)),
+                _chip(
+                  brand,
+                  '生图记忆',
+                  _retentionText(generateRetention),
+                  icon: Icons.collections_bookmark_outlined,
+                ),
+                _chip(
+                  brand,
+                  '改图记忆',
+                  _retentionText(editRetention),
+                  icon: Icons.history_edu_outlined,
+                ),
               ],
             ),
           ],
@@ -1424,6 +1451,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       return '无限';
     }
     return '${quota['remaining'] ?? 0}/${quota['total'] ?? 0}';
+  }
+
+  String _retentionText(Map quota) {
+    if (quota['is_unlimited'] == true) {
+      return '无限';
+    }
+    return '${quota['used'] ?? 0}/${quota['total'] ?? 0}';
   }
 
   String _formatBytes(int bytes) {

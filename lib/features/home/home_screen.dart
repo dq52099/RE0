@@ -23,6 +23,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final brand = ref.watch(brandProvider);
+    ref.listen<Map<String, dynamic>?>(authStateProvider, (previous, next) {
+      if (next != null) {
+        ref.read(historyRetentionProvider.notifier).state =
+            historyRetentionSummaryFromUser(next);
+      }
+    });
     final screens = [
       GalleryScreen(refreshToken: _galleryRefreshToken),
       const MaterializerScreen(),

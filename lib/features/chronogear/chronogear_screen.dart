@@ -231,6 +231,9 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     final remain = editQuota['is_unlimited'] == true
         ? '无限'
         : '${editQuota['remaining']} / ${editQuota['total']}';
+    final retention = ref.watch(historyRetentionProvider);
+    final editRetention = retention['edit'] as Map? ?? {};
+    final retentionText = _retentionText(editRetention);
     final materializerState = ref.watch(editImagesProvider);
     final activeTask = ref.watch(activeImageTaskProvider);
 
@@ -243,7 +246,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildManaStatus(brand, remain),
+              _buildManaStatus(brand, remain, retentionText),
               const SizedBox(height: 24),
               GestureDetector(
                 onTap: _pickImage,
@@ -430,6 +433,14 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                             showCenterNotice(context, '生图任务进行中，请稍后再试');
                             return;
                           }
+                          final retentionMessage = _retentionLimitMessage(
+                            editRetention,
+                            _count,
+                          );
+                          if (retentionMessage != null) {
+                            showCenterNotice(context, retentionMessage);
+                            return;
+                          }
                           FocusScope.of(context).unfocus();
                           setState(() => _lastSubmittedPrompt = prompt);
                           try {
@@ -510,7 +521,11 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     );
   }
 
-  Widget _buildManaStatus(AppBrand brand, String remain) {
+  Widget _buildManaStatus(
+    AppBrand brand,
+    String remain,
+    String retentionText,
+  ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -532,6 +547,18 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
             ],
           ),
           const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(Icons.collections_bookmark_outlined,
+                  size: 18, color: brand.primaryColor),
+              const SizedBox(width: 12),
+              Text(
+                '记忆保留: $retentionText',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           Text(
             utcMidnightLocalResetHint(),
             style: Theme.of(context).textTheme.bodySmall,
@@ -539,6 +566,27 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
         ],
       ),
     );
+  }
+
+  String _retentionText(Map quota) {
+    if (quota['is_unlimited'] == true) {
+      return '无限';
+    }
+    return '${quota['used'] ?? 0}/${quota['total'] ?? 0}';
+  }
+
+  String? _retentionLimitMessage(Map quota, int requested) {
+    if (quota['is_unlimited'] == true) {
+      return null;
+    }
+    final remaining = int.tryParse(quota['remaining']?.toString() ?? '') ?? 0;
+    if (remaining >= requested) {
+      return null;
+    }
+    final used = quota['used'] ?? 0;
+    final total = quota['total'] ?? 0;
+    final requestText = requested > 1 ? '本次需要 $requested 个席位，' : '';
+    return '记忆回廊的改图席位已满（已用 $used / 上限 $total）。$requestText继续回响会挤掉最早的记忆；请先到记忆回廊手动清理后再试。';
   }
 
   Widget _buildPromptAssist(AppBrand brand) {

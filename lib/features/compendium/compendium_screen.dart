@@ -27,11 +27,10 @@ class CompendiumScreen extends ConsumerStatefulWidget {
 
 class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     with AutomaticKeepAliveClientMixin {
-  static const _pageSize = 30;
+  static const _historyPageSize = 20;
   static const _hiddenStorageKey = 'hidden_history_items';
   static const MethodChannel _shareChannel = MethodChannel('re0/downloads');
 
-  final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   final List<Map<String, dynamic>> _items = [];
@@ -42,6 +41,8 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   final Set<String> _retryingKeys = {};
   Timer? _searchDebounce;
   int _page = 1;
+  int _total = 0;
+  int _totalPages = 1;
   bool _hasMore = true;
   bool _isLoading = false;
   bool _isBulkDeleting = false;
@@ -60,7 +61,6 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     _hiddenKeys.addAll(
       ref.read(sharedPrefsProvider).getStringList(_hiddenStorageKey) ?? [],
     );
-    _scrollController.addListener(_maybeLoadMore);
     _searchController.addListener(_onSearchChanged);
     _load(reset: true);
   }
@@ -70,8 +70,6 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     _searchDebounce?.cancel();
     _searchController.removeListener(_onSearchChanged);
     _searchFocusNode.dispose();
-    _scrollController.removeListener(_maybeLoadMore);
-    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -87,7 +85,10 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   void _onSearchChanged() {
     final next = _searchController.text.trim();
     if (next == _query) return;
-    setState(() => _query = next);
+    setState(() {
+      _query = next;
+      _page = 1;
+    });
     _searchDebounce?.cancel();
     _searchDebounce = Timer(
       const Duration(milliseconds: 350),
@@ -106,7 +107,6 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     setState(() {
       _isLoading = true;
       if (reset) {
-        _page = 1;
         _hasMore = true;
         _error = null;
       }
@@ -115,7 +115,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     try {
       final response = await ref.read(gatewayClientProvider).getHistory(
             _page,
-            pageSize: _pageSize,
+            pageSize: _historyPageSize,
             keyword: _query,
             action: _actionFilter,
             status: _statusFilter,
@@ -126,12 +126,15 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
           .toList();
       final totalPages =
           int.tryParse(response['total_pages']?.toString() ?? '') ?? _page;
+      final total =
+          int.tryParse(response['total']?.toString() ?? '') ?? nextItems.length;
       if (!mounted) return;
       setState(() {
-        if (reset) _items.clear();
+        _items.clear();
         _items.addAll(nextItems);
-        _hasMore = _page < totalPages && nextItems.isNotEmpty;
-        _page += 1;
+        _total = total;
+        _totalPages = totalPages < 1 ? 1 : totalPages;
+        _hasMore = _page < _totalPages;
         _error = null;
       });
     } catch (error) {
@@ -148,10 +151,15 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     }
   }
 
-  void _maybeLoadMore() {
-    if (_scrollController.position.extentAfter < 700) {
-      _load();
-    }
+  Future<void> _goToPage(int page) async {
+    final next = page.clamp(1, _totalPages).toInt();
+    if (_isLoading || next == _page) return;
+    _dismissKeyboard();
+    setState(() {
+      _page = next;
+      _error = null;
+    });
+    await _load(reset: true);
   }
 
   Future<void> _refresh() async {
@@ -166,14 +174,13 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
       _statusFilter = null;
       _actionFilter = null;
       _page = 1;
+      _total = 0;
+      _totalPages = 1;
       _hasMore = true;
       _error = null;
     });
     if (_searchController.text.isNotEmpty) {
       _searchController.clear();
-    }
-    if (_scrollController.hasClients) {
-      _scrollController.jumpTo(0);
     }
     await _load(reset: true);
   }
@@ -222,14 +229,20 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   Future<void> _setStatusFilter(String? value) async {
     if (_statusFilter == value) return;
     _dismissKeyboard();
-    setState(() => _statusFilter = value);
+    setState(() {
+      _statusFilter = value;
+      _page = 1;
+    });
     await _load(reset: true);
   }
 
   Future<void> _setActionFilter(String? value) async {
     if (_actionFilter == value) return;
     _dismissKeyboard();
-    setState(() => _actionFilter = value);
+    setState(() {
+      _actionFilter = value;
+      _page = 1;
+    });
     await _load(reset: true);
   }
 
@@ -265,6 +278,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
 
     try {
       await _hideHistoryItems([item], deletingKeys: {key});
+      await _refresh();
       if (!mounted) return;
       showCenterNotice(context, '图片记录已清理');
     } catch (error) {
@@ -288,7 +302,11 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
         try {
           final id = item['id']?.toString();
           if (id != null && id.isNotEmpty) {
-            await ref.read(gatewayClientProvider).deleteHistoryItem(id);
+            final result =
+                await ref.read(gatewayClientProvider).deleteHistoryItem(id);
+            ref.read(historyRetentionProvider.notifier).state =
+                _quotaSummaryFromResponse(
+                    result['history_retention_quota_summary']);
           }
         } catch (_) {
           // Fall back to local hide if server-side delete is unavailable.
@@ -302,6 +320,10 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
         _hiddenKeys.addAll(keys);
         _items.removeWhere((entry) => keys.contains(_historyKey(entry)));
         _deletingKeys.removeAll(keys);
+        _total = (_total - keys.length).clamp(0, _total).toInt();
+        _totalPages = (_total + _historyPageSize - 1) ~/ _historyPageSize;
+        if (_totalPages < 1) _totalPages = 1;
+        if (_page > _totalPages) _page = _totalPages;
       });
       await ref
           .read(sharedPrefsProvider)
@@ -338,6 +360,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     setState(() => _isBulkDeleting = true);
     try {
       await _hideHistoryItems(failedItems);
+      await _refresh();
       if (!mounted) return;
       showCenterNotice(context, '已清理 ${failedItems.length} 条失败记录');
     } catch (error) {
@@ -377,16 +400,12 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
           );
       ref.read(energyProvider.notifier).state =
           _quotaSummaryFromResponse(response['quota_summary']);
+      ref.read(historyRetentionProvider.notifier).state =
+          _quotaSummaryFromResponse(
+              response['history_retention_quota_summary']);
       if (!mounted) return;
       await _hideHistoryItems([item], deletingKeys: {key});
       await _refresh();
-      if (_scrollController.hasClients) {
-        await _scrollController.animateTo(
-          0,
-          duration: const Duration(milliseconds: 260),
-          curve: Curves.easeOut,
-        );
-      }
       final errors = (response['errors'] as List? ?? []).length;
       showCenterNotice(
         context,
@@ -628,7 +647,6 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
         child: RefreshIndicator(
           onRefresh: _refresh,
           child: CustomScrollView(
-            controller: _scrollController,
             cacheExtent: 1200,
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             slivers: [
@@ -682,26 +700,57 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                  child: Center(
-                    child: _isLoading
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : _hasMore
-                            ? TextButton(
-                                onPressed: () => _load(),
-                                child: const Text('加载更多'),
-                              )
-                            : const Text('没有更多记录'),
-                  ),
+                  child: _pageControls(),
                 ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _pageControls() {
+    final start = _total == 0 ? 0 : ((_page - 1) * _historyPageSize) + 1;
+    final end =
+        (_page * _historyPageSize) > _total ? _total : _page * _historyPageSize;
+    return Column(
+      children: [
+        if (_isLoading)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 10),
+            child: SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        Text(
+          _total == 0
+              ? '暂无记录'
+              : '第 $_page / $_totalPages 页 · $start-$end / $_total',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            OutlinedButton.icon(
+              onPressed:
+                  _isLoading || _page <= 1 ? null : () => _goToPage(_page - 1),
+              icon: const Icon(Icons.chevron_left),
+              label: const Text('上一页'),
+            ),
+            const SizedBox(width: 12),
+            FilledButton.icon(
+              onPressed:
+                  _isLoading || !_hasMore ? null : () => _goToPage(_page + 1),
+              icon: const Icon(Icons.chevron_right),
+              label: const Text('下一页'),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -895,21 +944,6 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                       item['size']?.toString() ?? '',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
-                    if (isSuccess)
-                      IconButton(
-                        tooltip: '分享图片链接',
-                        icon: isSharing
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.ios_share_outlined),
-                        color: brand.primaryColor,
-                        onPressed:
-                            isSharing ? null : () => _shareHistoryItem(item),
-                      ),
                     IconButton(
                       tooltip: '删除',
                       icon: isDeleting
@@ -942,10 +976,20 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                         _formatDuration(item['duration_ms'])!,
                       ),
                     if (isSuccess)
-                      _publishMetaButton(
+                      _metaActionButton(
                         brand: brand,
-                        isPublishing: isPublishing,
+                        tooltip: '发布到画廊',
+                        icon: Icons.publish_outlined,
+                        isBusy: isPublishing,
                         onPressed: () => _publishToGallery(item),
+                      ),
+                    if (isSuccess)
+                      _metaActionButton(
+                        brand: brand,
+                        tooltip: '分享图片链接',
+                        icon: Icons.ios_share_outlined,
+                        isBusy: isSharing,
+                        onPressed: () => _shareHistoryItem(item),
                       ),
                   ],
                 ),
@@ -1145,49 +1189,37 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     );
   }
 
-  Widget _publishMetaButton({
+  Widget _metaActionButton({
     required AppBrand brand,
-    required bool isPublishing,
+    required String tooltip,
+    required IconData icon,
+    required bool isBusy,
     required VoidCallback onPressed,
   }) {
     return Tooltip(
-      message: '发布到画廊',
+      message: tooltip,
       child: Material(
         color: brand.primaryColor.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
         child: InkWell(
           borderRadius: BorderRadius.circular(999),
-          onTap: isPublishing ? null : onPressed,
+          onTap: isBusy ? null : onPressed,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (isPublishing)
-                  SizedBox(
-                    width: 14,
-                    height: 14,
+            padding: const EdgeInsets.all(7),
+            child: isBusy
+                ? SizedBox(
+                    width: 16,
+                    height: 16,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
                       color: brand.primaryColor,
                     ),
                   )
-                else
-                  Icon(
-                    Icons.publish_outlined,
-                    size: 14,
+                : Icon(
+                    icon,
+                    size: 16,
                     color: brand.primaryColor,
                   ),
-                const SizedBox(width: 6),
-                Text(
-                  '发布',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: brand.primaryColor,
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-              ],
-            ),
           ),
         ),
       ),

@@ -353,7 +353,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           children: [
             ...users.map((user) {
               final quota = _map(user['quota_summary']);
-              final retention = _map(user['history_retention_summary']);
+              final historyCaps = _map(user['history_retention_summary']);
+              final historyQuota =
+                  _map(user['history_retention_quota_summary']);
               final userId = user['id']?.toString() ?? '';
               final canDelete =
                   canManage && userId.isNotEmpty && userId != currentUserId;
@@ -393,9 +395,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                       )
                     : null,
                 lines: [
-                  '生图模式: $mode · $overrideMode',
+                  '图片模式: $mode（$overrideMode）',
                   '$generateQuota · $editQuota',
-                  '保留 生图 ${_text(retention['generate'])} / 改图 ${_text(retention['edit'])}',
+                  '记忆保留额度: 生图 ${_historyQuotaBrief(historyQuota['generate'], historyCaps['generate'])} / 改图 ${_historyQuotaBrief(historyQuota['edit'], historyCaps['edit'])}',
                 ],
                 lineBreaks: false,
               );
@@ -552,8 +554,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 '默认生图模式: ${_imageModeLabel(_text(group['image_mode'], fallback: 'vip'))}',
                 '默认生图额度: ${_text(group['default_generate_quota'])}',
                 '默认改图额度: ${_text(group['default_edit_quota'])}',
-                '默认生图保留: ${_text(group['default_generate_history_retention'])}',
-                '默认改图保留: ${_text(group['default_edit_history_retention'])}',
+                '默认生图保留额度: ${_text(group['default_generate_history_retention'])} 条',
+                '默认改图保留额度: ${_text(group['default_edit_history_retention'])} 条',
                 '成员数: ${_text(group['user_count'])}',
               ],
             );
@@ -640,7 +642,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     )
                   : null,
               lines: [
-                'Key: ${_text(item['masked_key'])}',
+                '密钥: ${_text(item['masked_key'])}',
                 '最近使用: ${formatLocalTime(item['last_used_at'], fallback: '暂无')}',
               ],
             );
@@ -679,7 +681,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                           : _probeProviderHealth,
                       icon: const Icon(Icons.monitor_heart_outlined),
                       label:
-                          Text(_isProviderHealthChecking ? '测活中...' : '上游测活'),
+                          Text(_isProviderHealthChecking ? '检测中...' : '线路检测'),
                     ),
                   ],
                 )
@@ -779,7 +781,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
             const SizedBox(height: 8),
             _infoCard(
               title: 'Google Drive 备份',
-              subtitle: '使用 Service Account 上传备份包。',
+              subtitle: '使用 Google 服务账号上传备份包。',
               active: runtime['google_drive_backup_enabled'] == true,
               lines: [
                 '开关: ${_enabledLabel(runtime['google_drive_backup_enabled'])}',
@@ -824,7 +826,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               _infoCard(
                 title: '记录分页',
                 subtitle: '默认每页显示 5 条备份记录。',
-                badge: 'size=5',
+                badge: '每页 5 条',
                 lines: [
                   '当前页: $recordPage / $totalRecordPages',
                   '本页记录: ${visibleRecords.length} 条',
@@ -1394,25 +1396,37 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 TextField(
                   controller: generateQuota,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: '生图额度覆盖'),
+                  decoration: const InputDecoration(
+                    labelText: '个人生图额度',
+                    helperText: '留空则跟随用户组默认额度',
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: editQuota,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: '改图额度覆盖'),
+                  decoration: const InputDecoration(
+                    labelText: '个人改图额度',
+                    helperText: '留空则跟随用户组默认额度',
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: generateHistoryRetention,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: '生图历史保留覆盖'),
+                  decoration: const InputDecoration(
+                    labelText: '个人生图保留额度',
+                    helperText: '留空则跟随用户组和等级福利；达到上限后需先手动清理记忆回廊',
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: editHistoryRetention,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: '改图历史保留覆盖'),
+                  decoration: const InputDecoration(
+                    labelText: '个人改图保留额度',
+                    helperText: '留空则跟随用户组和等级福利；达到上限后需先手动清理记忆回廊',
+                  ),
                 ),
                 const SizedBox(height: 8),
                 CheckboxListTile(
@@ -1521,10 +1535,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final editQuota = TextEditingController(
         text: _text(group?['default_edit_quota'], fallback: '5'));
     final generateHistoryRetention = TextEditingController(
-      text: _text(group?['default_generate_history_retention'], fallback: '5'),
+      text: _text(group?['default_generate_history_retention'], fallback: '20'),
     );
     final editHistoryRetention = TextEditingController(
-      text: _text(group?['default_edit_history_retention'], fallback: '3'),
+      text: _text(group?['default_edit_history_retention'], fallback: '12'),
     );
     var imageMode = _text(group?['image_mode'], fallback: 'vip');
     if (!const ['vip', 'general'].contains(imageMode)) {
@@ -1549,12 +1563,18 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         TextField(
           controller: generateHistoryRetention,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: '默认生图历史保留'),
+          decoration: const InputDecoration(
+            labelText: '默认生图保留额度',
+            helperText: '组内用户基础保留额度；等级福利会额外增加',
+          ),
         ),
         TextField(
           controller: editHistoryRetention,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: '默认改图历史保留'),
+          decoration: const InputDecoration(
+            labelText: '默认改图保留额度',
+            helperText: '组内用户基础保留额度；等级福利会额外增加',
+          ),
         ),
         _stringDropdown(
           '默认生图模式',
@@ -1688,8 +1708,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       extraFields: [
         TextField(
           controller: rawKey,
-          decoration: InputDecoration(
-              labelText: item == null ? 'Key 值' : '新 Key，留空不轮换'),
+          decoration:
+              InputDecoration(labelText: item == null ? '密钥值' : '新密钥，留空不轮换'),
         ),
       ],
       active: active,
@@ -1906,7 +1926,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           final showBasic = category == null || category == '基础设置';
-          final showProvider = category == null || category == '上游生成';
+          final showProvider = category == null || category == '生成线路';
           final showAi = category == null || category == 'AI 辅助';
           final showNotification = category == null || category == '通知设置';
           final showMail = category == null || category == '邮件通道';
@@ -1924,7 +1944,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   const SizedBox(height: 12),
                   TextField(
                       controller: externalBase,
-                      decoration: const InputDecoration(labelText: '外部访问地址')),
+                      decoration: const InputDecoration(
+                        labelText: '公开访问地址',
+                        helperText: '用于邮件、分享和图片链接；留空时按当前访问地址自动判断',
+                      )),
                   const SizedBox(height: 12),
                   CheckboxListTile(
                     value: allowRegistration,
@@ -1937,53 +1960,51 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     controller: generateCheckinMultiplier,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: '签到生图倍率'),
+                    decoration: const InputDecoration(labelText: '签到生图奖励倍数'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: editCheckinMultiplier,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: '签到改图倍率'),
+                    decoration: const InputDecoration(labelText: '签到改图奖励倍数'),
                   ),
                   const SizedBox(height: 18),
                 ],
                 if (showProvider) ...[
-                  _settingsSectionTitle('VIP 模式上游'),
+                  _settingsSectionTitle('VIP 模式线路'),
                   const SizedBox(height: 8),
                   TextField(
                       controller: providerBase,
-                      decoration:
-                          const InputDecoration(labelText: '主用上游 base_url')),
+                      decoration: const InputDecoration(labelText: '主用线路地址')),
                   const SizedBox(height: 12),
                   TextField(
                       controller: providerKey,
                       obscureText: true,
                       decoration:
-                          const InputDecoration(labelText: '主用上游 Key 1，留空不修改')),
+                          const InputDecoration(labelText: '主用线路密钥 1，留空不修改')),
                   const SizedBox(height: 12),
                   TextField(
                       controller: providerSecondaryKey,
                       obscureText: true,
                       decoration:
-                          const InputDecoration(labelText: '主用上游 Key 2，留空不修改')),
+                          const InputDecoration(labelText: '主用线路密钥 2，留空不修改')),
                   const SizedBox(height: 12),
                   TextField(
                       controller: providerBackupBase,
-                      decoration:
-                          const InputDecoration(labelText: '备用上游 base_url')),
+                      decoration: const InputDecoration(labelText: '备用线路地址')),
                   const SizedBox(height: 12),
                   TextField(
                       controller: providerBackupKey,
                       obscureText: true,
                       decoration:
-                          const InputDecoration(labelText: '备用上游 Key 1，留空不修改')),
+                          const InputDecoration(labelText: '备用线路密钥 1，留空不修改')),
                   const SizedBox(height: 12),
                   TextField(
                       controller: providerBackupSecondaryKey,
                       obscureText: true,
                       decoration:
-                          const InputDecoration(labelText: '备用上游 Key 2，留空不修改')),
+                          const InputDecoration(labelText: '备用线路密钥 2，留空不修改')),
                   const SizedBox(height: 12),
                   TextField(
                       controller: providerModel,
@@ -2003,26 +2024,25 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(labelText: '超时时间秒')),
                   const SizedBox(height: 18),
-                  _settingsSectionTitle('一般模式上游'),
+                  _settingsSectionTitle('一般模式线路'),
                   const SizedBox(height: 12),
                   TextField(
                     controller: generalProviderBase,
-                    decoration:
-                        const InputDecoration(labelText: '一般模式 base_url'),
+                    decoration: const InputDecoration(labelText: '一般模式线路地址'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: generalProviderKey,
                     obscureText: true,
                     decoration:
-                        const InputDecoration(labelText: '一般模式 Key，留空不修改'),
+                        const InputDecoration(labelText: '一般模式密钥，留空不修改'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: generalProviderModel,
                     decoration: const InputDecoration(
                       labelText: '一般模式文本模型',
-                      helperText: '用于普通模式文本探活；图片生成实际使用下面的图片模型',
+                      helperText: '用于一般模式文本检测；图片生成使用下面的图片模型',
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -2047,13 +2067,14 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     value: providerHealthcheckEnabled,
                     onChanged: (value) => setDialogState(
                         () => providerHealthcheckEnabled = value),
-                    title: const Text('每小时探活并自动切换主备'),
+                    title: const Text('定时检测线路并自动切换'),
+                    subtitle: const Text('开启后按下方间隔检测主用和备用线路'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                       controller: providerHealthcheckInterval,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: '探活间隔分钟')),
+                      decoration: const InputDecoration(labelText: '线路检测间隔分钟')),
                   const SizedBox(height: 12),
                   _stringDropdown(
                       '响应格式',
@@ -2082,7 +2103,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   TextField(
                       controller: instructions,
                       maxLines: 3,
-                      decoration: const InputDecoration(labelText: '上游指令')),
+                      decoration: const InputDecoration(
+                        labelText: '模型调用指令',
+                        helperText: '随请求转发给模型的系统级说明',
+                      )),
                   const SizedBox(height: 16),
                 ],
                 if (showAi) ...[
@@ -2095,21 +2119,21 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: feedbackAiBase,
-                    decoration: const InputDecoration(labelText: 'base_url'),
+                    decoration: const InputDecoration(labelText: '反馈整理服务地址'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: feedbackAiKey,
                     obscureText: true,
                     decoration: const InputDecoration(
-                      labelText: 'api_key，留空不修改',
+                      labelText: '反馈整理密钥，留空不修改',
                       helperText: '展示时会打码；请求应由后端代理执行',
                     ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: feedbackAiModel,
-                    decoration: const InputDecoration(labelText: 'model'),
+                    decoration: const InputDecoration(labelText: '反馈整理模型'),
                   ),
                   const SizedBox(height: 16),
                   const Divider(),
@@ -2121,21 +2145,21 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: promptAiBase,
-                    decoration: const InputDecoration(labelText: 'base_url'),
+                    decoration: const InputDecoration(labelText: '提示词服务地址'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: promptAiKey,
                     obscureText: true,
                     decoration: const InputDecoration(
-                      labelText: 'api_key，留空不修改',
+                      labelText: '提示词服务密钥，留空不修改',
                       helperText: '与反馈 AI 分开保存，避免混淆',
                     ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: promptAiModel,
-                    decoration: const InputDecoration(labelText: 'model'),
+                    decoration: const InputDecoration(labelText: '提示词服务模型'),
                   ),
                   const SizedBox(height: 16),
                 ],
@@ -2152,7 +2176,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
                       labelText: '已读通知保留天数',
-                      helperText: '超过天数后自动清理已读通知',
+                      helperText: '只清理已读通知，未读通知不会按天数自动移除',
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -2160,8 +2184,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     controller: notificationCategoryLimit,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
-                      labelText: '每类通知最多条数',
-                      helperText: '通知中心每个分类最多保留展示的条数',
+                      labelText: '每类通知显示上限',
+                      helperText: '通知中心每个分类最多展示的条数',
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -2193,7 +2217,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     controller: openclawMailApiKey,
                     obscureText: true,
                     decoration: const InputDecoration(
-                      labelText: '主通道 API Key，留空不修改',
+                      labelText: '主通道密钥，留空不修改',
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -2258,7 +2282,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     controller: resendKey,
                     obscureText: true,
                     decoration: const InputDecoration(
-                      labelText: '备用通道 API Key，留空不修改',
+                      labelText: '备用通道密钥，留空不修改',
                       helperText: '默认作为备用邮件通道',
                     ),
                   ),
@@ -2266,7 +2290,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   const Divider(),
                   const SizedBox(height: 8),
                   Text(
-                    '系统通知收件人和兼容通道',
+                    '系统通知收件人和兼容邮件通道',
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
                   const SizedBox(height: 12),
@@ -2281,7 +2305,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   TextField(
                     controller: hermesBase,
                     decoration: const InputDecoration(
-                      labelText: '旧 HTTP 邮件服务地址',
+                      labelText: '兼容邮件服务地址',
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -2289,7 +2313,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     controller: hermesKey,
                     obscureText: true,
                     decoration: const InputDecoration(
-                      labelText: '旧 HTTP 邮件服务 Key，留空不修改',
+                      labelText: '兼容邮件服务密钥，留空不修改',
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -2579,7 +2603,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   obscureText: true,
                   maxLines: 3,
                   decoration: const InputDecoration(
-                    labelText: 'Service Account JSON，留空不修改',
+                    labelText: 'Google 服务账号 JSON，留空不修改',
+                    helperText: '从 Google Cloud 服务账号下载的 JSON',
                   ),
                 ),
                 const SizedBox(height: 18),
@@ -3267,7 +3292,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   Future<void> _probeProviderHealth() async {
     if (_isProviderHealthChecking) return;
     setState(() => _isProviderHealthChecking = true);
-    _showMessage('正在执行上游测活，请稍候。');
+    _showMessage('正在检测生成线路，请稍候。');
     try {
       final result =
           await ref.read(gatewayClientProvider).providerHealthcheck();
@@ -3276,7 +3301,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       _reload();
     } catch (error) {
       if (!mounted) return;
-      _showMessage(friendlyError(error, fallback: '上游测活失败。'), isError: true);
+      _showMessage(friendlyError(error, fallback: '线路检测失败。'), isError: true);
     } finally {
       if (mounted) setState(() => _isProviderHealthChecking = false);
     }
@@ -3304,7 +3329,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final apply = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('上游测活'),
+        title: const Text('线路检测'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -3397,12 +3422,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     addIf('额度或频率限制', ['额度或频率限制', 'usage_limit', 'rate limit']);
     addIf('权限或账号限制', ['拒绝访问', '认证失败', 'unauthorized', 'forbidden', '权限']);
     addIf('模型或接口不存在', ['模型或接口不存在', 'not found']);
-    addIf('上游超时', ['响应超时', 'timeout']);
+    addIf('线路超时', ['响应超时', 'timeout']);
     addIf('网络或地址不可达', ['无法连接上游', 'network', 'dns', 'base_url']);
     addIf('安全策略拦截', ['安全策略', 'content_policy', 'safety']);
     addIf('返回格式异常', ['返回格式异常', '空响应', '空图片', '未返回可用图片']);
     addIf('线路未完整配置', ['未配置', 'base_url 或 key 未配置', '线路未完整配置']);
-    addIf('上游返回异常', ['上游返回异常', 'provider returned http']);
+    addIf('线路返回异常', ['上游返回异常', 'provider returned http']);
     if (reasons.isNotEmpty) {
       return reasons.toSet().join('、');
     }
@@ -3508,7 +3533,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     }
     const order = [
       '基础设置',
-      '上游生成',
+      '生成线路',
       'AI 辅助',
       '通知设置',
       '邮件通道',
@@ -3564,7 +3589,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     if (key.startsWith('provider_') ||
         key.startsWith('general_provider_') ||
         key.startsWith('default_')) {
-      return '上游生成';
+      return '生成线路';
     }
     return '基础设置';
   }
@@ -3572,12 +3597,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   String _settingLabel(String key) {
     const labels = {
       'ui_title': '标题',
-      'external_access_base_url': '外部地址',
+      'external_access_base_url': '公开地址',
       'provider_active_slot': '线路',
       'provider_model': 'VIP 模型',
       'general_provider_image_model': '普通图片模型',
-      'notification_retention_days': '通知保留',
-      'notification_category_limit': '分类条数',
+      'notification_retention_days': '已读通知清理',
+      'notification_category_limit': '每类显示上限',
       'openclaw_mail_enabled': '主邮件通道',
       'openclaw_mail_user': '主通道邮箱',
       'email_code_primary_provider': '主用通道',
@@ -3651,6 +3676,17 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     return '$label ${_text(quota['remaining'], fallback: '0')}/${_text(quota['total'], fallback: '0')}';
   }
 
+  String _historyQuotaBrief(dynamic quotaValue, dynamic capValue) {
+    final quota = _map(quotaValue);
+    if (quota.isNotEmpty) {
+      if (quota['is_unlimited'] == true) {
+        return '无限';
+      }
+      return '${_text(quota['used'], fallback: '0')}/${_text(quota['total'], fallback: '0')} 条';
+    }
+    return '${_text(capValue, fallback: '0')} 条';
+  }
+
   String _imageModeLabel(String mode) {
     switch (mode) {
       case 'general':
@@ -3686,37 +3722,37 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       {
         'key': 'provider_secondary_api_key',
         'value': 'xxx',
-        'description': '主用上游第二 API Key',
+        'description': '主用线路备用密钥',
       },
       {
         'key': 'provider_backup_base_url',
         'value': '',
-        'description': '备用上游服务地址',
+        'description': '备用线路地址',
       },
       {
         'key': 'provider_backup_api_key',
         'value': 'xxx',
-        'description': '备用上游 API Key',
+        'description': '备用线路密钥',
       },
       {
         'key': 'provider_backup_secondary_api_key',
         'value': 'xxx',
-        'description': '备用上游第二 API Key',
+        'description': '备用线路第二密钥',
       },
       {
         'key': 'provider_active_slot',
         'value': 'primary',
-        'description': '当前启用的上游线路',
+        'description': '当前启用的生成线路',
       },
       {
         'key': 'provider_healthcheck_enabled',
         'value': 'true',
-        'description': '是否定时探活并自动切换主备',
+        'description': '是否定时检测并自动切换主备线路',
       },
       {
         'key': 'provider_healthcheck_interval_minutes',
         'value': '60',
-        'description': '上游文本和图片探活间隔分钟',
+        'description': '文本和图片线路检测间隔分钟',
       },
       {
         'key': 'protect_file_access',
@@ -3731,7 +3767,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       {
         'key': 'general_provider_api_key',
         'value': 'xxx',
-        'description': '一般模式 API Key',
+        'description': '一般模式密钥',
       },
       {
         'key': 'general_provider_model',
@@ -3746,7 +3782,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       {
         'key': 'feedback_ai_api_key',
         'value': 'xxx',
-        'description': '反馈 AI 整理 API Key',
+        'description': '反馈 AI 整理密钥',
       },
       {
         'key': 'feedback_ai_model',
@@ -3776,7 +3812,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       {
         'key': 'prompt_ai_api_key',
         'value': 'xxx',
-        'description': '提示词生成与图片识别 AI API Key',
+        'description': '提示词生成与图片识别 AI 密钥',
       },
       {
         'key': 'prompt_ai_model',
@@ -3821,7 +3857,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       {
         'key': 'openclaw_mail_api_key',
         'value': 'xxx',
-        'description': '主通道 API Key',
+        'description': '主通道密钥',
       },
       {
         'key': 'resend_base_url',
@@ -3831,7 +3867,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       {
         'key': 'resend_api_key',
         'value': 'xxx',
-        'description': 'Resend API Key，默认备用通道',
+        'description': '备用通道密钥',
       },
       {
         'key': 'resend_from',
@@ -3846,7 +3882,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       {
         'key': 'notification_retention_days',
         'value': '30',
-        'description': '已读通知保留天数',
+        'description': '已读通知自动清理天数',
       },
       {
         'key': 'notification_category_limit',
@@ -3856,12 +3892,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       {
         'key': 'hermes_base_url',
         'value': '',
-        'description': '旧 HTTP 邮件服务地址',
+        'description': '兼容邮件服务地址',
       },
       {
         'key': 'hermes_api_key',
         'value': 'xxx',
-        'description': '旧 HTTP 邮件服务 Key',
+        'description': '兼容邮件服务密钥',
       },
       {
         'key': 'email_smtp_host',
@@ -3916,7 +3952,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       {
         'key': 'google_drive_service_account_json',
         'value': 'xxx',
-        'description': 'Google Drive Service Account JSON',
+        'description': 'Google Drive 服务账号 JSON',
       },
       {
         'key': 'openlist_backup_primary_enabled',

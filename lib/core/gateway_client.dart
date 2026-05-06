@@ -349,9 +349,10 @@ class GatewayClient {
     }, fallback: '读取历史失败。');
   }
 
-  Future<void> deleteHistoryItem(String id) async {
-    await _guard(() async {
-      await _dio.delete('/api/images/history/$id');
+  Future<Map<String, dynamic>> deleteHistoryItem(String id) async {
+    return _guard(() async {
+      final res = await _dio.delete('/api/images/history/$id');
+      return _mapResponse(res.data);
     }, fallback: '删除图片记录失败。');
   }
 

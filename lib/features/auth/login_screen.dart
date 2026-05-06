@@ -83,6 +83,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       ref.read(authStateProvider.notifier).state = res['user'];
       ref.read(energyProvider.notifier).state = res['user']['quota_summary'];
+      ref.read(historyRetentionProvider.notifier).state =
+          historyRetentionSummaryFromUser(res['user']);
 
       if (mounted) {
         Navigator.of(context).pushReplacement(

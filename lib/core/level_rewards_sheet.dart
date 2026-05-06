@@ -11,6 +11,8 @@ class _LevelReward {
     required this.minPoints,
     required this.generateBonus,
     required this.editBonus,
+    required this.generateRetentionBonus,
+    required this.editRetentionBonus,
     required this.badgeName,
     required this.badgeColor,
   });
@@ -19,6 +21,8 @@ class _LevelReward {
   final int minPoints;
   final int generateBonus;
   final int editBonus;
+  final int generateRetentionBonus;
+  final int editRetentionBonus;
   final String badgeName;
   final Color badgeColor;
 }
@@ -29,6 +33,8 @@ const List<_LevelReward> _levelRewards = [
     minPoints: 0,
     generateBonus: 0,
     editBonus: 0,
+    generateRetentionBonus: 0,
+    editRetentionBonus: 0,
     badgeName: '见习旅者',
     badgeColor: Color(0xFF94A3B8),
   ),
@@ -37,6 +43,8 @@ const List<_LevelReward> _levelRewards = [
     minPoints: 100,
     generateBonus: 5,
     editBonus: 2,
+    generateRetentionBonus: 20,
+    editRetentionBonus: 8,
     badgeName: '初阶术士',
     badgeColor: Color(0xFF60A5FA),
   ),
@@ -45,6 +53,8 @@ const List<_LevelReward> _levelRewards = [
     minPoints: 500,
     generateBonus: 12,
     editBonus: 5,
+    generateRetentionBonus: 48,
+    editRetentionBonus: 20,
     badgeName: '进阶术士',
     badgeColor: Color(0xFF34D399),
   ),
@@ -53,6 +63,8 @@ const List<_LevelReward> _levelRewards = [
     minPoints: 1000,
     generateBonus: 24,
     editBonus: 10,
+    generateRetentionBonus: 96,
+    editRetentionBonus: 40,
     badgeName: '高阶术士',
     badgeColor: Color(0xFFFBBF24),
   ),
@@ -61,6 +73,8 @@ const List<_LevelReward> _levelRewards = [
     minPoints: 2000,
     generateBonus: 40,
     editBonus: 16,
+    generateRetentionBonus: 160,
+    editRetentionBonus: 64,
     badgeName: '圣域贤者',
     badgeColor: Color(0xFFFB7185),
   ),
@@ -69,6 +83,8 @@ const List<_LevelReward> _levelRewards = [
     minPoints: 3500,
     generateBonus: 60,
     editBonus: 24,
+    generateRetentionBonus: 240,
+    editRetentionBonus: 96,
     badgeName: '王都典藏',
     badgeColor: Color(0xFFC084FC),
   ),
@@ -77,6 +93,8 @@ const List<_LevelReward> _levelRewards = [
     minPoints: 5000,
     generateBonus: 90,
     editBonus: 36,
+    generateRetentionBonus: 360,
+    editRetentionBonus: 144,
     badgeName: '异界宗师',
     badgeColor: Color(0xFFF97316),
   ),
@@ -143,7 +161,7 @@ Future<void> showLevelRewardsSheet(
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '积分 $currentPoints · 每日生图 +${current.generateBonus} · 每日改图 +${current.editBonus}',
+                        '积分 $currentPoints · 每日生图 +${current.generateBonus} · 每日改图 +${current.editBonus}\n记忆保留 生图 +${current.generateRetentionBonus} · 改图 +${current.editRetentionBonus}',
                       ),
                       if (next != null) ...[
                         const SizedBox(height: 6),
@@ -330,7 +348,7 @@ class _LevelRewardsContentState extends State<_LevelRewardsContent> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${item['min_points'] ?? 0} 积分解锁 · 邀请码奖励 ${claimed && code.isNotEmpty ? code : '1 个'}',
+                  '${item['min_points'] ?? 0} 积分解锁 · 邀请码奖励 ${claimed && code.isNotEmpty ? code : '1 个'}\n记忆保留 生图 +${item['generate_retention_bonus'] ?? 0} · 改图 +${item['edit_retention_bonus'] ?? 0}',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -441,7 +459,7 @@ Widget _rewardTile(
               ),
               const SizedBox(height: 4),
               Text(
-                '${reward.minPoints} 积分解锁 · 每日生图 +${reward.generateBonus} · 每日改图 +${reward.editBonus}',
+                '${reward.minPoints} 积分解锁 · 每日生图 +${reward.generateBonus} · 每日改图 +${reward.editBonus}\n记忆保留 生图 +${reward.generateRetentionBonus} · 改图 +${reward.editRetentionBonus}',
                 style: theme.textTheme.bodySmall,
               ),
             ],

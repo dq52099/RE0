@@ -62,6 +62,11 @@ final energyProvider = StateProvider<Map<String, dynamic>>((ref) => {
       'edit': {'remaining': 0, 'total': 0, 'used': 0},
     });
 
+final historyRetentionProvider = StateProvider<Map<String, dynamic>>((ref) => {
+      'generate': {'remaining': 0, 'total': 0, 'used': 0},
+      'edit': {'remaining': 0, 'total': 0, 'used': 0},
+    });
+
 enum ImageTaskKind {
   generate,
   edit,
@@ -115,6 +120,8 @@ class GenerateImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
       );
       ref.read(energyProvider.notifier).state =
           _quotaSummary(res['quota_summary']);
+      ref.read(historyRetentionProvider.notifier).state =
+          _historyRetentionSummary(res['history_retention_quota_summary']);
       final items = _resultItems(res['data'] ?? res);
       if (items.isEmpty) {
         throw GatewayException(_imageFailureMessage(res, '图片生成失败。'));
@@ -172,6 +179,8 @@ class EditImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
       );
       ref.read(energyProvider.notifier).state =
           _quotaSummary(res['quota_summary']);
+      ref.read(historyRetentionProvider.notifier).state =
+          _historyRetentionSummary(res['history_retention_quota_summary']);
       final items = _resultItems(res['data'] ?? res);
       if (items.isEmpty) {
         throw GatewayException(_imageFailureMessage(res, '图片修改失败。'));
@@ -218,6 +227,46 @@ Map<String, dynamic> _quotaSummary(dynamic value) {
   return {
     'generate': {'remaining': 0, 'total': 0, 'used': 0},
     'edit': {'remaining': 0, 'total': 0, 'used': 0},
+  };
+}
+
+Map<String, dynamic> historyRetentionSummaryFromUser(dynamic user) {
+  if (user is! Map) return _emptyHistoryRetentionSummary();
+  final rich = user['history_retention_quota_summary'];
+  if (rich is Map) {
+    return Map<String, dynamic>.from(rich);
+  }
+  final caps = user['history_retention_summary'];
+  if (caps is Map) {
+    return {
+      'generate': _retentionEntry(caps['generate'], used: 0),
+      'edit': _retentionEntry(caps['edit'], used: 0),
+    };
+  }
+  return _emptyHistoryRetentionSummary();
+}
+
+Map<String, dynamic> _historyRetentionSummary(dynamic value) {
+  if (value is Map) {
+    return Map<String, dynamic>.from(value);
+  }
+  return _emptyHistoryRetentionSummary();
+}
+
+Map<String, dynamic> _emptyHistoryRetentionSummary() {
+  return {
+    'generate': {'remaining': 0, 'total': 0, 'used': 0},
+    'edit': {'remaining': 0, 'total': 0, 'used': 0},
+  };
+}
+
+Map<String, dynamic> _retentionEntry(dynamic total, {required int used}) {
+  final parsedTotal = int.tryParse(total?.toString() ?? '') ?? 0;
+  return {
+    'total': parsedTotal,
+    'used': used,
+    'remaining': parsedTotal > used ? parsedTotal - used : 0,
+    'is_unlimited': false,
   };
 }
 
