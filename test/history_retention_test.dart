@@ -30,4 +30,13 @@ void main() {
     expect(summary['edit']['remaining'], 20);
     expect(summary['edit']['total'], 20);
   });
+
+  test('logout reset keeps default visible quota instead of 0/0', () {
+    final summary = historyRetentionSummaryFromUser(null);
+
+    expect(summary['generate']['remaining'], 50);
+    expect(summary['generate']['total'], 50);
+    expect(summary['edit']['remaining'], 20);
+    expect(summary['edit']['total'], 20);
+  });
 }

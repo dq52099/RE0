@@ -63,8 +63,8 @@ final energyProvider = StateProvider<Map<String, dynamic>>((ref) => {
     });
 
 final historyRetentionProvider = StateProvider<Map<String, dynamic>>((ref) => {
-      'generate': {'remaining': 0, 'total': 0, 'used': 0},
-      'edit': {'remaining': 0, 'total': 0, 'used': 0},
+      'generate': _retentionEntry(50, used: 0),
+      'edit': _retentionEntry(20, used: 0),
     });
 
 enum ImageTaskKind {
@@ -240,7 +240,7 @@ Map<String, dynamic> historyRetentionSummaryFromUser(
   dynamic user, {
   Map<String, dynamic>? fallback,
 }) {
-  if (user is! Map) return _emptyHistoryRetentionSummary();
+  if (user is! Map) return _defaultHistoryRetentionSummary();
   final rich = user['history_retention_quota_summary'];
   if (rich is Map) {
     return Map<String, dynamic>.from(rich);
@@ -265,13 +265,6 @@ Map<String, dynamic> _historyRetentionSummary(
   }
   final safeFallback = _usableHistoryRetentionSummary(fallback);
   return safeFallback ?? _defaultHistoryRetentionSummary();
-}
-
-Map<String, dynamic> _emptyHistoryRetentionSummary() {
-  return {
-    'generate': {'remaining': 0, 'total': 0, 'used': 0},
-    'edit': {'remaining': 0, 'total': 0, 'used': 0},
-  };
 }
 
 Map<String, dynamic> _defaultHistoryRetentionSummary() {
