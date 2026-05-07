@@ -2195,6 +2195,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         _settingValue(byKey, 'allow_public_registration', fallback: 'true')
                 .toLowerCase() ==
             'true';
+    var registrationEmailRequired =
+        _settingBool(byKey, 'registration_email_required', fallback: true);
+    var registrationInviteRequired =
+        _settingBool(byKey, 'registration_invite_required', fallback: true);
     var protectFileAccess =
         _settingValue(byKey, 'protect_file_access', fallback: 'false')
                 .toLowerCase() ==
@@ -2303,6 +2307,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
             double.tryParse(editCheckinMultiplier.text),
         'provider_instructions': instructions.text.trim(),
         'allow_public_registration': allowRegistration,
+        'registration_email_required': registrationEmailRequired,
+        'registration_invite_required': registrationInviteRequired,
         'protect_file_access': protectFileAccess,
         'notification_retention_days':
             int.tryParse(notificationRetentionDays.text.trim()),
@@ -2347,11 +2353,26 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                         helperText: '用于邮件、分享和图片链接；留空时按当前访问地址自动判断',
                       )),
                   const SizedBox(height: 12),
-                  CheckboxListTile(
+                  SwitchListTile(
                     value: allowRegistration,
                     onChanged: (value) =>
-                        setDialogState(() => allowRegistration = value ?? true),
-                    title: const Text('允许公开注册'),
+                        setDialogState(() => allowRegistration = value),
+                    title: const Text('允许自助注册'),
+                    subtitle: const Text('关闭后登录页不再显示注册入口'),
+                  ),
+                  SwitchListTile(
+                    value: registrationEmailRequired,
+                    onChanged: (value) => setDialogState(
+                        () => registrationEmailRequired = value),
+                    title: const Text('注册需要邮箱验证'),
+                    subtitle: const Text('开启后必须填写邮箱并通过验证码；关闭后邮箱可选'),
+                  ),
+                  SwitchListTile(
+                    value: registrationInviteRequired,
+                    onChanged: (value) => setDialogState(
+                        () => registrationInviteRequired = value),
+                    title: const Text('注册需要邀请码'),
+                    subtitle: const Text('开启后必须填写可用邀请码；关闭后不显示邀请码输入'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -3920,6 +3941,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     if (key == 'ui_title' ||
         key == 'external_access_base_url' ||
         key == 'allow_public_registration' ||
+        key == 'registration_email_required' ||
+        key == 'registration_invite_required' ||
         key.startsWith('daily_checkin_')) {
       return '基础设置';
     }
@@ -3962,6 +3985,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     const labels = {
       'ui_title': '标题',
       'external_access_base_url': '公开地址',
+      'allow_public_registration': '自助注册',
+      'registration_email_required': '注册邮箱验证',
+      'registration_invite_required': '注册邀请码',
       'provider_active_slot': '线路',
       'provider_model': 'VIP 模型',
       'general_provider_image_model': '普通图片模型',
@@ -4123,6 +4149,21 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         'key': 'protect_file_access',
         'value': 'false',
         'description': '是否要求登录后才能查看图片文件与分享链接',
+      },
+      {
+        'key': 'allow_public_registration',
+        'value': 'true',
+        'description': '是否允许访客自助注册普通账号',
+      },
+      {
+        'key': 'registration_email_required',
+        'value': 'true',
+        'description': '注册时是否必须完成邮箱验证码验证',
+      },
+      {
+        'key': 'registration_invite_required',
+        'value': 'true',
+        'description': '注册时是否必须填写可用邀请码',
       },
       {
         'key': 'general_provider_base_url',

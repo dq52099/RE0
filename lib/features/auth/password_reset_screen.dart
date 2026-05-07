@@ -9,9 +9,9 @@ import '../../core/compact_save_notice.dart';
 import '../../core/providers.dart';
 
 class PasswordResetScreen extends ConsumerStatefulWidget {
-  const PasswordResetScreen({super.key, this.initialAccount = ''});
+  const PasswordResetScreen({super.key, this.initialEmail = ''});
 
-  final String initialAccount;
+  final String initialEmail;
 
   @override
   ConsumerState<PasswordResetScreen> createState() =>
@@ -21,12 +21,10 @@ class PasswordResetScreen extends ConsumerStatefulWidget {
 class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
   static const _defaultServerUrl = 'https://image.6688667.xyz';
 
-  late final TextEditingController _accountController;
-  final _emailController = TextEditingController();
+  late final TextEditingController _emailController;
   final _codeController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  String? _accountError;
   String? _emailError;
   String? _codeError;
   String? _passwordError;
@@ -38,13 +36,12 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
   @override
   void initState() {
     super.initState();
-    _accountController = TextEditingController(text: widget.initialAccount);
+    _emailController = TextEditingController(text: widget.initialEmail);
   }
 
   @override
   void dispose() {
     _emailCooldownTimer?.cancel();
-    _accountController.dispose();
     _emailController.dispose();
     _codeController.dispose();
     _passwordController.dispose();
@@ -52,23 +49,25 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
   }
 
   Future<void> _sendResetCode() async {
-    final account = _accountController.text.trim();
-    if (account.isEmpty) {
-      setState(() => _accountError = '请输入用户名、账号或邮箱。');
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      setState(() => _emailError = '请先填写邮箱。');
+      return;
+    }
+    if (!RegExp(r'^[^@\s]+@(qq\.com|163\.com|claw\.163\.com)$')
+        .hasMatch(email.toLowerCase())) {
+      setState(() => _emailError = '当前仅支持 qq.com、163.com 和 claw.163.com 邮箱。');
       return;
     }
 
     setState(() {
-      _accountError = null;
       _emailError = null;
       _isSendingCode = true;
     });
     try {
       final client = ref.read(gatewayClientProvider);
       await client.init(_defaultServerUrl);
-      final result = await client.requestPasswordReset(account);
-      _emailController.text =
-          result['email']?.toString() ?? _emailController.text;
+      final result = await client.requestPasswordReset(email);
       if (!mounted) return;
       _startEmailCooldown();
       final message = result['message']?.toString() ?? '验证码已发送，请查看邮箱。';
@@ -117,7 +116,7 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
     String? passwordError;
 
     if (email.isEmpty) {
-      emailError = '请先发送验证码获取收件邮箱。';
+      emailError = '请先填写邮箱。';
     } else if (!RegExp(r'^[^@\s]+@(qq\.com|163\.com|claw\.163\.com)$')
         .hasMatch(email.toLowerCase())) {
       emailError = '当前仅支持 qq.com、163.com 和 claw.163.com 邮箱。';
@@ -197,20 +196,6 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
                         ),
                         const SizedBox(height: 24),
                         TextField(
-                          controller: _accountController,
-                          onChanged: (_) {
-                            if (_accountError != null) {
-                              setState(() => _accountError = null);
-                            }
-                          },
-                          decoration: InputDecoration(
-                            labelText: '用户名、账号或邮箱',
-                            helperText: '填写任一已绑定账号信息，用于发送邮件验证码',
-                            errorText: _accountError,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
                           onChanged: (_) {
@@ -219,8 +204,8 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
                             }
                           },
                           decoration: InputDecoration(
-                            labelText: '收件邮箱',
-                            helperText: '发送验证码后会自动填入',
+                            labelText: '绑定邮箱',
+                            helperText: '填写账号已绑定的邮箱，用于接收找回密码验证码',
                             errorText: _emailError,
                           ),
                         ),

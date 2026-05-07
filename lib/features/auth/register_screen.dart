@@ -36,8 +36,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   String? _confirmPasswordError;
   bool _isSubmitting = false;
   bool _isSendingEmailCode = false;
+  bool _emailRequired = true;
+  bool _inviteRequired = true;
   int _emailCooldownSeconds = 0;
   Timer? _emailCooldownTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRegistrationPolicy();
+  }
 
   @override
   void dispose() {
@@ -50,6 +58,21 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadRegistrationPolicy() async {
+    try {
+      final client = ref.read(gatewayClientProvider);
+      await client.init(_defaultServerUrl);
+      final bootstrap = await client.bootstrap();
+      if (!mounted) return;
+      setState(() {
+        _emailRequired = bootstrap['registration_email_required'] != false;
+        _inviteRequired = bootstrap['registration_invite_required'] != false;
+      });
+    } catch (_) {
+      // Product defaults are strict; keep them when bootstrap is unavailable.
+    }
   }
 
   bool _validate() {
@@ -83,18 +106,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       displayNameError = '显示名称长度需为 2 到 32 个字符。';
     }
 
-    if (email.isNotEmpty &&
+    if (_emailRequired && email.isEmpty) {
+      emailError = '请填写邮箱。';
+    } else if (email.isNotEmpty &&
         !RegExp(r'^[^@\s]+@(qq\.com|163\.com|claw\.163\.com)$')
             .hasMatch(email.toLowerCase())) {
       emailError = '当前仅支持 qq.com、163.com 和 claw.163.com 邮箱。';
     }
-    if (email.isNotEmpty && emailCode.isEmpty) {
+    if ((_emailRequired || email.isNotEmpty) && emailCode.isEmpty) {
       emailCodeError = '请先获取并填写邮箱验证码。';
     }
 
-    if (invitationCode.isEmpty) {
+    if (_inviteRequired && invitationCode.isEmpty) {
       invitationCodeError = '请输入邀请码。';
-    } else if (invitationCode.length < 4) {
+    } else if (invitationCode.isNotEmpty && invitationCode.length < 4) {
       invitationCodeError = '邀请码格式不正确。';
     }
 
@@ -188,6 +213,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     });
   }
 
+  String _registrationPolicyText() {
+    if (_inviteRequired && _emailRequired) {
+      return '使用邀请码创建账号，并完成邮箱验证用于登录和找回密码。';
+    }
+    if (_inviteRequired) {
+      return '使用邀请码创建账号；邮箱可选，绑定后可用于登录和找回密码。';
+    }
+    if (_emailRequired) {
+      return '创建账号前需完成邮箱验证，用于邮箱登录和找回密码。';
+    }
+    return '创建账号后可绑定邮箱，用于邮箱登录和找回密码。';
+  }
+
   Future<void> _register() async {
     if (!_validate()) return;
 
@@ -198,7 +236,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       final res = await client.register(
         _usernameController.text.trim(),
         _displayNameController.text.trim(),
-        _invitationCodeController.text.trim(),
+        _inviteRequired ? _invitationCodeController.text.trim() : '',
         _passwordController.text,
         email: _emailController.text.trim(),
         emailCode: _emailCodeController.text.trim(),
@@ -256,7 +294,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '使用邀请码创建账号，可同时绑定邮箱用于邮箱密码登录和找回密码。',
+                          _registrationPolicyText(),
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                         const SizedBox(height: 24),
@@ -301,7 +339,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             }
                           },
                           decoration: InputDecoration(
-                            labelText: '邮箱（可选）',
+                            labelText: _emailRequired ? '邮箱' : '邮箱（可选）',
                             helperText: '绑定后可用邮箱密码登录和找回密码',
                             errorText: _emailError,
                           ),
@@ -349,21 +387,23 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        TextField(
-                          controller: _invitationCodeController,
-                          textCapitalization: TextCapitalization.characters,
-                          onChanged: (_) {
-                            if (_invitationCodeError != null) {
-                              setState(() => _invitationCodeError = null);
-                            }
-                          },
-                          decoration: InputDecoration(
-                            labelText: '邀请码',
-                            helperText: '向管理员获取，每个邀请码只能使用一次',
-                            errorText: _invitationCodeError,
+                        if (_inviteRequired) ...[
+                          TextField(
+                            controller: _invitationCodeController,
+                            textCapitalization: TextCapitalization.characters,
+                            onChanged: (_) {
+                              if (_invitationCodeError != null) {
+                                setState(() => _invitationCodeError = null);
+                              }
+                            },
+                            decoration: InputDecoration(
+                              labelText: '邀请码',
+                              helperText: '向管理员获取，每个邀请码只能使用一次',
+                              errorText: _invitationCodeError,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 12),
+                          const SizedBox(height: 12),
+                        ],
                         TextField(
                           controller: _passwordController,
                           obscureText: true,

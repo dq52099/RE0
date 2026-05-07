@@ -112,10 +112,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _openPasswordResetScreen() {
+    final text = _usernameController.text.trim();
+    final initialEmail =
+        RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(text) ? text : '';
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => PasswordResetScreen(
-          initialAccount: _usernameController.text.trim(),
+          initialEmail: initialEmail,
         ),
       ),
     );

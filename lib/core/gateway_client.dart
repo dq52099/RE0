@@ -87,10 +87,10 @@ class GatewayClient {
     }, fallback: '邮箱验证码登录失败。');
   }
 
-  Future<Map<String, dynamic>> requestPasswordReset(String account) async {
+  Future<Map<String, dynamic>> requestPasswordReset(String email) async {
     return _guard(() async {
       final res = await _dio.post('/api/auth/password-reset', data: {
-        'account': account,
+        'email': email,
       });
       return Map<String, dynamic>.from(res.data as Map);
     }, fallback: '发送找回密码验证码失败。');
@@ -122,10 +122,11 @@ class GatewayClient {
     return _guard(() async {
       final emailText = email?.trim();
       final codeText = emailCode?.trim();
+      final invitationText = invitationCode.trim();
       final res = await _dio.post('/api/auth/register', data: {
         'username': username,
         'display_name': displayName,
-        'invitation_code': invitationCode,
+        if (invitationText.isNotEmpty) 'invitation_code': invitationText,
         'password': password,
         if (emailText != null && emailText.isNotEmpty) 'email': emailText,
         if (codeText != null && codeText.isNotEmpty) 'email_code': codeText,
