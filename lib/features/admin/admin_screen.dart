@@ -11,6 +11,59 @@ import '../../core/local_time_format.dart';
 import '../../core/providers.dart';
 import '../feedback/admin_feedback_panel.dart';
 
+Map<String, dynamic> buildAdminMailSettingsPayload({
+  required bool emailServiceEnabled,
+  required String emailPrimaryProvider,
+  required String emailBackupProvider,
+  required String emailActiveSlot,
+  required bool emailAutoSwitchEnabled,
+  required bool openclawMailEnabled,
+  required String openclawMailUser,
+  required String openclawMailApiKey,
+  required String emailSenderName,
+  required String resendBase,
+  required String resendKey,
+  required String resendFrom,
+  required String smtpHost,
+  required String smtpPort,
+  required String smtpUsername,
+  required String smtpPassword,
+  required bool smtpUseSsl,
+  required String systemNoticeEmailTo,
+  required String hermesBase,
+  required String hermesKey,
+}) {
+  final payload = <String, dynamic>{
+    'email_service_enabled': emailServiceEnabled,
+    'email_code_primary_provider': emailPrimaryProvider.trim(),
+    'email_code_backup_provider': emailBackupProvider.trim(),
+    'email_code_active_slot': emailActiveSlot.trim(),
+    'email_auto_switch_enabled': emailAutoSwitchEnabled,
+    'openclaw_mail_enabled': openclawMailEnabled,
+    'openclaw_mail_user': openclawMailUser.trim(),
+    if (openclawMailApiKey.trim().isNotEmpty)
+      'openclaw_mail_api_key': openclawMailApiKey.trim(),
+    'email_sender_name':
+        emailSenderName.trim().isEmpty ? '从零开始生图' : emailSenderName.trim(),
+    'resend_base_url': resendBase.trim().isEmpty
+        ? 'https://api.resend.com'
+        : resendBase.trim(),
+    if (resendKey.trim().isNotEmpty) 'resend_api_key': resendKey.trim(),
+    'resend_from': resendFrom.trim(),
+    'email_smtp_host': smtpHost.trim(),
+    'email_smtp_port': int.tryParse(smtpPort.trim()) ?? 465,
+    'email_smtp_username': smtpUsername.trim(),
+    if (smtpPassword.trim().isNotEmpty)
+      'email_smtp_password': smtpPassword.trim(),
+    'email_smtp_use_ssl': smtpUseSsl,
+    'system_notice_email_to': systemNoticeEmailTo.trim(),
+    'hermes_base_url': hermesBase.trim(),
+    if (hermesKey.trim().isNotEmpty) 'hermes_api_key': hermesKey.trim(),
+  };
+  payload.removeWhere((_, value) => value == null);
+  return payload;
+}
+
 class AdminScreen extends ConsumerStatefulWidget {
   const AdminScreen({super.key, this.initialView});
 
@@ -941,7 +994,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
             _infoCard(
               title: '线路说明',
               subtitle:
-                  '163 API、Resend、SMTP 都可以用；只有在主通道或备用通道里选中的服务才会发送邮件。主通道失败时会尝试备用通道，自动切换只决定是否把成功的备用通道保存为当前线路。',
+                  '163 API、Resend、SMTP 都可以用；只有在主通道或备用通道里选中的服务才会发送邮件。开启自动切换后，当前线路失败才会尝试备用通道并保存成功线路；关闭时只使用当前线路。',
               lines: const [],
             ),
             _settingsSectionTitle('通道配置'),
@@ -2167,6 +2220,105 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     var forceReloginEnabled = _settingBool(byKey, 'force_relogin_enabled');
     final dialogCategory = category ?? '全部设置';
 
+    Map<String, dynamic> cleanPayload(Map<String, dynamic> payload) {
+      payload.removeWhere((_, value) => value == null);
+      return payload;
+    }
+
+    Map<String, dynamic> mailPayload() {
+      return buildAdminMailSettingsPayload(
+        emailServiceEnabled: emailServiceEnabled,
+        emailPrimaryProvider: emailPrimaryProvider,
+        emailBackupProvider: emailBackupProvider,
+        emailActiveSlot: emailActiveSlot,
+        emailAutoSwitchEnabled: emailAutoSwitchEnabled,
+        openclawMailEnabled: openclawMailEnabled,
+        openclawMailUser: openclawMailUser.text,
+        openclawMailApiKey: openclawMailApiKey.text,
+        emailSenderName: emailSenderName.text,
+        resendBase: resendBase.text,
+        resendKey: resendKey.text,
+        resendFrom: resendFrom.text,
+        smtpHost: smtpHost.text,
+        smtpPort: smtpPort.text,
+        smtpUsername: smtpUsername.text,
+        smtpPassword: smtpPassword.text,
+        smtpUseSsl: smtpUseSsl,
+        systemNoticeEmailTo: systemNoticeEmailTo.text,
+        hermesBase: hermesBase.text,
+        hermesKey: hermesKey.text,
+      );
+    }
+
+    Map<String, dynamic> settingsPayload() {
+      final payload = <String, dynamic>{
+        'ui_title': uiTitle.text.trim(),
+        'external_access_base_url': externalBase.text.trim(),
+        'provider_base_url': providerBase.text.trim(),
+        if (providerKey.text.trim().isNotEmpty)
+          'provider_api_key': providerKey.text.trim(),
+        if (providerSecondaryKey.text.trim().isNotEmpty)
+          'provider_secondary_api_key': providerSecondaryKey.text.trim(),
+        'provider_backup_base_url': providerBackupBase.text.trim(),
+        if (providerBackupKey.text.trim().isNotEmpty)
+          'provider_backup_api_key': providerBackupKey.text.trim(),
+        if (providerBackupSecondaryKey.text.trim().isNotEmpty)
+          'provider_backup_secondary_api_key':
+              providerBackupSecondaryKey.text.trim(),
+        'provider_active_slot': activeProviderSlot,
+        'provider_healthcheck_enabled': providerHealthcheckEnabled,
+        'provider_healthcheck_interval_minutes':
+            int.tryParse(providerHealthcheckInterval.text),
+        'provider_model': providerModel.text.trim(),
+        'general_provider_base_url': generalProviderBase.text.trim(),
+        if (generalProviderKey.text.trim().isNotEmpty)
+          'general_provider_api_key': generalProviderKey.text.trim(),
+        'general_provider_model': generalProviderModel.text.trim(),
+        'general_provider_image_model': generalProviderImageModel.text.trim(),
+        'provider_image_profile': profile,
+        'provider_timeout_seconds': int.tryParse(providerTimeout.text),
+        'default_response_format': responseFormat,
+        'default_image_quality': quality,
+        'default_image_background': background,
+        'default_image_output_format': outputFormat,
+        'feedback_ai_base_url': feedbackAiBase.text.trim().isEmpty
+            ? _defaultAiBaseUrl
+            : feedbackAiBase.text.trim(),
+        if (feedbackAiKey.text.trim().isNotEmpty)
+          'feedback_ai_api_key': feedbackAiKey.text.trim(),
+        'feedback_ai_model': feedbackAiModel.text.trim().isEmpty
+            ? _feedbackAiModel
+            : feedbackAiModel.text.trim(),
+        'prompt_ai_base_url':
+            promptAiBase.text.trim().isEmpty ? null : promptAiBase.text.trim(),
+        if (promptAiKey.text.trim().isNotEmpty)
+          'prompt_ai_api_key': promptAiKey.text.trim(),
+        'prompt_ai_model': promptAiModel.text.trim().isEmpty
+            ? _promptAiModel
+            : promptAiModel.text.trim(),
+        ...mailPayload(),
+        'daily_checkin_generate_multiplier':
+            double.tryParse(generateCheckinMultiplier.text),
+        'daily_checkin_edit_multiplier':
+            double.tryParse(editCheckinMultiplier.text),
+        'provider_instructions': instructions.text.trim(),
+        'allow_public_registration': allowRegistration,
+        'protect_file_access': protectFileAccess,
+        'notification_retention_days':
+            int.tryParse(notificationRetentionDays.text.trim()),
+        'notification_category_limit':
+            int.tryParse(notificationCategoryLimit.text.trim()),
+        'force_app_update_enabled': forceUpdateEnabled,
+        'force_relogin_enabled': forceReloginEnabled,
+      };
+      if (category != null) {
+        payload.removeWhere(
+          (key, _) => !_settingKeyBelongsToCategory(key, category),
+        );
+      }
+      return cleanPayload(payload);
+    }
+
     final payload = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -2490,7 +2642,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     onChanged: (value) =>
                         setDialogState(() => emailAutoSwitchEnabled = value),
                     title: const Text('发送失败后自动切换'),
-                    subtitle: const Text('关闭时仍会尝试备用通道，但不会把备用通道保存为当前线路'),
+                    subtitle: const Text('关闭时只使用当前线路；开启后失败才尝试备用通道并保存成功线路'),
                   ),
                   const SizedBox(height: 18),
                   _settingsSectionTitle('163 API 通道'),
@@ -2641,109 +2793,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   onPressed: () => Navigator.pop(context),
                   child: const Text('取消')),
               FilledButton(
-                onPressed: () => Navigator.pop(
-                    context,
-                    {
-                      'ui_title': uiTitle.text.trim(),
-                      'external_access_base_url': externalBase.text.trim(),
-                      'provider_base_url': providerBase.text.trim(),
-                      if (providerKey.text.trim().isNotEmpty)
-                        'provider_api_key': providerKey.text.trim(),
-                      if (providerSecondaryKey.text.trim().isNotEmpty)
-                        'provider_secondary_api_key':
-                            providerSecondaryKey.text.trim(),
-                      'provider_backup_base_url':
-                          providerBackupBase.text.trim(),
-                      if (providerBackupKey.text.trim().isNotEmpty)
-                        'provider_backup_api_key':
-                            providerBackupKey.text.trim(),
-                      if (providerBackupSecondaryKey.text.trim().isNotEmpty)
-                        'provider_backup_secondary_api_key':
-                            providerBackupSecondaryKey.text.trim(),
-                      'provider_active_slot': activeProviderSlot,
-                      'provider_healthcheck_enabled':
-                          providerHealthcheckEnabled,
-                      'provider_healthcheck_interval_minutes':
-                          int.tryParse(providerHealthcheckInterval.text),
-                      'provider_model': providerModel.text.trim(),
-                      'general_provider_base_url':
-                          generalProviderBase.text.trim(),
-                      if (generalProviderKey.text.trim().isNotEmpty)
-                        'general_provider_api_key':
-                            generalProviderKey.text.trim(),
-                      'general_provider_model':
-                          generalProviderModel.text.trim(),
-                      'general_provider_image_model':
-                          generalProviderImageModel.text.trim(),
-                      'provider_image_profile': profile,
-                      'provider_timeout_seconds':
-                          int.tryParse(providerTimeout.text),
-                      'default_response_format': responseFormat,
-                      'default_image_quality': quality,
-                      'default_image_background': background,
-                      'default_image_output_format': outputFormat,
-                      'feedback_ai_base_url': feedbackAiBase.text.trim().isEmpty
-                          ? _defaultAiBaseUrl
-                          : feedbackAiBase.text.trim(),
-                      if (feedbackAiKey.text.trim().isNotEmpty)
-                        'feedback_ai_api_key': feedbackAiKey.text.trim(),
-                      'feedback_ai_model': feedbackAiModel.text.trim().isEmpty
-                          ? _feedbackAiModel
-                          : feedbackAiModel.text.trim(),
-                      'prompt_ai_base_url': promptAiBase.text.trim().isEmpty
-                          ? null
-                          : promptAiBase.text.trim(),
-                      if (promptAiKey.text.trim().isNotEmpty)
-                        'prompt_ai_api_key': promptAiKey.text.trim(),
-                      'prompt_ai_model': promptAiModel.text.trim().isEmpty
-                          ? _promptAiModel
-                          : promptAiModel.text.trim(),
-                      'email_service_enabled': emailServiceEnabled,
-                      'openclaw_mail_enabled': openclawMailEnabled,
-                      'openclaw_mail_user': openclawMailUser.text.trim(),
-                      if (openclawMailApiKey.text.trim().isNotEmpty)
-                        'openclaw_mail_api_key': openclawMailApiKey.text.trim(),
-                      'email_sender_name': emailSenderName.text.trim().isEmpty
-                          ? '从零开始生图'
-                          : emailSenderName.text.trim(),
-                      'email_code_primary_provider': emailPrimaryProvider,
-                      'email_code_backup_provider': emailBackupProvider,
-                      'email_code_active_slot': emailActiveSlot,
-                      'email_auto_switch_enabled': emailAutoSwitchEnabled,
-                      'hermes_base_url': hermesBase.text.trim(),
-                      if (hermesKey.text.trim().isNotEmpty)
-                        'hermes_api_key': hermesKey.text.trim(),
-                      if (resendKey.text.trim().isNotEmpty)
-                        'resend_api_key': resendKey.text.trim(),
-                      'resend_base_url': resendBase.text.trim().isEmpty
-                          ? 'https://api.resend.com'
-                          : resendBase.text.trim(),
-                      'resend_from': resendFrom.text.trim(),
-                      'system_notice_email_to': systemNoticeEmailTo.text.trim(),
-                      'email_smtp_host': smtpHost.text.trim(),
-                      'email_smtp_port': int.tryParse(smtpPort.text.trim()),
-                      'email_smtp_username': smtpUsername.text.trim(),
-                      if (smtpPassword.text.trim().isNotEmpty)
-                        'email_smtp_password': smtpPassword.text.trim(),
-                      'email_smtp_use_ssl': smtpUseSsl,
-                      'daily_checkin_generate_multiplier':
-                          double.tryParse(generateCheckinMultiplier.text),
-                      'daily_checkin_edit_multiplier':
-                          double.tryParse(editCheckinMultiplier.text),
-                      'provider_instructions': instructions.text.trim(),
-                      'allow_public_registration': allowRegistration,
-                      'protect_file_access': protectFileAccess,
-                      'notification_retention_days':
-                          int.tryParse(notificationRetentionDays.text.trim()),
-                      'notification_category_limit':
-                          int.tryParse(notificationCategoryLimit.text.trim()),
-                      'force_app_update_enabled': forceUpdateEnabled,
-                      'force_relogin_enabled': forceReloginEnabled,
-                    }..removeWhere(
-                        (key, value) =>
-                            category != null &&
-                            !_settingKeyBelongsToCategory(key, category),
-                      )),
+                onPressed: () => Navigator.pop(context,
+                    category == '邮件通道' ? mailPayload() : settingsPayload()),
                 child: const Text('保存'),
               ),
             ],
