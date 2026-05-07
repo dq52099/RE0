@@ -423,22 +423,28 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
       if (prompt.isEmpty) {
         throw const GatewayException('这条失败记录没有可重试的提示词。');
       }
-      final response = await ref.read(gatewayClientProvider).materialize(
-            prompt,
-            1,
-            item['size']?.toString().trim().isNotEmpty == true
-                ? item['size'].toString().trim()
-                : 'auto',
-            'auto',
-            'auto',
-            'png',
-          );
+      final id = item['id']?.toString() ?? '';
+      if (id.isEmpty) {
+        throw const GatewayException('这条失败记录缺少历史 ID，无法重试。');
+      }
+      final response =
+          await ref.read(gatewayClientProvider).retryHistoryGenerate(id);
       ref.read(energyProvider.notifier).state =
           _quotaSummaryFromResponse(response['quota_summary']);
       _updateRetentionIfPresent(response['history_retention_quota_summary']);
       if (!mounted) return;
-      await _hideHistoryItems([item], deletingKeys: {key});
-      await _refresh();
+      final updatedItem = response['history_item'];
+      if (updatedItem is Map) {
+        final next = Map<String, dynamic>.from(updatedItem);
+        setState(() {
+          final index = _items.indexWhere((entry) => _historyKey(entry) == key);
+          if (index >= 0) {
+            _items[index] = next;
+          }
+        });
+      } else {
+        await _refresh();
+      }
       final errors = (response['errors'] as List? ?? []).length;
       showCenterNotice(
         context,

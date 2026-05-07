@@ -132,14 +132,14 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       sections.add(const _AdminSection('invites', '邀请码'));
     }
     if (isAdmin ||
-        permissions.contains('feedback.view') ||
-        menus.contains('feedback')) {
-      sections.add(const _AdminSection('feedback', '用户反馈'));
-    }
-    if (isAdmin ||
         permissions.contains('announcement.view') ||
         menus.contains('announcements')) {
       sections.add(const _AdminSection('announcements', '公告福利'));
+    }
+    if (isAdmin ||
+        permissions.contains('feedback.view') ||
+        menus.contains('feedback')) {
+      sections.add(const _AdminSection('feedback', '用户反馈'));
     }
     if (isAdmin || permissions.contains('feedback.ai')) {
       sections.add(const _AdminSection('feedbackAi', '反馈 AI'));
@@ -694,13 +694,6 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 )
               : null,
           children: [
-            _infoCard(
-              title: '运行状态',
-              subtitle: '当前后端实际使用的配置',
-              lines: runtime.entries
-                  .map((item) => '${item.key}: ${_text(item.value)}')
-                  .toList(),
-            ),
             ...groups.entries.map(
               (entry) => _infoCard(
                 title: entry.key,
@@ -723,6 +716,13 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     )
                     .toList(),
               ),
+            ),
+            _infoCard(
+              title: '运行状态',
+              subtitle: '当前后端实际使用的配置',
+              lines: runtime.entries
+                  .map((item) => '${item.key}: ${_text(item.value)}')
+                  .toList(),
             ),
           ],
         );

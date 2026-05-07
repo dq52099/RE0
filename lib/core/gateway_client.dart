@@ -356,6 +356,13 @@ class GatewayClient {
     }, fallback: '删除图片记录失败。');
   }
 
+  Future<Map<String, dynamic>> retryHistoryGenerate(String id) async {
+    return _guard(() async {
+      final res = await _dio.post('/api/images/history/$id/retry');
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '重试生成失败。');
+  }
+
   Future<Map<String, dynamic>> createImageShareLink({
     String? historyId,
     String? relativeUrl,
