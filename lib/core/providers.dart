@@ -74,6 +74,8 @@ enum ImageTaskKind {
 
 final activeImageTaskProvider = StateProvider<ImageTaskKind?>((ref) => null);
 
+final selectedImageModeProvider = StateProvider<String?>((ref) => null);
+
 final imageCapabilitiesProvider =
     FutureProvider<ImageCapabilities>((ref) async {
   final client = ref.read(gatewayClientProvider);
@@ -103,37 +105,43 @@ class GenerateImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
     String quality,
     String background,
     String outputFormat,
+    String imageMode,
   ) async {
     _ensureTaskAvailable(ref, ImageTaskKind.generate);
     ref.read(activeImageTaskProvider.notifier).state = ImageTaskKind.generate;
     final previous = state.valueOrNull ?? const <Map<String, dynamic>>[];
-    state = const AsyncValue.loading();
+    state = const AsyncValue.data([]);
     try {
       final client = ref.read(gatewayClientProvider);
-      final res = await client.materialize(
-        runes,
-        count,
-        size,
-        quality,
-        background,
-        outputFormat,
-      );
-      ref.read(energyProvider.notifier).state =
-          _quotaSummary(res['quota_summary']);
-      ref.read(historyRetentionProvider.notifier).state =
-          _historyRetentionSummary(
-        res['history_retention_quota_summary'],
-        fallback: ref.read(historyRetentionProvider),
-      );
-      final items = _resultItems(res['data'] ?? res);
-      if (items.isEmpty) {
-        throw GatewayException(_imageFailureMessage(res, '图片生成失败。'));
+      final collected = <Map<String, dynamic>>[];
+      final errors = <dynamic>[];
+      for (var index = 0; index < count; index += 1) {
+        final res = await client.materialize(
+          runes,
+          1,
+          size,
+          quality,
+          background,
+          outputFormat,
+          clientBatchIndex: index + 1,
+          imageMode: imageMode,
+        );
+        _applyResponseSummaries(ref, res);
+        final items = _resultItems(res['data'] ?? res);
+        if (items.isNotEmpty) {
+          collected.addAll(items);
+          state = AsyncValue.data(List<Map<String, dynamic>>.from(collected));
+        }
+        errors.addAll(res['errors'] as List? ?? const []);
       }
-      state = AsyncValue.data(items);
+      if (collected.isEmpty) {
+        throw GatewayException(
+            errors.isNotEmpty ? errors.first.toString() : '图片生成失败。未返回可用图片。');
+      }
       return _partialSuccessMessage(
         actionLabel: '生图',
-        items: items,
-        errors: res['errors'],
+        items: collected,
+        errors: errors,
       );
     } catch (e, st) {
       state = previous.isEmpty
@@ -164,38 +172,44 @@ class EditImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
     String quality,
     String background,
     String outputFormat,
+    String imageMode,
   ) async {
     _ensureTaskAvailable(ref, ImageTaskKind.edit);
     ref.read(activeImageTaskProvider.notifier).state = ImageTaskKind.edit;
     final previous = state.valueOrNull ?? const <Map<String, dynamic>>[];
-    state = const AsyncValue.loading();
+    state = const AsyncValue.data([]);
     try {
       final client = ref.read(gatewayClientProvider);
-      final res = await client.recall(
-        runes,
-        imagePath,
-        count,
-        size,
-        quality,
-        background,
-        outputFormat,
-      );
-      ref.read(energyProvider.notifier).state =
-          _quotaSummary(res['quota_summary']);
-      ref.read(historyRetentionProvider.notifier).state =
-          _historyRetentionSummary(
-        res['history_retention_quota_summary'],
-        fallback: ref.read(historyRetentionProvider),
-      );
-      final items = _resultItems(res['data'] ?? res);
-      if (items.isEmpty) {
-        throw GatewayException(_imageFailureMessage(res, '图片修改失败。'));
+      final collected = <Map<String, dynamic>>[];
+      final errors = <dynamic>[];
+      for (var index = 0; index < count; index += 1) {
+        final res = await client.recall(
+          runes,
+          imagePath,
+          1,
+          size,
+          quality,
+          background,
+          outputFormat,
+          clientBatchIndex: index + 1,
+          imageMode: imageMode,
+        );
+        _applyResponseSummaries(ref, res);
+        final items = _resultItems(res['data'] ?? res);
+        if (items.isNotEmpty) {
+          collected.addAll(items);
+          state = AsyncValue.data(List<Map<String, dynamic>>.from(collected));
+        }
+        errors.addAll(res['errors'] as List? ?? const []);
       }
-      state = AsyncValue.data(items);
+      if (collected.isEmpty) {
+        throw GatewayException(
+            errors.isNotEmpty ? errors.first.toString() : '图片修改失败。未返回可用图片。');
+      }
       return _partialSuccessMessage(
         actionLabel: '改图',
-        items: items,
-        errors: res['errors'],
+        items: collected,
+        errors: errors,
       );
     } catch (e, st) {
       state = previous.isEmpty
@@ -212,6 +226,14 @@ class EditImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
   void clear() {
     state = const AsyncValue.data([]);
   }
+}
+
+void _applyResponseSummaries(Ref ref, Map<String, dynamic> res) {
+  ref.read(energyProvider.notifier).state = _quotaSummary(res['quota_summary']);
+  ref.read(historyRetentionProvider.notifier).state = _historyRetentionSummary(
+    res['history_retention_quota_summary'],
+    fallback: ref.read(historyRetentionProvider),
+  );
 }
 
 void _ensureTaskAvailable(Ref ref, ImageTaskKind nextTask) {
@@ -350,21 +372,6 @@ String _imageUrl(Map<String, dynamic> item) {
     if (nested.isNotEmpty) return nested;
   }
   return '';
-}
-
-String _imageFailureMessage(Map<String, dynamic> response, String fallback) {
-  final errors = (response['errors'] as List? ?? [])
-      .map((item) => item?.toString().trim() ?? '')
-      .where((item) => item.isNotEmpty)
-      .toList();
-  if (errors.isNotEmpty) {
-    return errors.first;
-  }
-  for (final key in ['detail', 'message', 'error']) {
-    final text = response[key]?.toString().trim() ?? '';
-    if (text.isNotEmpty) return text;
-  }
-  return '$fallback 未返回可用图片。';
 }
 
 String? _partialSuccessMessage({

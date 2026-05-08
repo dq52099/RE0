@@ -1402,7 +1402,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
         ),
       ),
       child: Text(
-        _qualityLabel(item),
+        _qualityModeLabel(item),
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
               fontWeight: FontWeight.w700,
             ),
@@ -1432,6 +1432,10 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   }
 
   String _qualityLabel(Map<String, dynamic> item) {
+    final explicit = item['quality_mode_label']?.toString().trim();
+    if (explicit != null && explicit.isNotEmpty) return explicit;
+    final actualTier = _actualSizeTierLabel(item);
+    if (actualTier != null) return actualTier;
     final size = item['size']?.toString().trim().toLowerCase();
     final sizeTier = _sizeTierLabel(size);
     if (sizeTier != null) return sizeTier;
@@ -1440,6 +1444,33 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     if (quality == '2k') return '2K';
     if (quality == '4k') return '4K';
     return 'Auto';
+  }
+
+  String? _actualSizeTierLabel(Map<String, dynamic> item) {
+    final width = int.tryParse(item['actual_width']?.toString() ?? '') ?? 0;
+    final height = int.tryParse(item['actual_height']?.toString() ?? '') ?? 0;
+    final longest = width > height ? width : height;
+    if (longest <= 0) return null;
+    if (longest >= 3840) return '4K';
+    if (longest >= 2048) return '2K';
+    return '1K';
+  }
+
+  String _qualityModeLabel(Map<String, dynamic> item) {
+    final tier = _qualityLabel(item);
+    final rawMode = item['image_mode_label']?.toString().trim();
+    final mode = rawMode != null && rawMode.isNotEmpty
+        ? rawMode
+        : _modeLabelFromModel(item['model_name']);
+    return '$tier · $mode';
+  }
+
+  String _modeLabelFromModel(dynamic value) {
+    final text = value?.toString() ?? '';
+    if (text.startsWith('VIP模式:')) return 'VIP';
+    if (text.startsWith('一般模式:')) return '一般';
+    if (text.contains('codex-gpt-image')) return '一般';
+    return 'VIP';
   }
 
   String? _sizeTierLabel(String? value) {

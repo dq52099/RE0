@@ -148,8 +148,9 @@ class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage>
       future: _imageFuture,
       builder: (context, snapshot) {
         if (snapshot.hasData) {
+          final imageFile = snapshot.data!;
           return Image.file(
-            snapshot.data!,
+            imageFile,
             width: widget.width,
             height: widget.height,
             fit: widget.fit,
@@ -157,7 +158,10 @@ class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage>
             cacheHeight: widget.cacheHeight,
             filterQuality: FilterQuality.low,
             gaplessPlayback: true,
-            errorBuilder: (_, __, ___) => _networkFallback(),
+            errorBuilder: (_, __, ___) {
+              _handleDecodeError(imageFile);
+              return _networkFallback();
+            },
           );
         }
 
@@ -228,6 +232,11 @@ class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage>
         ),
       ],
     );
+  }
+
+  void _handleDecodeError(File file) {
+    unawaited(FileImage(file).evict());
+    _scheduleRetry();
   }
 
   Widget _networkFallback() {

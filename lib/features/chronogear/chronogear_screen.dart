@@ -234,6 +234,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     final retention = ref.watch(historyRetentionProvider);
     final editRetention = retention['edit'] as Map? ?? {};
     final retentionText = _retentionText(editRetention);
+    final selectedMode = _selectedImageMode(capabilities);
     final materializerState = ref.watch(editImagesProvider);
     final activeTask = ref.watch(activeImageTaskProvider);
 
@@ -246,7 +247,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildManaStatus(brand, remain, retentionText),
+              _buildManaStatus(brand, remain, retentionText, capabilities),
               const SizedBox(height: 24),
               GestureDetector(
                 onTap: _pickImage,
@@ -420,7 +421,8 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: materializerState.isLoading || _imageFile == null
+                  onPressed: activeTask == ImageTaskKind.edit ||
+                          _imageFile == null
                       ? null
                       : () async {
                           final prompt = _spellController.text.trim();
@@ -454,6 +456,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                                   quality,
                                   background,
                                   outputFormat,
+                                  selectedMode,
                                 );
                             if (!mounted || notice == null) return;
                             showCenterNotice(context, notice);
@@ -464,7 +467,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                             );
                           }
                         },
-                  child: materializerState.isLoading
+                  child: activeTask == ImageTaskKind.edit
                       ? const CircularProgressIndicator(color: Colors.white)
                       : Text(brand.editButtonLabel,
                           style: const TextStyle(fontSize: 18)),
@@ -497,12 +500,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                               ),
                             ),
                           ),
-                          child: CachedGatewayImage(
-                            url: item['url']?.toString() ?? '',
-                            borderRadius: BorderRadius.circular(12),
-                            fit: BoxFit.cover,
-                            accentColor: brand.primaryColor,
-                          ),
+                          child: _resultImageCard(brand, item),
                         ),
                       );
                     }),
@@ -525,7 +523,9 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     AppBrand brand,
     String remain,
     String retentionText,
+    ImageCapabilities capabilities,
   ) {
+    final selectedMode = _selectedImageMode(capabilities);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -559,6 +559,8 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
             ],
           ),
           const SizedBox(height: 8),
+          _buildImageModeRow(brand, capabilities, selectedMode),
+          const SizedBox(height: 8),
           Text(
             utcMidnightLocalResetHint(),
             style: Theme.of(context).textTheme.bodySmall,
@@ -566,6 +568,108 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildImageModeRow(
+    AppBrand brand,
+    ImageCapabilities capabilities,
+    String selectedMode,
+  ) {
+    final canSwitch = capabilities.imageModes.canSwitch;
+    return Row(
+      children: [
+        Icon(Icons.route_outlined, size: 18, color: brand.primaryColor),
+        const SizedBox(width: 12),
+        Text(
+          '线路: ',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        if (canSwitch)
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'vip', label: Text('VIP')),
+              ButtonSegment(value: 'general', label: Text('一般')),
+            ],
+            selected: {selectedMode},
+            onSelectionChanged: (values) {
+              final next = values.first;
+              ref.read(selectedImageModeProvider.notifier).state = next;
+            },
+            style: ButtonStyle(
+              visualDensity: VisualDensity.compact,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              textStyle: WidgetStateProperty.all(
+                Theme.of(context).textTheme.labelMedium,
+              ),
+            ),
+          )
+        else
+          Text(
+            imageModeLabel(selectedMode),
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+      ],
+    );
+  }
+
+  String _selectedImageMode(ImageCapabilities capabilities) {
+    final selected = ref.watch(selectedImageModeProvider);
+    if (selected != null &&
+        capabilities.imageModes.allowed.contains(selected)) {
+      return selected;
+    }
+    return capabilities.imageModes.current;
+  }
+
+  Widget _resultImageCard(
+    AppBrand brand,
+    Map<String, dynamic> item,
+  ) {
+    final routeLabel = _routeLabel(item);
+    return Stack(
+      children: [
+        CachedGatewayImage(
+          url: item['url']?.toString() ?? '',
+          borderRadius: BorderRadius.circular(12),
+          fit: BoxFit.cover,
+          accentColor: brand.primaryColor,
+          cacheWidth: 900,
+        ),
+        if (routeLabel.isNotEmpty)
+          Positioned(
+            left: 10,
+            bottom: 10,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.58),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                child: Text(
+                  '线路 $routeLabel',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _routeLabel(Map<String, dynamic> item) {
+    final explicit = item['provider_slot_label']?.toString().trim();
+    if (explicit != null && explicit.isNotEmpty) return explicit;
+    final slot = item['provider_slot']?.toString().trim().toLowerCase();
+    if (slot == 'primary') return '主用';
+    if (slot == 'backup') return '备用';
+    if (slot == 'general') return '一般';
+    return '';
   }
 
   String _retentionText(Map quota) {

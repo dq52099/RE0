@@ -2362,8 +2362,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   ),
                   SwitchListTile(
                     value: registrationEmailRequired,
-                    onChanged: (value) => setDialogState(
-                        () => registrationEmailRequired = value),
+                    onChanged: (value) =>
+                        setDialogState(() => registrationEmailRequired = value),
                     title: const Text('注册需要邮箱验证'),
                     subtitle: const Text('开启后必须填写邮箱并通过验证码；关闭后邮箱可选'),
                   ),
@@ -3703,6 +3703,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               _healthLine('主用', _map(checks['primary'])),
               const SizedBox(height: 8),
               _healthLine('备用', _map(checks['backup'])),
+              const SizedBox(height: 8),
+              _healthLine('一般', _map(checks['general'])),
               const SizedBox(height: 12),
               Text(
                 '当前线路：${_providerSlotLabel(current)}\n建议线路：${_providerSlotLabel(recommended)}',
@@ -3748,13 +3750,18 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final textDetail = _healthReason(_text(item['text_detail'], fallback: '-'));
     final imageDetail =
         _healthReason(_text(item['image_detail'], fallback: '-'));
+    final textElapsed = _formatElapsedMs(item['text_elapsed_ms']);
+    final imageElapsed = _formatElapsedMs(item['image_elapsed_ms']);
+    final elapsed = _formatElapsedMs(item['elapsed_ms']);
     final detail = configured
         ? _healthReason(_text(item['detail'], fallback: '-'))
         : '线路未完整配置';
     final lines = <String>[
-      '状态：${ok ? '可用' : '不可用'}',
-      if (textOk != null) '文本：${textOk == true ? '可用' : '不可用（$textDetail）'}',
-      if (imageOk != null) '图片：${imageOk == true ? '可用' : '不可用（$imageDetail）'}',
+      '状态：${ok ? '可用' : '不可用'}${elapsed == null ? '' : ' · 总耗时 $elapsed'}',
+      if (textOk != null)
+        '文本：${textOk == true ? '可用' : '不可用（$textDetail）'}${textElapsed == null ? '' : ' · $textElapsed'}',
+      if (imageOk != null)
+        '图片：${imageOk == true ? '可用' : '不可用（$imageDetail）'}${imageElapsed == null ? '' : ' · $imageElapsed'}',
       if (textOk == null && imageOk == null) '原因：$detail',
     ];
     return Column(
@@ -3772,6 +3779,17 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 
   String _providerSlotLabel(String value) {
     return _providerSlotLabels[value] ?? value;
+  }
+
+  String? _formatElapsedMs(dynamic raw) {
+    final value = int.tryParse(raw?.toString() ?? '');
+    if (value == null || value <= 0) return null;
+    if (value < 1000) return '${value}ms';
+    final seconds = value / 1000;
+    if (seconds < 60) return '${seconds.toStringAsFixed(1)}秒';
+    final minutes = seconds ~/ 60;
+    final remain = (seconds % 60).round();
+    return '$minutes分${remain}秒';
   }
 
   String _healthReason(String value) {

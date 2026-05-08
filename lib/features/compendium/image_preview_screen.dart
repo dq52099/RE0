@@ -133,6 +133,8 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
                             fit: BoxFit.contain,
                             showDownload: false,
                             accentColor: brand.primaryColor,
+                            cacheWidth:
+                                _previewCacheWidth(constraints.maxWidth),
                           ),
                         ),
                       ),
@@ -150,6 +152,12 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
         ],
       ),
     );
+  }
+
+  int _previewCacheWidth(double viewportWidth) {
+    final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
+    final targetWidth = (viewportWidth * devicePixelRatio).round();
+    return targetWidth.clamp(1080, 2160).toInt();
   }
 
   Widget _bottomPanel({

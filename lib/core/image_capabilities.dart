@@ -67,11 +67,13 @@ class ImageCapabilities {
     required this.generate,
     required this.edit,
     required this.outputFormats,
+    required this.imageModes,
   });
 
   final ImageActionOptions generate;
   final ImageActionOptions edit;
   final List<ImageOption> outputFormats;
+  final ImageModeCapabilities imageModes;
 
   static ImageCapabilities fallback() {
     const sizes = [
@@ -125,6 +127,8 @@ class ImageCapabilities {
         ImageOption(value: 'jpeg', label: 'JPEG'),
         ImageOption(value: 'webp', label: 'WebP'),
       ],
+      imageModes:
+          ImageModeCapabilities(current: 'vip', allowed: ['vip', 'general']),
     );
   }
 
@@ -140,6 +144,7 @@ class ImageCapabilities {
         ImageOption(value: 'jpeg', label: 'JPEG'),
         ImageOption(value: 'webp', label: 'WebP'),
       ],
+      imageModes: ImageModeCapabilities.fromJson(_map(json['image_modes'])),
     );
   }
 
@@ -209,6 +214,36 @@ class ImageCapabilities {
     }
     return (label == null || label.trim().isEmpty) ? value : label;
   }
+}
+
+class ImageModeCapabilities {
+  const ImageModeCapabilities({
+    required this.current,
+    required this.allowed,
+  });
+
+  final String current;
+  final List<String> allowed;
+
+  bool get canSwitch => allowed.contains('vip') && allowed.contains('general');
+
+  factory ImageModeCapabilities.fromJson(Map<String, dynamic> json) {
+    final allowed = (json['allowed'] as List? ?? const [])
+        .map((item) => item.toString().trim().toLowerCase())
+        .where((item) => item == 'vip' || item == 'general')
+        .toSet()
+        .toList();
+    final current = json['current']?.toString().trim().toLowerCase();
+    final fallback = allowed.contains('vip') ? 'vip' : 'general';
+    return ImageModeCapabilities(
+      current: current == 'vip' || current == 'general' ? current! : fallback,
+      allowed: allowed.isEmpty ? [fallback] : allowed,
+    );
+  }
+}
+
+String imageModeLabel(String mode) {
+  return mode == 'general' ? '一般' : 'VIP';
 }
 
 List<ImageOption> filterSizeOptionsByResolution(

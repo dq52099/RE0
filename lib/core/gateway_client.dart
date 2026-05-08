@@ -205,8 +205,10 @@ class GatewayClient {
     String size,
     String quality,
     String background,
-    String outputFormat,
-  ) async {
+    String outputFormat, {
+    int? clientBatchIndex,
+    String? imageMode,
+  }) async {
     try {
       final res = await _dio.post(
         '/api/images/generate',
@@ -218,6 +220,9 @@ class GatewayClient {
           'background': background,
           'output_format': outputFormat,
           'response_format': 'url',
+          if (clientBatchIndex != null) 'client_batch_index': clientBatchIndex,
+          if (imageMode != null && imageMode.isNotEmpty)
+            'image_mode': imageMode,
         },
         options: Options(
           receiveTimeout: _imageRequestTimeout,
@@ -241,8 +246,10 @@ class GatewayClient {
     String size,
     String quality,
     String background,
-    String outputFormat,
-  ) async {
+    String outputFormat, {
+    int? clientBatchIndex,
+    String? imageMode,
+  }) async {
     try {
       final formData = FormData.fromMap({
         'prompt': runes,
@@ -252,6 +259,8 @@ class GatewayClient {
         'background': background,
         'output_format': outputFormat,
         'response_format': 'url',
+        if (clientBatchIndex != null) 'client_batch_index': clientBatchIndex,
+        if (imageMode != null && imageMode.isNotEmpty) 'image_mode': imageMode,
         'image': await MultipartFile.fromFile(imagePath),
       });
       final res = await _dio.post(
