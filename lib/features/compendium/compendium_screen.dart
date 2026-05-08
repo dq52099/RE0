@@ -9,6 +9,7 @@ import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
 import '../../core/cached_gateway_image.dart';
 import '../../core/compact_save_notice.dart';
+import '../../core/image_capabilities.dart';
 import '../../core/local_time_format.dart';
 import '../../core/providers.dart';
 import 'image_preview_screen.dart';
@@ -781,71 +782,108 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   }
 
   Widget _pageControls() {
-    final start = _total == 0 ? 0 : ((_page - 1) * _pageSize) + 1;
-    final end = (_page * _pageSize) > _total ? _total : _page * _pageSize;
+    final textStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        );
+    final pageText = _total == 0 ? '第 0/0 页' : '第 $_page/$_totalPages 页';
+    final totalText = '共 $_total 张';
     return Column(
       children: [
         if (_isLoading)
           const Padding(
-            padding: EdgeInsets.only(bottom: 10),
+            padding: EdgeInsets.only(bottom: 8),
             child: SizedBox(
-              width: 22,
-              height: 22,
+              width: 18,
+              height: 18,
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
           ),
-        Text(
-          _total == 0
-              ? '暂无记录'
-              : '第 $_page / $_totalPages 页 · $start-$end / $_total · 每页 $_pageSize 张',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: 8),
         Wrap(
           alignment: WrapAlignment.center,
           crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 8,
-          runSpacing: 8,
+          spacing: 6,
+          runSpacing: 6,
           children: [
-            Text('每页', style: Theme.of(context).textTheme.bodySmall),
-            DropdownButton<int>(
-              value: _pageSize,
-              onChanged: _isLoading
-                  ? null
-                  : (value) {
-                      if (value != null) unawaited(_setPageSize(value));
-                    },
-              items: _historyPageSizeOptions
-                  .map(
-                    (value) => DropdownMenuItem<int>(
-                      value: value,
-                      child: Text('$value 张'),
-                    ),
-                  )
-                  .toList(),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            OutlinedButton.icon(
+            _pageButton(
+              icon: Icons.chevron_left,
+              label: '上一页',
+              filled: false,
               onPressed:
                   _isLoading || _page <= 1 ? null : () => _goToPage(_page - 1),
-              icon: const Icon(Icons.chevron_left),
-              label: const Text('上一页'),
             ),
-            const SizedBox(width: 12),
-            FilledButton.icon(
+            Text(pageText, style: textStyle),
+            DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: _pageSize,
+                isDense: true,
+                iconSize: 16,
+                style: textStyle,
+                onChanged: _isLoading
+                    ? null
+                    : (value) {
+                        if (value != null) unawaited(_setPageSize(value));
+                      },
+                items: _historyPageSizeOptions
+                    .map(
+                      (value) => DropdownMenuItem<int>(
+                        value: value,
+                        child: Text('每页 $value 张'),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+            Text(totalText, style: textStyle),
+            _pageButton(
+              icon: Icons.chevron_right,
+              label: '下一页',
+              filled: true,
               onPressed:
                   _isLoading || !_hasMore ? null : () => _goToPage(_page + 1),
-              icon: const Icon(Icons.chevron_right),
-              label: const Text('下一页'),
             ),
           ],
         ),
       ],
+    );
+  }
+
+  Widget _pageButton({
+    required IconData icon,
+    required String label,
+    required bool filled,
+    required VoidCallback? onPressed,
+  }) {
+    final child = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14),
+        const SizedBox(width: 2),
+        Text(label),
+      ],
+    );
+    final style = ButtonStyle(
+      visualDensity: VisualDensity.compact,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      padding: WidgetStateProperty.all(
+        const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      ),
+      textStyle: WidgetStateProperty.all(
+        Theme.of(context).textTheme.labelSmall?.copyWith(fontSize: 11),
+      ),
+      minimumSize: WidgetStateProperty.all(const Size(0, 28)),
+    );
+    if (filled) {
+      return FilledButton(
+        onPressed: onPressed,
+        style: style,
+        child: child,
+      );
+    }
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: style,
+      child: child,
     );
   }
 
@@ -1389,23 +1427,31 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   }
 
   Widget _qualityPill(Map<String, dynamic> item) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: Theme.of(context)
-              .colorScheme
-              .outlineVariant
-              .withValues(alpha: 0.7),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 88),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: Theme.of(context)
+                .colorScheme
+                .outlineVariant
+                .withValues(alpha: 0.7),
+          ),
         ),
-      ),
-      child: Text(
-        _qualityModeLabel(item),
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+        child: Text(
+          _qualityModeLabel(item),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          softWrap: false,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+              ),
+        ),
       ),
     );
   }
@@ -1458,19 +1504,8 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
 
   String _qualityModeLabel(Map<String, dynamic> item) {
     final tier = _qualityLabel(item);
-    final rawMode = item['image_mode_label']?.toString().trim();
-    final mode = rawMode != null && rawMode.isNotEmpty
-        ? rawMode
-        : _modeLabelFromModel(item['model_name']);
+    final mode = imageModeLabelFromItem(item);
     return '$tier · $mode';
-  }
-
-  String _modeLabelFromModel(dynamic value) {
-    final text = value?.toString() ?? '';
-    if (text.startsWith('VIP模式:')) return 'VIP';
-    if (text.startsWith('一般模式:')) return '一般';
-    if (text.contains('codex-gpt-image')) return '一般';
-    return 'VIP';
   }
 
   String? _sizeTierLabel(String? value) {

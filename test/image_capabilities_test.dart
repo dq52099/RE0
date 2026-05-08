@@ -41,4 +41,16 @@ void main() {
       'auto',
     );
   });
+
+  test('reads VIP mode from explicit item fields before model fallback', () {
+    expect(
+      imageModeLabelFromItem({
+        'image_mode': 'vip',
+        'image_mode_label': 'VIP',
+        'provider_slot_label': '备用',
+        'model_name': '一般模式:codex-gpt-image-2',
+      }),
+      'VIP',
+    );
+  });
 }

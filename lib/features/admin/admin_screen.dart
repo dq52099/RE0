@@ -2469,7 +2469,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     controller: generalProviderImageModel,
                     decoration: const InputDecoration(
                       labelText: '一般模式图片模型',
-                      helperText: '用于普通模式 /v1/images 生图和改图',
+                      helperText: '用于一般模式 /v1/images 生图和改图',
                     ),
                   ),
                   const SizedBox(height: 18),

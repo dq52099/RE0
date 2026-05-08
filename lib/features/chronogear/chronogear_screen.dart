@@ -153,6 +153,135 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     });
   }
 
+  Future<void> _recallWithCandidate(String candidate) async {
+    if (_imageFile == null) {
+      showCenterNotice(context, '请先选择需要改图的图片');
+      return;
+    }
+    final prompt = candidate.trim();
+    if (prompt.isEmpty) {
+      showCenterNotice(context, '当前推荐词为空');
+      return;
+    }
+    final capabilities = ref.read(imageCapabilitiesProvider).valueOrNull ??
+        ImageCapabilities.fallback();
+    final options = capabilities.edit;
+    final size = resolveSizeForResolutionAndAspect(
+      options.sizes,
+      _resolutionTier,
+      _aspectRatio,
+      _defaultAspectRatioForDevice(context),
+    );
+    final quality =
+        _safeValue(_quality, options.qualities, options.defaultQuality);
+    final background =
+        _safeValue(_background, options.backgrounds, options.defaultBackground);
+    final outputFormat = _safeValue(
+      _outputFormat,
+      capabilities.outputFormats,
+      capabilities.outputFormats.first.value,
+    );
+    final selectedMode = _selectedImageMode(capabilities);
+    final retention = ref.read(historyRetentionProvider);
+    final editRetention = retention['edit'] as Map? ?? {};
+    final retentionMessage = _retentionLimitMessage(editRetention, 1);
+    if (retentionMessage != null) {
+      showCenterNotice(context, retentionMessage);
+      return;
+    }
+    if (ref.read(activeImageTaskProvider) == ImageTaskKind.generate) {
+      showCenterNotice(context, '生图任务进行中，请稍后再试');
+      return;
+    }
+    _dismissPromptAssistFocus();
+    setState(() => _lastSubmittedPrompt = prompt);
+    try {
+      final notice = await ref.read(editImagesProvider.notifier).recall(
+            prompt,
+            _imageFile!.path,
+            1,
+            size,
+            quality,
+            background,
+            outputFormat,
+            selectedMode,
+          );
+      if (!mounted || notice == null) return;
+      showCenterNotice(context, notice);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(error))),
+      );
+    }
+  }
+
+  Future<void> _recallWithAllCandidates() async {
+    if (_imageFile == null) {
+      showCenterNotice(context, '请先选择需要改图的图片');
+      return;
+    }
+    final prompts = _assistCandidates
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (prompts.isEmpty) {
+      showCenterNotice(context, '当前没有可用推荐词');
+      return;
+    }
+    final capabilities = ref.read(imageCapabilitiesProvider).valueOrNull ??
+        ImageCapabilities.fallback();
+    final options = capabilities.edit;
+    final size = resolveSizeForResolutionAndAspect(
+      options.sizes,
+      _resolutionTier,
+      _aspectRatio,
+      _defaultAspectRatioForDevice(context),
+    );
+    final quality =
+        _safeValue(_quality, options.qualities, options.defaultQuality);
+    final background =
+        _safeValue(_background, options.backgrounds, options.defaultBackground);
+    final outputFormat = _safeValue(
+      _outputFormat,
+      capabilities.outputFormats,
+      capabilities.outputFormats.first.value,
+    );
+    final selectedMode = _selectedImageMode(capabilities);
+    final retention = ref.read(historyRetentionProvider);
+    final editRetention = retention['edit'] as Map? ?? {};
+    final retentionMessage =
+        _retentionLimitMessage(editRetention, prompts.length);
+    if (retentionMessage != null) {
+      showCenterNotice(context, retentionMessage);
+      return;
+    }
+    if (ref.read(activeImageTaskProvider) == ImageTaskKind.generate) {
+      showCenterNotice(context, '生图任务进行中，请稍后再试');
+      return;
+    }
+    _dismissPromptAssistFocus();
+    setState(() => _lastSubmittedPrompt = prompts.join('\n---\n'));
+    try {
+      final notice = await ref.read(editImagesProvider.notifier).recallPrompts(
+            prompts,
+            _imageFile!.path,
+            size,
+            quality,
+            background,
+            outputFormat,
+            selectedMode,
+          );
+      if (!mounted || notice == null) return;
+      showCenterNotice(context, notice);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(error))),
+      );
+    }
+  }
+
   Future<void> _openCandidatePrompt(String candidate) async {
     _dismissPromptAssistFocus();
     final brand = ref.read(brandProvider);
@@ -581,7 +710,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
         Icon(Icons.route_outlined, size: 18, color: brand.primaryColor),
         const SizedBox(width: 12),
         Text(
-          '线路: ',
+          '模式: ',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
         if (canSwitch)
@@ -625,7 +754,8 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     AppBrand brand,
     Map<String, dynamic> item,
   ) {
-    final routeLabel = _routeLabel(item);
+    final modeLabel = imageModeLabelFromItem(item);
+    final channelLabel = _channelLabel(item);
     return Stack(
       children: [
         CachedGatewayImage(
@@ -635,34 +765,39 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
           accentColor: brand.primaryColor,
           cacheWidth: 900,
         ),
-        if (routeLabel.isNotEmpty)
-          Positioned(
-            left: 10,
-            bottom: 10,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.58),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                child: Text(
-                  '线路 $routeLabel',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-          ),
+        Positioned(
+          left: 10,
+          bottom: 10,
+          child: _resultRouteBadge(modeLabel, channelLabel),
+        ),
       ],
     );
   }
 
-  String _routeLabel(Map<String, dynamic> item) {
+  Widget _resultRouteBadge(String modeLabel, String channelLabel) {
+    final text = channelLabel.isEmpty
+        ? '模式 $modeLabel'
+        : '模式 $modeLabel · 通道 $channelLabel';
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.58),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        child: Text(
+          text,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _channelLabel(Map<String, dynamic> item) {
     final explicit = item['provider_slot_label']?.toString().trim();
     if (explicit != null && explicit.isNotEmpty) return explicit;
     final slot = item['provider_slot']?.toString().trim().toLowerCase();
@@ -813,43 +948,76 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     );
   }
 
-  Widget _candidateText(String candidate) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: () => _openCandidatePrompt(candidate),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _candidateRow(AppBrand brand, String candidate, int index) {
+    return Container(
+      margin: EdgeInsets.only(top: index == 0 ? 0 : 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: brand.primaryColor.withValues(alpha: 0.12),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Expanded(
-                child: Text(
-                  candidate,
-                  maxLines: 4,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(height: 1.35),
+              Text(
+                '推荐 ${index + 1}',
+                style: TextStyle(
+                  color: brand.primaryColor,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(width: 8),
-              Icon(
-                Icons.open_in_full,
-                size: 18,
-                color: Theme.of(context).colorScheme.primary,
+              const Spacer(),
+              IconButton(
+                tooltip: '查看完整推荐词',
+                constraints: const BoxConstraints.tightFor(
+                  width: 34,
+                  height: 34,
+                ),
+                padding: EdgeInsets.zero,
+                onPressed: () => _openCandidatePrompt(candidate),
+                icon: const Icon(Icons.open_in_full, size: 18),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 4),
+          Text(
+            candidate,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 13, height: 1.35),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () {
+                  _setAssistCandidateIndex(index);
+                  _replaceWithCurrentCandidate();
+                },
+                icon: const Icon(Icons.input_outlined, size: 18),
+                label: const Text('填入'),
+              ),
+              FilledButton.icon(
+                onPressed: () => _recallWithCandidate(candidate),
+                icon: const Icon(Icons.brush_outlined, size: 18),
+                label: const Text('用这条改图'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
   Widget _candidateSwitcher(AppBrand brand) {
     if (_assistCandidates.isEmpty) return const SizedBox.shrink();
-    final index =
-        _assistCandidateIndex.clamp(0, _assistCandidates.length - 1).toInt();
-    final candidate = _assistCandidates[index];
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 12),
@@ -867,35 +1035,28 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  '候选 ${index + 1}/${_assistCandidates.length}',
+                  'AI 推荐词 · ${_assistCandidates.length} 条',
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
-              IconButton(
-                tooltip: '上一个',
-                onPressed: index <= 0
-                    ? null
-                    : () => _setAssistCandidateIndex(index - 1),
-                icon: const Icon(Icons.chevron_left),
-              ),
-              IconButton(
-                tooltip: '下一个',
-                onPressed: index >= _assistCandidates.length - 1
-                    ? null
-                    : () => _setAssistCandidateIndex(index + 1),
-                icon: const Icon(Icons.chevron_right),
-              ),
             ],
           ),
-          const SizedBox(height: 6),
-          _candidateText(candidate),
           const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerRight,
-            child: OutlinedButton.icon(
-              onPressed: _replaceWithCurrentCandidate,
-              icon: const Icon(Icons.input_outlined),
-              label: const Text('使用/替换当前咒文'),
+          ...List.generate(
+            _assistCandidates.length,
+            (candidateIndex) => _candidateRow(
+              brand,
+              _assistCandidates[candidateIndex],
+              candidateIndex,
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _recallWithAllCandidates,
+              icon: const Icon(Icons.auto_awesome_motion_outlined),
+              label: Text('按 ${_assistCandidates.length} 条推荐词分别改图'),
             ),
           ),
         ],

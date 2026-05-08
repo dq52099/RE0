@@ -246,6 +246,26 @@ String imageModeLabel(String mode) {
   return mode == 'general' ? '一般' : 'VIP';
 }
 
+String imageModeFromItem(Map<String, dynamic> item) {
+  final raw = item['image_mode']?.toString().trim().toLowerCase();
+  if (raw == 'vip' || raw == 'general') return raw!;
+  final label = item['image_mode_label']?.toString().trim().toLowerCase();
+  if (label == 'vip') return 'vip';
+  if (label == '一般' || label == 'normal' || label == 'general') {
+    return 'general';
+  }
+  final model = item['model_name']?.toString() ?? '';
+  if (model.startsWith('一般模式:')) return 'general';
+  if (model.startsWith('VIP模式:')) return 'vip';
+  return model.contains('codex-gpt-image') ? 'general' : 'vip';
+}
+
+String imageModeLabelFromItem(Map<String, dynamic> item) {
+  final explicit = item['image_mode_label']?.toString().trim();
+  if (explicit == 'VIP' || explicit == '一般') return explicit!;
+  return imageModeLabel(imageModeFromItem(item));
+}
+
 List<ImageOption> filterSizeOptionsByResolution(
   List<ImageOption> sizes,
   String tier,

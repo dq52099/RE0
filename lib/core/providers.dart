@@ -116,8 +116,9 @@ class GenerateImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
       final collected = <Map<String, dynamic>>[];
       final errors = <dynamic>[];
       for (var index = 0; index < count; index += 1) {
+        final prompt = _promptForBatchIndex(runes, index);
         final res = await client.materialize(
-          runes,
+          prompt,
           1,
           size,
           quality,
@@ -155,9 +156,84 @@ class GenerateImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
     }
   }
 
+  Future<String?> materializePrompts(
+    List<String> prompts,
+    String size,
+    String quality,
+    String background,
+    String outputFormat,
+    String imageMode,
+  ) async {
+    final cleanPrompts = prompts
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (cleanPrompts.isEmpty) {
+      throw GatewayException('没有可用推荐词。');
+    }
+    _ensureTaskAvailable(ref, ImageTaskKind.generate);
+    ref.read(activeImageTaskProvider.notifier).state = ImageTaskKind.generate;
+    final previous = state.valueOrNull ?? const <Map<String, dynamic>>[];
+    state = const AsyncValue.data([]);
+    try {
+      final client = ref.read(gatewayClientProvider);
+      final collected = <Map<String, dynamic>>[];
+      final errors = <dynamic>[];
+      for (var index = 0; index < cleanPrompts.length; index += 1) {
+        final res = await client.materialize(
+          cleanPrompts[index],
+          1,
+          size,
+          quality,
+          background,
+          outputFormat,
+          clientBatchIndex: index + 1,
+          imageMode: imageMode,
+        );
+        _applyResponseSummaries(ref, res);
+        final items = _resultItems(res['data'] ?? res);
+        if (items.isNotEmpty) {
+          collected.addAll(items);
+          state = AsyncValue.data(List<Map<String, dynamic>>.from(collected));
+        }
+        errors.addAll(res['errors'] as List? ?? const []);
+      }
+      if (collected.isEmpty) {
+        throw GatewayException(
+            errors.isNotEmpty ? errors.first.toString() : '推荐词生图失败。未返回可用图片。');
+      }
+      return _partialSuccessMessage(
+        actionLabel: '推荐词生图',
+        items: collected,
+        errors: errors,
+      );
+    } catch (e, st) {
+      state = previous.isEmpty
+          ? AsyncValue.error(e, st)
+          : AsyncValue.data(previous);
+      return previous.isEmpty ? null : friendlyError(e, fallback: '推荐词生图失败。');
+    } finally {
+      if (ref.read(activeImageTaskProvider) == ImageTaskKind.generate) {
+        ref.read(activeImageTaskProvider.notifier).state = null;
+      }
+    }
+  }
+
   void clear() {
     state = const AsyncValue.data([]);
   }
+}
+
+String _promptForBatchIndex(String prompt, int index) {
+  final parts = prompt
+      .split(RegExp(r'\n\s*---+\s*\n'))
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toList(growable: false);
+  if (parts.length > 1 && index < parts.length) {
+    return parts[index];
+  }
+  return prompt;
 }
 
 class EditImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
@@ -183,8 +259,9 @@ class EditImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
       final collected = <Map<String, dynamic>>[];
       final errors = <dynamic>[];
       for (var index = 0; index < count; index += 1) {
+        final prompt = _promptForBatchIndex(runes, index);
         final res = await client.recall(
-          runes,
+          prompt,
           imagePath,
           1,
           size,
@@ -216,6 +293,71 @@ class EditImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
           ? AsyncValue.error(e, st)
           : AsyncValue.data(previous);
       return previous.isEmpty ? null : friendlyError(e, fallback: '图片修改失败。');
+    } finally {
+      if (ref.read(activeImageTaskProvider) == ImageTaskKind.edit) {
+        ref.read(activeImageTaskProvider.notifier).state = null;
+      }
+    }
+  }
+
+  Future<String?> recallPrompts(
+    List<String> prompts,
+    String imagePath,
+    String size,
+    String quality,
+    String background,
+    String outputFormat,
+    String imageMode,
+  ) async {
+    final cleanPrompts = prompts
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (cleanPrompts.isEmpty) {
+      throw GatewayException('没有可用推荐词。');
+    }
+    _ensureTaskAvailable(ref, ImageTaskKind.edit);
+    ref.read(activeImageTaskProvider.notifier).state = ImageTaskKind.edit;
+    final previous = state.valueOrNull ?? const <Map<String, dynamic>>[];
+    state = const AsyncValue.data([]);
+    try {
+      final client = ref.read(gatewayClientProvider);
+      final collected = <Map<String, dynamic>>[];
+      final errors = <dynamic>[];
+      for (var index = 0; index < cleanPrompts.length; index += 1) {
+        final res = await client.recall(
+          cleanPrompts[index],
+          imagePath,
+          1,
+          size,
+          quality,
+          background,
+          outputFormat,
+          clientBatchIndex: index + 1,
+          imageMode: imageMode,
+        );
+        _applyResponseSummaries(ref, res);
+        final items = _resultItems(res['data'] ?? res);
+        if (items.isNotEmpty) {
+          collected.addAll(items);
+          state = AsyncValue.data(List<Map<String, dynamic>>.from(collected));
+        }
+        errors.addAll(res['errors'] as List? ?? const []);
+      }
+      if (collected.isEmpty) {
+        throw GatewayException(
+            errors.isNotEmpty ? errors.first.toString() : '推荐词改图失败。未返回可用图片。');
+      }
+      return _partialSuccessMessage(
+        actionLabel: '推荐词改图',
+        items: collected,
+        errors: errors,
+      );
+    } catch (e, st) {
+      state = previous.isEmpty
+          ? AsyncValue.error(e, st)
+          : AsyncValue.data(previous);
+      return previous.isEmpty ? null : friendlyError(e, fallback: '推荐词改图失败。');
     } finally {
       if (ref.read(activeImageTaskProvider) == ImageTaskKind.edit) {
         ref.read(activeImageTaskProvider.notifier).state = null;

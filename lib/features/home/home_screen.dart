@@ -25,6 +25,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final brand = ref.watch(brandProvider);
     ref.listen<Map<String, dynamic>?>(authStateProvider, (previous, next) {
       if (next != null) {
+        final previousMode = previous?['image_mode']?.toString();
+        final nextMode = next['image_mode']?.toString();
+        if (previous == null || previousMode != nextMode) {
+          ref.read(selectedImageModeProvider.notifier).state = null;
+        }
         ref.read(historyRetentionProvider.notifier).state =
             historyRetentionSummaryFromUser(
           next,
