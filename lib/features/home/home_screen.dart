@@ -27,7 +27,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (next != null) {
         final previousMode = previous?['image_mode']?.toString();
         final nextMode = next['image_mode']?.toString();
-        if (previous == null || previousMode != nextMode) {
+        final previousEffectiveMode =
+            previous?['effective_image_mode']?.toString();
+        final nextEffectiveMode = next['effective_image_mode']?.toString();
+        if (previous == null ||
+            previousMode != nextMode ||
+            previousEffectiveMode != nextEffectiveMode) {
           ref.read(selectedImageModeProvider.notifier).state = null;
           ref.read(selectedImageModeBaseProvider.notifier).state = null;
           ref.invalidate(imageCapabilitiesProvider);

@@ -246,14 +246,28 @@ String imageModeLabel(String mode) {
   return mode == 'general' ? '一般' : 'VIP';
 }
 
-String imageModeFromItem(Map<String, dynamic> item) {
-  final raw = item['image_mode']?.toString().trim().toLowerCase();
-  if (raw == 'vip' || raw == 'general') return raw!;
-  final label = item['image_mode_label']?.toString().trim().toLowerCase();
-  if (label == 'vip') return 'vip';
-  if (label == '一般' || label == 'normal' || label == 'general') {
+String? normalizeImageMode(dynamic value) {
+  final text = value?.toString().trim().toLowerCase();
+  if (text == null || text.isEmpty) return null;
+  if (text == 'vip' || text == 'vip模式') return 'vip';
+  if (text == 'general' || text == 'normal' || text == '一般' || text == '一般模式') {
     return 'general';
   }
+  return null;
+}
+
+String? imageModeFromUser(Map<String, dynamic>? user) {
+  if (user == null) return null;
+  return normalizeImageMode(user['effective_image_mode']) ??
+      normalizeImageMode(user['image_mode_override']) ??
+      normalizeImageMode(user['image_mode']);
+}
+
+String imageModeFromItem(Map<String, dynamic> item) {
+  final raw = normalizeImageMode(item['image_mode']);
+  if (raw != null) return raw;
+  final label = normalizeImageMode(item['image_mode_label']);
+  if (label != null) return label;
   final model = item['model_name']?.toString() ?? '';
   if (model.startsWith('一般模式:')) return 'general';
   if (model.startsWith('VIP模式:')) return 'vip';

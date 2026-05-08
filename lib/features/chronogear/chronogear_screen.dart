@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -154,136 +153,6 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     });
   }
 
-  Future<void> _recallWithCandidate(String candidate) async {
-    if (_imageFile == null) {
-      showCenterNotice(context, '请先选择需要改图的图片');
-      return;
-    }
-    final prompt = candidate.trim();
-    if (prompt.isEmpty) {
-      showCenterNotice(context, '当前推荐词为空');
-      return;
-    }
-    final capabilities = ref.read(imageCapabilitiesProvider).valueOrNull ??
-        ImageCapabilities.fallback();
-    final options = capabilities.edit;
-    final size = resolveSizeForResolutionAndAspect(
-      options.sizes,
-      _resolutionTier,
-      _aspectRatio,
-      _defaultAspectRatioForDevice(context),
-    );
-    final quality =
-        _safeValue(_quality, options.qualities, options.defaultQuality);
-    final background =
-        _safeValue(_background, options.backgrounds, options.defaultBackground);
-    final outputFormat = _safeValue(
-      _outputFormat,
-      capabilities.outputFormats,
-      capabilities.outputFormats.first.value,
-    );
-    final selectedMode = _selectedImageMode(capabilities);
-    final retention = ref.read(historyRetentionProvider);
-    final editRetention = retention['edit'] as Map? ?? {};
-    final retentionMessage = _retentionLimitMessage(editRetention, 1);
-    if (retentionMessage != null) {
-      showCenterNotice(context, retentionMessage);
-      return;
-    }
-    if (ref.read(activeImageTaskProvider) == ImageTaskKind.generate) {
-      showCenterNotice(context, '生图任务进行中，请稍后再试');
-      return;
-    }
-    _dismissPromptAssistFocus();
-    setState(() => _lastSubmittedPrompt = prompt);
-    try {
-      final notice = await ref.read(editImagesProvider.notifier).recall(
-            prompt,
-            _imageFile!.path,
-            1,
-            size,
-            quality,
-            background,
-            outputFormat,
-            selectedMode,
-          );
-      if (!mounted || notice == null) return;
-      showCenterNotice(context, notice);
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyError(error))),
-      );
-    }
-  }
-
-  Future<void> _recallWithAllCandidates() async {
-    if (_imageFile == null) {
-      showCenterNotice(context, '请先选择需要改图的图片');
-      return;
-    }
-    final prompts = _assistCandidates
-        .map((item) => item.trim())
-        .where((item) => item.isNotEmpty)
-        .toList(growable: false);
-    if (prompts.isEmpty) {
-      showCenterNotice(context, '当前没有可用推荐词');
-      return;
-    }
-    final capabilities = ref.read(imageCapabilitiesProvider).valueOrNull ??
-        ImageCapabilities.fallback();
-    final options = capabilities.edit;
-    final size = resolveSizeForResolutionAndAspect(
-      options.sizes,
-      _resolutionTier,
-      _aspectRatio,
-      _defaultAspectRatioForDevice(context),
-    );
-    final quality =
-        _safeValue(_quality, options.qualities, options.defaultQuality);
-    final background =
-        _safeValue(_background, options.backgrounds, options.defaultBackground);
-    final outputFormat = _safeValue(
-      _outputFormat,
-      capabilities.outputFormats,
-      capabilities.outputFormats.first.value,
-    );
-    final selectedMode = _selectedImageMode(capabilities);
-    final retention = ref.read(historyRetentionProvider);
-    final editRetention = retention['edit'] as Map? ?? {};
-    final retentionMessage =
-        _retentionLimitMessage(editRetention, prompts.length);
-    if (retentionMessage != null) {
-      showCenterNotice(context, retentionMessage);
-      return;
-    }
-    if (ref.read(activeImageTaskProvider) == ImageTaskKind.generate) {
-      showCenterNotice(context, '生图任务进行中，请稍后再试');
-      return;
-    }
-    _dismissPromptAssistFocus();
-    setState(() => _lastSubmittedPrompt = prompts.join('\n---\n'));
-    showCenterNotice(context, '将按 ${prompts.length} 条推荐词逐条改图，出图后会陆续显示。');
-    try {
-      final notice = await ref.read(editImagesProvider.notifier).recallPrompts(
-            prompts,
-            _imageFile!.path,
-            size,
-            quality,
-            background,
-            outputFormat,
-            selectedMode,
-          );
-      if (!mounted || notice == null) return;
-      showCenterNotice(context, notice);
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyError(error))),
-      );
-    }
-  }
-
   Future<void> _openAllCandidatesDialog(AppBrand brand) async {
     if (_assistCandidates.isEmpty) return;
     _dismissPromptAssistFocus();
@@ -337,15 +206,6 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                           icon: const Icon(Icons.input_outlined, size: 18),
                           label: const Text('填入'),
                         ),
-                        FilledButton.icon(
-                          onPressed: () {
-                            Navigator.pop(context);
-                            _setAssistCandidateIndex(index);
-                            unawaited(_recallWithCandidate(candidate));
-                          },
-                          icon: const Icon(Icons.brush_outlined, size: 18),
-                          label: const Text('改图'),
-                        ),
                       ],
                     ),
                   ],
@@ -358,14 +218,6 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('关闭'),
-          ),
-          FilledButton.icon(
-            onPressed: () {
-              Navigator.pop(context);
-              unawaited(_recallWithAllCandidates());
-            },
-            icon: const Icon(Icons.auto_awesome_motion_outlined),
-            label: Text('按 ${_assistCandidates.length} 条逐条改图'),
           ),
         ],
       ),
@@ -837,6 +689,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
   String _selectedImageMode(ImageCapabilities capabilities) {
     final selected = ref.watch(selectedImageModeProvider);
     final selectedBase = ref.watch(selectedImageModeBaseProvider);
+    final userMode = imageModeFromUser(ref.watch(authStateProvider));
     if (selectedBase != null &&
         selectedBase != capabilities.imageModes.current) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -844,13 +697,14 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
         ref.read(selectedImageModeProvider.notifier).state = null;
         ref.read(selectedImageModeBaseProvider.notifier).state = null;
       });
-      return capabilities.imageModes.current;
+      return userMode ?? capabilities.imageModes.current;
     }
     if (selected != null &&
-        selectedBase == capabilities.imageModes.current &&
+        selectedBase != null &&
         capabilities.imageModes.allowed.contains(selected)) {
       return selected;
     }
+    if (userMode != null) return userMode;
     return capabilities.imageModes.current;
   }
 
@@ -1114,20 +968,6 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                 onPressed: () => _openAllCandidatesDialog(brand),
                 child: const Text('查看全部'),
               ),
-              IconButton(
-                tooltip: '上一个',
-                onPressed: index <= 0
-                    ? null
-                    : () => _setAssistCandidateIndex(index - 1),
-                icon: const Icon(Icons.chevron_left),
-              ),
-              IconButton(
-                tooltip: '下一个',
-                onPressed: index >= _assistCandidates.length - 1
-                    ? null
-                    : () => _setAssistCandidateIndex(index + 1),
-                icon: const Icon(Icons.chevron_right),
-              ),
             ],
           ),
           const SizedBox(height: 6),
@@ -1142,16 +982,6 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                 onPressed: _replaceWithCurrentCandidate,
                 icon: const Icon(Icons.input_outlined, size: 18),
                 label: const Text('填入'),
-              ),
-              FilledButton.icon(
-                onPressed: () => _recallWithCandidate(candidate),
-                icon: const Icon(Icons.brush_outlined, size: 18),
-                label: const Text('用这条改图'),
-              ),
-              FilledButton.icon(
-                onPressed: _recallWithAllCandidates,
-                icon: const Icon(Icons.auto_awesome_motion_outlined, size: 18),
-                label: Text('${_assistCandidates.length} 条逐条改图'),
               ),
             ],
           ),

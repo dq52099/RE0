@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -204,128 +203,6 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     });
   }
 
-  Future<void> _generateWithCandidate(String candidate) async {
-    final prompt = candidate.trim();
-    if (prompt.isEmpty) {
-      showCenterNotice(context, '当前推荐词为空');
-      return;
-    }
-    final capabilities = ref.read(imageCapabilitiesProvider).valueOrNull ??
-        ImageCapabilities.fallback();
-    final options = capabilities.generate;
-    final size = resolveSizeForResolutionAndAspect(
-      options.sizes,
-      _resolutionTier,
-      _aspectRatio,
-      _defaultAspectRatioForDevice(context),
-    );
-    final quality =
-        _safeValue(_quality, options.qualities, options.defaultQuality);
-    final background =
-        _safeValue(_background, options.backgrounds, options.defaultBackground);
-    final outputFormat = _safeValue(
-      _outputFormat,
-      capabilities.outputFormats,
-      capabilities.outputFormats.first.value,
-    );
-    final selectedMode = _selectedImageMode(capabilities);
-    final retention = ref.read(historyRetentionProvider);
-    final generateRetention = retention['generate'] as Map? ?? {};
-    final retentionMessage = _retentionLimitMessage(generateRetention, 1);
-    if (retentionMessage != null) {
-      showCenterNotice(context, retentionMessage);
-      return;
-    }
-    if (ref.read(activeImageTaskProvider) == ImageTaskKind.edit) {
-      showCenterNotice(context, '改图任务进行中，请稍后再试');
-      return;
-    }
-    _dismissPromptAssistFocus();
-    setState(() => _lastSubmittedPrompt = prompt);
-    try {
-      final notice =
-          await ref.read(generateImagesProvider.notifier).materialize(
-                prompt,
-                1,
-                size,
-                quality,
-                background,
-                outputFormat,
-                selectedMode,
-              );
-      if (!mounted || notice == null) return;
-      showCenterNotice(context, notice);
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyError(error))),
-      );
-    }
-  }
-
-  Future<void> _generateWithAllCandidates() async {
-    final prompts = _activeCandidates
-        .map((item) => item.trim())
-        .where((item) => item.isNotEmpty)
-        .toList(growable: false);
-    if (prompts.isEmpty) {
-      showCenterNotice(context, '当前没有可用推荐词');
-      return;
-    }
-    final capabilities = ref.read(imageCapabilitiesProvider).valueOrNull ??
-        ImageCapabilities.fallback();
-    final options = capabilities.generate;
-    final size = resolveSizeForResolutionAndAspect(
-      options.sizes,
-      _resolutionTier,
-      _aspectRatio,
-      _defaultAspectRatioForDevice(context),
-    );
-    final quality =
-        _safeValue(_quality, options.qualities, options.defaultQuality);
-    final background =
-        _safeValue(_background, options.backgrounds, options.defaultBackground);
-    final outputFormat = _safeValue(
-      _outputFormat,
-      capabilities.outputFormats,
-      capabilities.outputFormats.first.value,
-    );
-    final selectedMode = _selectedImageMode(capabilities);
-    final retention = ref.read(historyRetentionProvider);
-    final generateRetention = retention['generate'] as Map? ?? {};
-    final retentionMessage =
-        _retentionLimitMessage(generateRetention, prompts.length);
-    if (retentionMessage != null) {
-      showCenterNotice(context, retentionMessage);
-      return;
-    }
-    if (ref.read(activeImageTaskProvider) == ImageTaskKind.edit) {
-      showCenterNotice(context, '改图任务进行中，请稍后再试');
-      return;
-    }
-    _dismissPromptAssistFocus();
-    setState(() => _lastSubmittedPrompt = prompts.join('\n---\n'));
-    showCenterNotice(context, '将按 ${prompts.length} 条推荐词逐条生成，出图后会陆续显示。');
-    try {
-      final notice =
-          await ref.read(generateImagesProvider.notifier).materializePrompts(
-                prompts,
-                size,
-                quality,
-                background,
-                outputFormat,
-                selectedMode,
-              );
-      if (!mounted || notice == null) return;
-      showCenterNotice(context, notice);
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyError(error))),
-      );
-    }
-  }
-
   Future<void> _openAllCandidatesDialog(AppBrand brand) async {
     final candidates = _activeCandidates;
     if (candidates.isEmpty) return;
@@ -380,18 +257,6 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                           icon: const Icon(Icons.input_outlined, size: 18),
                           label: const Text('填入'),
                         ),
-                        FilledButton.icon(
-                          onPressed: () {
-                            Navigator.pop(context);
-                            _setActiveCandidateIndex(index);
-                            unawaited(_generateWithCandidate(candidate));
-                          },
-                          icon: const Icon(
-                            Icons.auto_awesome_outlined,
-                            size: 18,
-                          ),
-                          label: const Text('生成'),
-                        ),
                       ],
                     ),
                   ],
@@ -404,14 +269,6 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('关闭'),
-          ),
-          FilledButton.icon(
-            onPressed: () {
-              Navigator.pop(context);
-              unawaited(_generateWithAllCandidates());
-            },
-            icon: const Icon(Icons.auto_awesome_motion_outlined),
-            label: Text('按 ${candidates.length} 条逐条生成'),
           ),
         ],
       ),
@@ -972,20 +829,6 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                 onPressed: () => _openAllCandidatesDialog(brand),
                 child: const Text('查看全部'),
               ),
-              IconButton(
-                tooltip: '上一个',
-                onPressed: index <= 0
-                    ? null
-                    : () => _setActiveCandidateIndex(index - 1),
-                icon: const Icon(Icons.chevron_left),
-              ),
-              IconButton(
-                tooltip: '下一个',
-                onPressed: index >= candidates.length - 1
-                    ? null
-                    : () => _setActiveCandidateIndex(index + 1),
-                icon: const Icon(Icons.chevron_right),
-              ),
             ],
           ),
           const SizedBox(height: 6),
@@ -1000,16 +843,6 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                 onPressed: _replaceWithCurrentCandidate,
                 icon: const Icon(Icons.input_outlined, size: 18),
                 label: const Text('填入'),
-              ),
-              FilledButton.icon(
-                onPressed: () => _generateWithCandidate(candidate),
-                icon: const Icon(Icons.auto_awesome_outlined, size: 18),
-                label: const Text('用这条生成'),
-              ),
-              FilledButton.icon(
-                onPressed: _generateWithAllCandidates,
-                icon: const Icon(Icons.auto_awesome_motion_outlined, size: 18),
-                label: Text('${candidates.length} 条逐条生成'),
               ),
             ],
           ),
@@ -1116,6 +949,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
   String _selectedImageMode(ImageCapabilities capabilities) {
     final selected = ref.watch(selectedImageModeProvider);
     final selectedBase = ref.watch(selectedImageModeBaseProvider);
+    final userMode = imageModeFromUser(ref.watch(authStateProvider));
     if (selectedBase != null &&
         selectedBase != capabilities.imageModes.current) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1123,13 +957,14 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
         ref.read(selectedImageModeProvider.notifier).state = null;
         ref.read(selectedImageModeBaseProvider.notifier).state = null;
       });
-      return capabilities.imageModes.current;
+      return userMode ?? capabilities.imageModes.current;
     }
     if (selected != null &&
-        selectedBase == capabilities.imageModes.current &&
+        selectedBase != null &&
         capabilities.imageModes.allowed.contains(selected)) {
       return selected;
     }
+    if (userMode != null) return userMode;
     return capabilities.imageModes.current;
   }
 

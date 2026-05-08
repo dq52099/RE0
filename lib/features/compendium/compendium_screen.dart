@@ -784,6 +784,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   Widget _pageControls() {
     final textStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
           fontSize: 11,
+          fontWeight: FontWeight.normal,
         );
     final pageText = _total == 0 ? '第 0/0 页' : '第 $_page/$_totalPages 页';
     final totalText = '共 $_total 张';
@@ -798,34 +799,53 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
           ),
-        Wrap(
-          alignment: WrapAlignment.center,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 6,
-          runSpacing: 6,
+        Row(
           children: [
-            _pageButton(
-              icon: Icons.chevron_left,
-              label: '上一页',
-              filled: false,
-              onPressed:
-                  _isLoading || _page <= 1 ? null : () => _goToPage(_page - 1),
+            Expanded(
+              child: Wrap(
+                alignment: WrapAlignment.start,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  _pageButton(
+                    icon: Icons.chevron_left,
+                    label: '上一页',
+                    filled: false,
+                    onPressed: _isLoading || _page <= 1
+                        ? null
+                        : () => _goToPage(_page - 1),
+                  ),
+                  Text(pageText, style: textStyle),
+                  Text(totalText, style: textStyle),
+                  _pageButton(
+                    icon: Icons.chevron_right,
+                    label: '下一页',
+                    filled: true,
+                    onPressed: _isLoading || !_hasMore
+                        ? null
+                        : () => _goToPage(_page + 1),
+                  ),
+                ],
+              ),
             ),
-            Text(pageText, style: textStyle),
+            const SizedBox(width: 8),
             PopupMenuButton<int>(
               enabled: !_isLoading,
               tooltip: '调整每页数量',
               initialValue: _pageSize,
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 96),
+              constraints: const BoxConstraints(minWidth: 72),
+              position: PopupMenuPosition.under,
               onSelected: (value) => unawaited(_setPageSize(value)),
               itemBuilder: (context) => _historyPageSizeOptions
                   .map(
                     (value) => PopupMenuItem<int>(
                       value: value,
+                      height: 34,
                       child: Text(
-                        '每页 $value 张',
-                        style: Theme.of(context).textTheme.bodySmall,
+                        '$value 张',
+                        style: textStyle,
                       ),
                     ),
                   )
@@ -848,7 +868,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('每页 $_pageSize 张', style: textStyle),
+                    Text('每页 $_pageSize', style: textStyle),
                     const SizedBox(width: 3),
                     Icon(
                       Icons.keyboard_arrow_down,
@@ -858,14 +878,6 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                   ],
                 ),
               ),
-            ),
-            Text(totalText, style: textStyle),
-            _pageButton(
-              icon: Icons.chevron_right,
-              label: '下一页',
-              filled: true,
-              onPressed:
-                  _isLoading || !_hasMore ? null : () => _goToPage(_page + 1),
             ),
           ],
         ),
@@ -1051,6 +1063,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
               imageUrl: imageUrl,
               sourceUrl: item['source_image_url']?.toString() ?? '',
               height: 238,
+              badge: _qualityModeLabel(item),
               onMainTap: () {
                 _dismissKeyboard();
                 Navigator.of(context).push(
@@ -1119,7 +1132,6 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                                 isBusy: isPublishing,
                                 onPressed: () => _toggleGalleryPublish(item),
                               ),
-                            _qualityPill(item),
                           ],
                         ),
                       ),
@@ -1454,36 +1466,6 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     );
   }
 
-  Widget _qualityPill(Map<String, dynamic> item) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 72),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: Theme.of(context)
-                .colorScheme
-                .outlineVariant
-                .withValues(alpha: 0.7),
-          ),
-        ),
-        child: Text(
-          _qualityModeLabel(item),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          softWrap: false,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                fontSize: 9.5,
-                fontWeight: FontWeight.w400,
-              ),
-        ),
-      ),
-    );
-  }
-
   String _formatCreatedAt(String? raw) {
     return formatLocalTime(raw, fallback: '时间未记录');
   }
@@ -1591,6 +1573,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     required VoidCallback onMainTap,
     required VoidCallback onLongPress,
     String? caption,
+    String? badge,
   }) {
     final hasSource = sourceUrl.isNotEmpty && sourceUrl != imageUrl;
     return Stack(
@@ -1618,7 +1601,36 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
               caption: caption,
             ),
           ),
+        if (badge != null && badge.trim().isNotEmpty)
+          Positioned(
+            left: 10,
+            bottom: 10,
+            child: _imageBadge(badge.trim()),
+          ),
       ],
+    );
+  }
+
+  Widget _imageBadge(String text) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.58),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        child: Text(
+          text,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.visible,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
     );
   }
 
