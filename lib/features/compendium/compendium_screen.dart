@@ -784,7 +784,6 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   Widget _pageControls() {
     final textStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
           fontSize: 11,
-          fontWeight: FontWeight.w600,
         );
     final pageText = _total == 0 ? '第 0/0 页' : '第 $_page/$_totalPages 页';
     final totalText = '共 $_total 张';
@@ -813,25 +812,51 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                   _isLoading || _page <= 1 ? null : () => _goToPage(_page - 1),
             ),
             Text(pageText, style: textStyle),
-            DropdownButtonHideUnderline(
-              child: DropdownButton<int>(
-                value: _pageSize,
-                isDense: true,
-                iconSize: 16,
-                style: textStyle,
-                onChanged: _isLoading
-                    ? null
-                    : (value) {
-                        if (value != null) unawaited(_setPageSize(value));
-                      },
-                items: _historyPageSizeOptions
-                    .map(
-                      (value) => DropdownMenuItem<int>(
-                        value: value,
-                        child: Text('每页 $value 张'),
+            PopupMenuButton<int>(
+              enabled: !_isLoading,
+              tooltip: '调整每页数量',
+              initialValue: _pageSize,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 96),
+              onSelected: (value) => unawaited(_setPageSize(value)),
+              itemBuilder: (context) => _historyPageSizeOptions
+                  .map(
+                    (value) => PopupMenuItem<int>(
+                      value: value,
+                      child: Text(
+                        '每页 $value 张',
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
-                    )
-                    .toList(),
+                    ),
+                  )
+                  .toList(),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .surface
+                      .withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .outlineVariant
+                        .withValues(alpha: 0.6),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('每页 $_pageSize 张', style: textStyle),
+                    const SizedBox(width: 3),
+                    Icon(
+                      Icons.keyboard_arrow_down,
+                      size: 14,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
               ),
             ),
             Text(totalText, style: textStyle),
@@ -869,7 +894,10 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
         const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       ),
       textStyle: WidgetStateProperty.all(
-        Theme.of(context).textTheme.labelSmall?.copyWith(fontSize: 11),
+        Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontSize: 11,
+              fontWeight: FontWeight.w400,
+            ),
       ),
       minimumSize: WidgetStateProperty.all(const Size(0, 28)),
     );
@@ -1428,9 +1456,9 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
 
   Widget _qualityPill(Map<String, dynamic> item) {
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 88),
+      constraints: const BoxConstraints(maxWidth: 72),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
           borderRadius: BorderRadius.circular(999),
@@ -1448,8 +1476,8 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
           softWrap: false,
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w700,
+                fontSize: 9.5,
+                fontWeight: FontWeight.w400,
               ),
         ),
       ),

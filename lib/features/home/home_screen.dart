@@ -29,6 +29,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         final nextMode = next['image_mode']?.toString();
         if (previous == null || previousMode != nextMode) {
           ref.read(selectedImageModeProvider.notifier).state = null;
+          ref.read(selectedImageModeBaseProvider.notifier).state = null;
+          ref.invalidate(imageCapabilitiesProvider);
         }
         ref.read(historyRetentionProvider.notifier).state =
             historyRetentionSummaryFromUser(

@@ -75,6 +75,7 @@ enum ImageTaskKind {
 final activeImageTaskProvider = StateProvider<ImageTaskKind?>((ref) => null);
 
 final selectedImageModeProvider = StateProvider<String?>((ref) => null);
+final selectedImageModeBaseProvider = StateProvider<String?>((ref) => null);
 
 final imageCapabilitiesProvider =
     FutureProvider<ImageCapabilities>((ref) async {

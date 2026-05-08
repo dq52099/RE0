@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -304,6 +305,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     }
     _dismissPromptAssistFocus();
     setState(() => _lastSubmittedPrompt = prompts.join('\n---\n'));
+    showCenterNotice(context, '将按 ${prompts.length} 条推荐词逐条生成，出图后会陆续显示。');
     try {
       final notice =
           await ref.read(generateImagesProvider.notifier).materializePrompts(
@@ -322,6 +324,99 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
         SnackBar(content: Text(friendlyError(error))),
       );
     }
+  }
+
+  Future<void> _openAllCandidatesDialog(AppBrand brand) async {
+    final candidates = _activeCandidates;
+    if (candidates.isEmpty) return;
+    _dismissPromptAssistFocus();
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('全部推荐词'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: candidates.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            itemBuilder: (context, index) {
+              final candidate = candidates[index];
+              return Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .surface
+                      .withValues(alpha: 0.72),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: brand.primaryColor.withValues(alpha: 0.12),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '推荐 ${index + 1}',
+                      style: TextStyle(color: brand.primaryColor),
+                    ),
+                    const SizedBox(height: 6),
+                    SelectableText(
+                      candidate,
+                      style: const TextStyle(fontSize: 13, height: 1.35),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _setActiveCandidateIndex(index);
+                            _replaceWithCurrentCandidate();
+                          },
+                          icon: const Icon(Icons.input_outlined, size: 18),
+                          label: const Text('填入'),
+                        ),
+                        FilledButton.icon(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _setActiveCandidateIndex(index);
+                            unawaited(_generateWithCandidate(candidate));
+                          },
+                          icon: const Icon(
+                            Icons.auto_awesome_outlined,
+                            size: 18,
+                          ),
+                          label: const Text('生成'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('关闭'),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              unawaited(_generateWithAllCandidates());
+            },
+            icon: const Icon(Icons.auto_awesome_motion_outlined),
+            label: Text('按 ${candidates.length} 条逐条生成'),
+          ),
+        ],
+      ),
+    );
+    _dismissPromptAssistFocus();
   }
 
   Future<void> _openCandidatePrompt(String candidate) async {
@@ -815,70 +910,34 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     );
   }
 
-  Widget _candidateRow(AppBrand brand, String candidate, int index) {
-    return Container(
-      margin: EdgeInsets.only(top: index == 0 ? 0 : 10),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: brand.primaryColor.withValues(alpha: 0.12),
+  Widget _candidateText(String candidate) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => _openCandidatePrompt(candidate),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  candidate,
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13, height: 1.35),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.open_in_full,
+                size: 18,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ],
+          ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                '推荐 ${index + 1}',
-                style: TextStyle(
-                  color: brand.primaryColor,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Spacer(),
-              IconButton(
-                tooltip: '查看完整推荐词',
-                constraints: const BoxConstraints.tightFor(
-                  width: 34,
-                  height: 34,
-                ),
-                padding: EdgeInsets.zero,
-                onPressed: () => _openCandidatePrompt(candidate),
-                icon: const Icon(Icons.open_in_full, size: 18),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            candidate,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 13, height: 1.35),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              OutlinedButton.icon(
-                onPressed: () {
-                  _setActiveCandidateIndex(index);
-                  _replaceWithCurrentCandidate();
-                },
-                icon: const Icon(Icons.input_outlined, size: 18),
-                label: const Text('填入'),
-              ),
-              FilledButton.icon(
-                onPressed: () => _generateWithCandidate(candidate),
-                icon: const Icon(Icons.auto_awesome_outlined, size: 18),
-                label: const Text('用这条生成'),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
@@ -886,6 +945,8 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
   Widget _candidateSwitcher(AppBrand brand) {
     final candidates = _activeCandidates;
     if (candidates.isEmpty) return const SizedBox.shrink();
+    final index = _activeCandidateIndex.clamp(0, candidates.length - 1).toInt();
+    final candidate = candidates[index];
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 12),
@@ -903,26 +964,54 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  'AI 推荐词 · ${candidates.length} 条',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                  '推荐 ${index + 1}/${candidates.length}',
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
+              ),
+              TextButton(
+                onPressed: () => _openAllCandidatesDialog(brand),
+                child: const Text('查看全部'),
+              ),
+              IconButton(
+                tooltip: '上一个',
+                onPressed: index <= 0
+                    ? null
+                    : () => _setActiveCandidateIndex(index - 1),
+                icon: const Icon(Icons.chevron_left),
+              ),
+              IconButton(
+                tooltip: '下一个',
+                onPressed: index >= candidates.length - 1
+                    ? null
+                    : () => _setActiveCandidateIndex(index + 1),
+                icon: const Icon(Icons.chevron_right),
               ),
             ],
           ),
+          const SizedBox(height: 6),
+          _candidateText(candidate),
           const SizedBox(height: 10),
-          ...List.generate(
-            candidates.length,
-            (candidateIndex) => _candidateRow(
-                brand, candidates[candidateIndex], candidateIndex),
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: _generateWithAllCandidates,
-              icon: const Icon(Icons.auto_awesome_motion_outlined),
-              label: Text('按 ${candidates.length} 条推荐词分别生成'),
-            ),
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _replaceWithCurrentCandidate,
+                icon: const Icon(Icons.input_outlined, size: 18),
+                label: const Text('填入'),
+              ),
+              FilledButton.icon(
+                onPressed: () => _generateWithCandidate(candidate),
+                icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+                label: const Text('用这条生成'),
+              ),
+              FilledButton.icon(
+                onPressed: _generateWithAllCandidates,
+                icon: const Icon(Icons.auto_awesome_motion_outlined, size: 18),
+                label: Text('${candidates.length} 条逐条生成'),
+              ),
+            ],
           ),
         ],
       ),
@@ -1004,6 +1093,8 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
             onSelectionChanged: (values) {
               final next = values.first;
               ref.read(selectedImageModeProvider.notifier).state = next;
+              ref.read(selectedImageModeBaseProvider.notifier).state =
+                  capabilities.imageModes.current;
             },
             style: ButtonStyle(
               visualDensity: VisualDensity.compact,
@@ -1024,7 +1115,18 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
 
   String _selectedImageMode(ImageCapabilities capabilities) {
     final selected = ref.watch(selectedImageModeProvider);
+    final selectedBase = ref.watch(selectedImageModeBaseProvider);
+    if (selectedBase != null &&
+        selectedBase != capabilities.imageModes.current) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(selectedImageModeProvider.notifier).state = null;
+        ref.read(selectedImageModeBaseProvider.notifier).state = null;
+      });
+      return capabilities.imageModes.current;
+    }
     if (selected != null &&
+        selectedBase == capabilities.imageModes.current &&
         capabilities.imageModes.allowed.contains(selected)) {
       return selected;
     }
