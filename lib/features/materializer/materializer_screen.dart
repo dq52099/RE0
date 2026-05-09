@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import '../../core/cached_gateway_image.dart';
 import '../../core/compact_dropdown_field.dart';
 import '../../core/compact_save_notice.dart';
 import '../../core/image_capabilities.dart';
+import '../../core/prompt_assist_copy.dart';
 import '../../core/providers.dart';
 import '../../core/timezone_reset_hint.dart';
 import '../compendium/image_preview_screen.dart';
@@ -75,6 +77,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
   }
 
   Future<void> _generatePromptFromIdea() async {
+    final copy = promptAssistCopyFor(ref.read(brandProvider));
     final idea = _ideaController.text.trim();
     if (idea.isEmpty) {
       showCenterNotice(context, '请先写下简单想法');
@@ -94,7 +97,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
         setState(() {
           _ideaCandidates = const [];
           _ideaCandidateIndex = 0;
-          _ideaAssistError = 'AI 没有返回可用咒文，请换个描述再试。';
+          _ideaAssistError = copy.generateNoResult;
         });
         return;
       }
@@ -102,11 +105,11 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
         _ideaCandidates = candidates;
         _ideaCandidateIndex = 0;
       });
-      showCenterNotice(context, '已生成候选，点击候选可查看完整咒文');
+      showCenterNotice(context, copy.generateReady);
     } catch (error) {
       if (!mounted) return;
-      setState(() =>
-          _ideaAssistError = friendlyError(error, fallback: 'AI 生成咒文失败。'));
+      setState(() => _ideaAssistError =
+          friendlyError(error, fallback: copy.generateFailure));
     } finally {
       if (mounted) {
         setState(() => _isGeneratingIdeaPrompt = false);
@@ -115,6 +118,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
   }
 
   Future<void> _pickAndRecognizeImagePrompt() async {
+    final copy = promptAssistCopyFor(ref.read(brandProvider));
     final picked = await _assistImagePicker.pickImage(
       source: ImageSource.gallery,
       imageQuality: 92,
@@ -136,7 +140,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
         setState(() {
           _imageCandidates = const [];
           _imageCandidateIndex = 0;
-          _imageAssistError = 'AI 没有识别出可用咒文，请换张图片再试。';
+          _imageAssistError = copy.imageNoResult;
         });
         return;
       }
@@ -144,11 +148,11 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
         _imageCandidates = candidates;
         _imageCandidateIndex = 0;
       });
-      showCenterNotice(context, '已识别候选，点击候选可查看完整咒文');
+      showCenterNotice(context, copy.imageReady);
     } catch (error) {
       if (!mounted) return;
-      setState(() =>
-          _imageAssistError = friendlyError(error, fallback: '图片识别咒文失败。'));
+      setState(() => _imageAssistError =
+          friendlyError(error, fallback: copy.imageFailure));
     } finally {
       if (mounted) {
         setState(() => _isRecognizingImagePrompt = false);
@@ -185,9 +189,10 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
   }
 
   void _replaceWithCurrentCandidate() {
+    final copy = promptAssistCopyFor(ref.read(brandProvider));
     final candidate = _activeCandidate;
     if (candidate == null || candidate.trim().isEmpty) {
-      showCenterNotice(context, '当前没有可用候选');
+      showCenterNotice(context, copy.generateNoCurrent);
       return;
     }
     _dismissPromptAssistFocus();
@@ -203,75 +208,287 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     });
   }
 
+  Future<void> _generateWithCandidate(String candidate) async {
+    final brand = ref.read(brandProvider);
+    final copy = promptAssistCopyFor(brand);
+    final prompt = candidate.trim();
+    if (prompt.isEmpty) {
+      showCenterNotice(context, copy.generateEmptyCurrent);
+      return;
+    }
+    final activeTask = ref.read(activeImageTaskProvider);
+    if (activeTask == ImageTaskKind.generate) {
+      showCenterNotice(context, copy.generateBusy(brand));
+      return;
+    }
+    if (activeTask == ImageTaskKind.edit) {
+      showCenterNotice(context, copy.editBusy(brand));
+      return;
+    }
+    final capabilities = ref.read(imageCapabilitiesProvider).valueOrNull ??
+        ImageCapabilities.fallback();
+    final options = capabilities.generate;
+    final size = resolveSizeForResolutionAndAspect(
+      options.sizes,
+      _resolutionTier,
+      _aspectRatio,
+      _defaultAspectRatioForDevice(context),
+    );
+    final quality =
+        _safeValue(_quality, options.qualities, options.defaultQuality);
+    final background =
+        _safeValue(_background, options.backgrounds, options.defaultBackground);
+    final outputFormat = _safeValue(
+      _outputFormat,
+      capabilities.outputFormats,
+      capabilities.outputFormats.first.value,
+    );
+    final selectedMode = _selectedImageMode(capabilities);
+    final retention = ref.read(historyRetentionProvider);
+    final generateRetention = retention['generate'] as Map? ?? {};
+    final retentionMessage = _retentionLimitMessage(generateRetention, 1);
+    if (retentionMessage != null) {
+      showCenterNotice(context, retentionMessage);
+      return;
+    }
+    _dismissPromptAssistFocus();
+    setState(() => _lastSubmittedPrompt = prompt);
+    try {
+      final notice =
+          await ref.read(generateImagesProvider.notifier).materialize(
+                prompt,
+                1,
+                size,
+                quality,
+                background,
+                outputFormat,
+                selectedMode,
+              );
+      if (!mounted || notice == null) return;
+      showCenterNotice(context, notice);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(error))),
+      );
+    }
+  }
+
+  Future<void> _generateWithAllCandidates() async {
+    final brand = ref.read(brandProvider);
+    final copy = promptAssistCopyFor(brand);
+    final prompts = _activeCandidates
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (prompts.isEmpty) {
+      showCenterNotice(context, copy.generateNoCurrent);
+      return;
+    }
+    final activeTask = ref.read(activeImageTaskProvider);
+    if (activeTask == ImageTaskKind.generate) {
+      showCenterNotice(context, copy.generateBusy(brand));
+      return;
+    }
+    if (activeTask == ImageTaskKind.edit) {
+      showCenterNotice(context, copy.editBusy(brand));
+      return;
+    }
+    final capabilities = ref.read(imageCapabilitiesProvider).valueOrNull ??
+        ImageCapabilities.fallback();
+    final options = capabilities.generate;
+    final size = resolveSizeForResolutionAndAspect(
+      options.sizes,
+      _resolutionTier,
+      _aspectRatio,
+      _defaultAspectRatioForDevice(context),
+    );
+    final quality =
+        _safeValue(_quality, options.qualities, options.defaultQuality);
+    final background =
+        _safeValue(_background, options.backgrounds, options.defaultBackground);
+    final outputFormat = _safeValue(
+      _outputFormat,
+      capabilities.outputFormats,
+      capabilities.outputFormats.first.value,
+    );
+    final selectedMode = _selectedImageMode(capabilities);
+    final retention = ref.read(historyRetentionProvider);
+    final generateRetention = retention['generate'] as Map? ?? {};
+    final retentionMessage =
+        _retentionLimitMessage(generateRetention, prompts.length);
+    if (retentionMessage != null) {
+      showCenterNotice(context, retentionMessage);
+      return;
+    }
+    _dismissPromptAssistFocus();
+    setState(() => _lastSubmittedPrompt = prompts.join('\n---\n'));
+    showCenterNotice(context, copy.generateBatchNotice(prompts.length));
+    try {
+      final notice =
+          await ref.read(generateImagesProvider.notifier).materializePrompts(
+                prompts,
+                size,
+                quality,
+                background,
+                outputFormat,
+                selectedMode,
+              );
+      if (!mounted || notice == null) return;
+      showCenterNotice(context, notice);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(error))),
+      );
+    }
+  }
+
   Future<void> _openAllCandidatesDialog(AppBrand brand) async {
+    final copy = promptAssistCopyFor(brand);
     final candidates = _activeCandidates;
     if (candidates.isEmpty) return;
     _dismissPromptAssistFocus();
     await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('全部推荐词'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.separated(
-            shrinkWrap: true,
-            itemCount: candidates.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (context, index) {
-              final candidate = candidates[index];
-              return Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .surface
-                      .withValues(alpha: 0.72),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: brand.primaryColor.withValues(alpha: 0.12),
-                  ),
-                ),
+      builder: (context) {
+        final media = MediaQuery.of(context);
+        return Dialog(
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+          child: SizedBox(
+            width: media.size.width - 24,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: media.size.height * 0.72),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      '推荐 ${index + 1}',
-                      style: TextStyle(color: brand.primaryColor),
-                    ),
-                    const SizedBox(height: 6),
-                    SelectableText(
-                      candidate,
-                      style: const TextStyle(fontSize: 13, height: 1.35),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            copy.generateAllTitle,
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: '关闭',
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: candidates.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        itemBuilder: (context, index) {
+                          final candidate = candidates[index];
+                          return Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .surface
+                                  .withValues(alpha: 0.72),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color:
+                                    brand.primaryColor.withValues(alpha: 0.12),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '第 ${index + 1} 条',
+                                  style: TextStyle(color: brand.primaryColor),
+                                ),
+                                const SizedBox(height: 6),
+                                SelectableText(
+                                  candidate,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    height: 1.35,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    OutlinedButton.icon(
+                                      onPressed: () {
+                                        Navigator.pop(context);
+                                        _setActiveCandidateIndex(index);
+                                        _replaceWithCurrentCandidate();
+                                      },
+                                      icon: const Icon(
+                                        Icons.input_outlined,
+                                        size: 18,
+                                      ),
+                                      label: const Text('填入'),
+                                    ),
+                                    FilledButton.icon(
+                                      onPressed: () {
+                                        Navigator.pop(context);
+                                        _setActiveCandidateIndex(index);
+                                        unawaited(
+                                            _generateWithCandidate(candidate));
+                                      },
+                                      icon: const Icon(
+                                        Icons.auto_awesome_outlined,
+                                        size: 18,
+                                      ),
+                                      label: Text(copy.generateUseThisLabel()),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
                       children: [
-                        OutlinedButton.icon(
+                        Expanded(
+                          child: Text(
+                            copy.generateCountLabel(candidates.length),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('关闭'),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton.icon(
                           onPressed: () {
                             Navigator.pop(context);
-                            _setActiveCandidateIndex(index);
-                            _replaceWithCurrentCandidate();
+                            unawaited(_generateWithAllCandidates());
                           },
-                          icon: const Icon(Icons.input_outlined, size: 18),
-                          label: const Text('填入'),
+                          icon: const Icon(
+                            Icons.auto_awesome_motion_outlined,
+                            size: 18,
+                          ),
+                          label:
+                              Text(copy.generateBatchLabel(candidates.length)),
                         ),
                       ],
                     ),
                   ],
                 ),
-              );
-            },
+              ),
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('关闭'),
-          ),
-        ],
-      ),
+        );
+      },
     );
     _dismissPromptAssistFocus();
   }
@@ -279,11 +496,12 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
   Future<void> _openCandidatePrompt(String candidate) async {
     _dismissPromptAssistFocus();
     final brand = ref.read(brandProvider);
+    final copy = promptAssistCopyFor(brand);
     final controller = TextEditingController(text: candidate);
     final next = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('AI 候选咒文'),
+        title: Text(copy.generateFullTitle),
         content: SizedBox(
           width: double.maxFinite,
           child: TextField(
@@ -305,7 +523,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
               _dismissPromptAssistFocus(context);
               Navigator.pop(context, controller.text.trim());
             },
-            child: const Text('使用/替换当前咒文'),
+            child: Text(copy.fillGenerate),
           ),
         ],
       ),
@@ -333,6 +551,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
   @override
   Widget build(BuildContext context) {
     final brand = ref.watch(brandProvider);
+    final copy = promptAssistCopyFor(brand);
     final capabilities = ref.watch(imageCapabilitiesProvider).valueOrNull ??
         ImageCapabilities.fallback();
     final options = capabilities.generate;
@@ -387,7 +606,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
               _buildPromptField(brand),
               if (activeTask == ImageTaskKind.edit) ...[
                 const SizedBox(height: 12),
-                _buildTaskNotice('改图任务正在进行，请等待完成后再开始生图。'),
+                _buildTaskNotice(copy.editBlocksGenerate(brand)),
               ],
               const SizedBox(height: 16),
               LayoutBuilder(
@@ -523,12 +742,12 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                       : () async {
                           final prompt = _spellController.text.trim();
                           if (prompt.isEmpty) {
-                            showCenterNotice(context, '请先填写提示词');
+                            showCenterNotice(context, copy.writeGenerate);
                             return;
                           }
                           final currentTask = ref.read(activeImageTaskProvider);
                           if (currentTask == ImageTaskKind.edit) {
-                            showCenterNotice(context, '改图任务进行中，请稍后再试');
+                            showCenterNotice(context, copy.editBusy(brand));
                             return;
                           }
                           final retentionMessage = _retentionLimitMessage(
@@ -615,6 +834,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
   }
 
   Widget _buildPromptAssist(AppBrand brand) {
+    final copy = promptAssistCopyFor(brand);
     final isIdea = _assistMode == _PromptAssistMode.idea;
     final isLoading =
         isIdea ? _isGeneratingIdeaPrompt : _isRecognizingImagePrompt;
@@ -635,13 +855,13 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
             runSpacing: 8,
             children: [
               ChoiceChip(
-                label: const Text('根据思路生成'),
+                label: Text(copy.ideaChip),
                 selected: isIdea,
                 onSelected: (_) =>
                     setState(() => _assistMode = _PromptAssistMode.idea),
               ),
               ChoiceChip(
-                label: const Text('根据图片识别'),
+                label: Text(copy.imageChip),
                 selected: !isIdea,
                 onSelected: (_) =>
                     setState(() => _assistMode = _PromptAssistMode.image),
@@ -678,7 +898,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.auto_awesome_outlined),
-                  label: const Text('生成'),
+                  label: Text(copy.ideaAction),
                 ),
               ],
             )
@@ -714,8 +934,8 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                 Expanded(
                   child: Text(
                     _assistImageFile == null
-                        ? '选择本地图片后反推 3 个咒文候选'
-                        : '已选择图片，可重新识别或更换图片',
+                        ? copy.imageEmptyText
+                        : copy.imageSelectedText,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ),
@@ -729,7 +949,8 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.image_search_outlined),
-                  label: Text(_assistImageFile == null ? '选择' : '识别'),
+                  label: Text(
+                      _assistImageFile == null ? '选择' : copy.imageInferVerb),
                 ),
               ],
             ),
@@ -800,6 +1021,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
   }
 
   Widget _candidateSwitcher(AppBrand brand) {
+    final copy = promptAssistCopyFor(brand);
     final candidates = _activeCandidates;
     if (candidates.isEmpty) return const SizedBox.shrink();
     final index = _activeCandidateIndex.clamp(0, candidates.length - 1).toInt();
@@ -821,13 +1043,27 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  '推荐 ${index + 1}/${candidates.length}',
+                  copy.generateSwitcherLabel(index, candidates.length),
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
               TextButton(
                 onPressed: () => _openAllCandidatesDialog(brand),
                 child: const Text('查看全部'),
+              ),
+              IconButton(
+                tooltip: copy.previousGenerateTooltip(),
+                onPressed: index <= 0
+                    ? null
+                    : () => _setActiveCandidateIndex(index - 1),
+                icon: const Icon(Icons.chevron_left),
+              ),
+              IconButton(
+                tooltip: copy.nextGenerateTooltip(),
+                onPressed: index >= candidates.length - 1
+                    ? null
+                    : () => _setActiveCandidateIndex(index + 1),
+                icon: const Icon(Icons.chevron_right),
               ),
             ],
           ),
@@ -1042,8 +1278,13 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     }
     final used = quota['used'] ?? 0;
     final total = quota['total'] ?? 0;
-    final requestText = requested > 1 ? '本次需要 $requested 个席位，' : '';
-    return '记忆回廊的生图席位已满（已用 $used / 上限 $total）。$requestText继续咏唱会挤掉最早的记忆；请先到记忆回廊手动清理后再试。';
+    final copy = promptAssistCopyFor(ref.read(brandProvider));
+    return copy.generateRetentionLimitMessage(
+      brand: ref.read(brandProvider),
+      used: used,
+      total: total,
+      requested: requested,
+    );
   }
 
   Widget _buildTaskNotice(String message) {

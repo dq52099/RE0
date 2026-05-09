@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +10,7 @@ import '../../core/cached_gateway_image.dart';
 import '../../core/compact_dropdown_field.dart';
 import '../../core/compact_save_notice.dart';
 import '../../core/image_capabilities.dart';
+import '../../core/prompt_assist_copy.dart';
 import '../../core/providers.dart';
 import '../../core/timezone_reset_hint.dart';
 import '../compendium/image_preview_screen.dart';
@@ -76,8 +78,10 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
   }
 
   Future<void> _generatePromptFromIdeaAndImage() async {
+    final brand = ref.read(brandProvider);
+    final copy = promptAssistCopyFor(brand);
     if (_imageFile == null) {
-      showCenterNotice(context, '请先选择需要改图的图片');
+      showCenterNotice(context, copy.pickEditSource);
       return;
     }
     final idea = _ideaController.text.trim();
@@ -100,7 +104,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
         setState(() {
           _assistCandidates = const [];
           _assistCandidateIndex = 0;
-          _assistError = 'AI 没有返回可用咒文，请换个想法或图片再试。';
+          _assistError = copy.editNoResult;
         });
         return;
       }
@@ -108,11 +112,11 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
         _assistCandidates = candidates;
         _assistCandidateIndex = 0;
       });
-      showCenterNotice(context, '已生成候选，点击候选可查看完整咒文');
+      showCenterNotice(context, copy.editReady);
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _assistError = friendlyError(error, fallback: '结合图片推荐提示词失败。');
+        _assistError = friendlyError(error, fallback: copy.editFailure);
       });
     } finally {
       if (mounted) {
@@ -135,9 +139,10 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
   }
 
   void _replaceWithCurrentCandidate() {
+    final copy = promptAssistCopyFor(ref.read(brandProvider));
     final candidate = _activeCandidate;
     if (candidate == null || candidate.trim().isEmpty) {
-      showCenterNotice(context, '当前没有可用候选');
+      showCenterNotice(context, copy.editNoCurrent);
       return;
     }
     _dismissPromptAssistFocus();
@@ -153,74 +158,294 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     });
   }
 
+  Future<void> _recallWithCandidate(String candidate) async {
+    final brand = ref.read(brandProvider);
+    final copy = promptAssistCopyFor(brand);
+    if (_imageFile == null) {
+      showCenterNotice(context, copy.pickEditSource);
+      return;
+    }
+    final prompt = candidate.trim();
+    if (prompt.isEmpty) {
+      showCenterNotice(context, copy.editEmptyCurrent);
+      return;
+    }
+    final activeTask = ref.read(activeImageTaskProvider);
+    if (activeTask == ImageTaskKind.edit) {
+      showCenterNotice(context, copy.editBusy(brand));
+      return;
+    }
+    if (activeTask == ImageTaskKind.generate) {
+      showCenterNotice(context, copy.generateBusy(brand));
+      return;
+    }
+    final capabilities = ref.read(imageCapabilitiesProvider).valueOrNull ??
+        ImageCapabilities.fallback();
+    final options = capabilities.edit;
+    final size = resolveSizeForResolutionAndAspect(
+      options.sizes,
+      _resolutionTier,
+      _aspectRatio,
+      _defaultAspectRatioForDevice(context),
+    );
+    final quality =
+        _safeValue(_quality, options.qualities, options.defaultQuality);
+    final background =
+        _safeValue(_background, options.backgrounds, options.defaultBackground);
+    final outputFormat = _safeValue(
+      _outputFormat,
+      capabilities.outputFormats,
+      capabilities.outputFormats.first.value,
+    );
+    final selectedMode = _selectedImageMode(capabilities);
+    final retention = ref.read(historyRetentionProvider);
+    final editRetention = retention['edit'] as Map? ?? {};
+    final retentionMessage = _retentionLimitMessage(editRetention, 1);
+    if (retentionMessage != null) {
+      showCenterNotice(context, retentionMessage);
+      return;
+    }
+    _dismissPromptAssistFocus();
+    setState(() => _lastSubmittedPrompt = prompt);
+    try {
+      final notice = await ref.read(editImagesProvider.notifier).recall(
+            prompt,
+            _imageFile!.path,
+            1,
+            size,
+            quality,
+            background,
+            outputFormat,
+            selectedMode,
+          );
+      if (!mounted || notice == null) return;
+      showCenterNotice(context, notice);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(error))),
+      );
+    }
+  }
+
+  Future<void> _recallWithAllCandidates() async {
+    final brand = ref.read(brandProvider);
+    final copy = promptAssistCopyFor(brand);
+    if (_imageFile == null) {
+      showCenterNotice(context, copy.pickEditSource);
+      return;
+    }
+    final prompts = _assistCandidates
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (prompts.isEmpty) {
+      showCenterNotice(context, copy.editNoCurrent);
+      return;
+    }
+    final activeTask = ref.read(activeImageTaskProvider);
+    if (activeTask == ImageTaskKind.edit) {
+      showCenterNotice(context, copy.editBusy(brand));
+      return;
+    }
+    if (activeTask == ImageTaskKind.generate) {
+      showCenterNotice(context, copy.generateBusy(brand));
+      return;
+    }
+    final capabilities = ref.read(imageCapabilitiesProvider).valueOrNull ??
+        ImageCapabilities.fallback();
+    final options = capabilities.edit;
+    final size = resolveSizeForResolutionAndAspect(
+      options.sizes,
+      _resolutionTier,
+      _aspectRatio,
+      _defaultAspectRatioForDevice(context),
+    );
+    final quality =
+        _safeValue(_quality, options.qualities, options.defaultQuality);
+    final background =
+        _safeValue(_background, options.backgrounds, options.defaultBackground);
+    final outputFormat = _safeValue(
+      _outputFormat,
+      capabilities.outputFormats,
+      capabilities.outputFormats.first.value,
+    );
+    final selectedMode = _selectedImageMode(capabilities);
+    final retention = ref.read(historyRetentionProvider);
+    final editRetention = retention['edit'] as Map? ?? {};
+    final retentionMessage =
+        _retentionLimitMessage(editRetention, prompts.length);
+    if (retentionMessage != null) {
+      showCenterNotice(context, retentionMessage);
+      return;
+    }
+    _dismissPromptAssistFocus();
+    setState(() => _lastSubmittedPrompt = prompts.join('\n---\n'));
+    showCenterNotice(context, copy.editBatchNotice(prompts.length));
+    try {
+      final notice = await ref.read(editImagesProvider.notifier).recallPrompts(
+            prompts,
+            _imageFile!.path,
+            size,
+            quality,
+            background,
+            outputFormat,
+            selectedMode,
+          );
+      if (!mounted || notice == null) return;
+      showCenterNotice(context, notice);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(error))),
+      );
+    }
+  }
+
   Future<void> _openAllCandidatesDialog(AppBrand brand) async {
+    final copy = promptAssistCopyFor(brand);
     if (_assistCandidates.isEmpty) return;
     _dismissPromptAssistFocus();
     await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('全部推荐词'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.separated(
-            shrinkWrap: true,
-            itemCount: _assistCandidates.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (context, index) {
-              final candidate = _assistCandidates[index];
-              return Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .surface
-                      .withValues(alpha: 0.72),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: brand.primaryColor.withValues(alpha: 0.12),
-                  ),
-                ),
+      builder: (context) {
+        final media = MediaQuery.of(context);
+        return Dialog(
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+          child: SizedBox(
+            width: media.size.width - 24,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: media.size.height * 0.72),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      '推荐 ${index + 1}',
-                      style: TextStyle(color: brand.primaryColor),
-                    ),
-                    const SizedBox(height: 6),
-                    SelectableText(
-                      candidate,
-                      style: const TextStyle(fontSize: 13, height: 1.35),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            copy.editAllTitle,
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: '关闭',
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: _assistCandidates.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        itemBuilder: (context, index) {
+                          final candidate = _assistCandidates[index];
+                          return Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .surface
+                                  .withValues(alpha: 0.72),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color:
+                                    brand.primaryColor.withValues(alpha: 0.12),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '第 ${index + 1} 条',
+                                  style: TextStyle(color: brand.primaryColor),
+                                ),
+                                const SizedBox(height: 6),
+                                SelectableText(
+                                  candidate,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    height: 1.35,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    OutlinedButton.icon(
+                                      onPressed: () {
+                                        Navigator.pop(context);
+                                        _setAssistCandidateIndex(index);
+                                        _replaceWithCurrentCandidate();
+                                      },
+                                      icon: const Icon(
+                                        Icons.input_outlined,
+                                        size: 18,
+                                      ),
+                                      label: const Text('填入'),
+                                    ),
+                                    FilledButton.icon(
+                                      onPressed: () {
+                                        Navigator.pop(context);
+                                        _setAssistCandidateIndex(index);
+                                        unawaited(
+                                            _recallWithCandidate(candidate));
+                                      },
+                                      icon: const Icon(
+                                        Icons.brush_outlined,
+                                        size: 18,
+                                      ),
+                                      label: Text(copy.editUseThisLabel()),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
                       children: [
-                        OutlinedButton.icon(
+                        Expanded(
+                          child: Text(
+                            copy.editCountLabel(_assistCandidates.length),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('关闭'),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton.icon(
                           onPressed: () {
                             Navigator.pop(context);
-                            _setAssistCandidateIndex(index);
-                            _replaceWithCurrentCandidate();
+                            unawaited(_recallWithAllCandidates());
                           },
-                          icon: const Icon(Icons.input_outlined, size: 18),
-                          label: const Text('填入'),
+                          icon: const Icon(
+                            Icons.auto_awesome_motion_outlined,
+                            size: 18,
+                          ),
+                          label: Text(
+                              copy.editBatchLabel(_assistCandidates.length)),
                         ),
                       ],
                     ),
                   ],
                 ),
-              );
-            },
+              ),
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('关闭'),
-          ),
-        ],
-      ),
+        );
+      },
     );
     _dismissPromptAssistFocus();
   }
@@ -228,11 +453,12 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
   Future<void> _openCandidatePrompt(String candidate) async {
     _dismissPromptAssistFocus();
     final brand = ref.read(brandProvider);
+    final copy = promptAssistCopyFor(brand);
     final controller = TextEditingController(text: candidate);
     final next = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('推荐改图咒文'),
+        title: Text(copy.editFullTitle),
         content: SizedBox(
           width: double.maxFinite,
           child: TextField(
@@ -254,7 +480,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
               _dismissPromptAssistFocus(context);
               Navigator.pop(context, controller.text.trim());
             },
-            child: const Text('使用/替换当前咒文'),
+            child: Text(copy.fillEdit),
           ),
         ],
       ),
@@ -280,6 +506,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
   @override
   Widget build(BuildContext context) {
     final brand = ref.watch(brandProvider);
+    final copy = promptAssistCopyFor(brand);
     final capabilities = ref.watch(imageCapabilitiesProvider).valueOrNull ??
         ImageCapabilities.fallback();
     final options = capabilities.edit;
@@ -362,7 +589,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
               _buildPromptField(brand),
               if (activeTask == ImageTaskKind.generate) ...[
                 const SizedBox(height: 12),
-                _buildTaskNotice('生图任务正在进行，请等待完成后再开始改图。'),
+                _buildTaskNotice(copy.generateBlocksEdit(brand)),
               ],
               const SizedBox(height: 16),
               LayoutBuilder(
@@ -499,12 +726,12 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                       : () async {
                           final prompt = _spellController.text.trim();
                           if (prompt.isEmpty) {
-                            showCenterNotice(context, '请先填写改图提示词');
+                            showCenterNotice(context, copy.writeEdit);
                             return;
                           }
                           final currentTask = ref.read(activeImageTaskProvider);
                           if (currentTask == ImageTaskKind.generate) {
-                            showCenterNotice(context, '生图任务进行中，请稍后再试');
+                            showCenterNotice(context, copy.generateBusy(brand));
                             return;
                           }
                           final retentionMessage = _retentionLimitMessage(
@@ -782,11 +1009,17 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     }
     final used = quota['used'] ?? 0;
     final total = quota['total'] ?? 0;
-    final requestText = requested > 1 ? '本次需要 $requested 个席位，' : '';
-    return '记忆回廊的改图席位已满（已用 $used / 上限 $total）。$requestText继续回响会挤掉最早的记忆；请先到记忆回廊手动清理后再试。';
+    final copy = promptAssistCopyFor(ref.read(brandProvider));
+    return copy.editRetentionLimitMessage(
+      brand: ref.read(brandProvider),
+      used: used,
+      total: total,
+      requested: requested,
+    );
   }
 
   Widget _buildPromptAssist(AppBrand brand) {
+    final copy = promptAssistCopyFor(brand);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -828,8 +1061,8 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
               Expanded(
                 child: Text(
                   _imageFile == null
-                      ? '先选择图片，再输入简单想法，让 AI 推荐 3 个改图咒文候选'
-                      : '结合当前图片和你的简单想法，推荐 3 个更完整的改图咒文',
+                      ? copy.editIntroNoImage()
+                      : copy.editIntroWithImage(),
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
@@ -868,7 +1101,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.auto_awesome_outlined),
-                label: const Text('推荐'),
+                label: Text(copy.ideaAction),
               ),
             ],
           ),
@@ -939,6 +1172,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
   }
 
   Widget _candidateSwitcher(AppBrand brand) {
+    final copy = promptAssistCopyFor(brand);
     if (_assistCandidates.isEmpty) return const SizedBox.shrink();
     final index =
         _assistCandidateIndex.clamp(0, _assistCandidates.length - 1).toInt();
@@ -960,13 +1194,27 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  '推荐 ${index + 1}/${_assistCandidates.length}',
+                  copy.editSwitcherLabel(index, _assistCandidates.length),
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
               TextButton(
                 onPressed: () => _openAllCandidatesDialog(brand),
                 child: const Text('查看全部'),
+              ),
+              IconButton(
+                tooltip: copy.previousEditTooltip(),
+                onPressed: index <= 0
+                    ? null
+                    : () => _setAssistCandidateIndex(index - 1),
+                icon: const Icon(Icons.chevron_left),
+              ),
+              IconButton(
+                tooltip: copy.nextEditTooltip(),
+                onPressed: index >= _assistCandidates.length - 1
+                    ? null
+                    : () => _setAssistCandidateIndex(index + 1),
+                icon: const Icon(Icons.chevron_right),
               ),
             ],
           ),
