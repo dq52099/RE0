@@ -24,6 +24,11 @@ String _defaultAspectRatioForDevice(BuildContext context) {
   return '16:9';
 }
 
+enum _PromptAssistMode {
+  idea,
+  image,
+}
+
 class ChronogearScreen extends ConsumerStatefulWidget {
   const ChronogearScreen({super.key});
 
@@ -34,7 +39,9 @@ class ChronogearScreen extends ConsumerStatefulWidget {
 class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
   final TextEditingController _spellController = TextEditingController();
   final TextEditingController _ideaController = TextEditingController();
+  final ImagePicker _assistImagePicker = ImagePicker();
   File? _imageFile;
+  File? _assistImageFile;
   int _count = 1;
   String _resolutionTier = 'auto';
   String _aspectRatio = 'auto';
@@ -42,10 +49,15 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
   String _background = 'auto';
   String _outputFormat = 'png';
   String _lastSubmittedPrompt = '';
-  List<String> _assistCandidates = const [];
-  int _assistCandidateIndex = 0;
-  bool _isGeneratingAssist = false;
-  String? _assistError;
+  _PromptAssistMode _assistMode = _PromptAssistMode.idea;
+  List<String> _ideaCandidates = const [];
+  List<String> _imageCandidates = const [];
+  int _ideaCandidateIndex = 0;
+  int _imageCandidateIndex = 0;
+  bool _isGeneratingIdeaPrompt = false;
+  bool _isRecognizingImagePrompt = false;
+  String? _ideaAssistError;
+  String? _imageAssistError;
   String? _lastAppliedCandidate;
 
   @override
@@ -70,72 +82,166 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     if (picked != null) {
       setState(() {
         _imageFile = File(picked.path);
-        _assistCandidates = const [];
-        _assistCandidateIndex = 0;
-        _assistError = null;
+        _assistImageFile = null;
+        _assistMode = _PromptAssistMode.idea;
+        _ideaCandidates = const [];
+        _imageCandidates = const [];
+        _ideaCandidateIndex = 0;
+        _imageCandidateIndex = 0;
+        _ideaAssistError = null;
+        _imageAssistError = null;
+        _lastAppliedCandidate = null;
       });
     }
   }
 
-  Future<void> _generatePromptFromIdeaAndImage() async {
+  Future<void> _generatePromptFromIdea() async {
     final brand = ref.read(brandProvider);
     final copy = promptAssistCopyFor(brand);
-    if (_imageFile == null) {
-      showCenterNotice(context, copy.pickEditSource);
-      return;
-    }
     final idea = _ideaController.text.trim();
     if (idea.isEmpty) {
-      showCenterNotice(context, '请先写下简单想法');
+      showCenterNotice(context, '请先写下${copy.editVerb}意图');
       return;
     }
     _dismissPromptAssistFocus();
     setState(() {
-      _isGeneratingAssist = true;
-      _assistError = null;
+      _assistMode = _PromptAssistMode.idea;
+      _isGeneratingIdeaPrompt = true;
+      _ideaAssistError = null;
     });
     try {
       final candidates = await ref
           .read(gatewayClientProvider)
-          .generateEditPromptCandidates(
-              idea: idea, imagePath: _imageFile!.path);
+          .generateEditPromptCandidates(idea);
       if (!mounted) return;
       if (candidates.isEmpty) {
         setState(() {
-          _assistCandidates = const [];
-          _assistCandidateIndex = 0;
-          _assistError = copy.editNoResult;
+          _ideaCandidates = const [];
+          _ideaCandidateIndex = 0;
+          _ideaAssistError = copy.editNoResult;
         });
         return;
       }
       setState(() {
-        _assistCandidates = candidates;
-        _assistCandidateIndex = 0;
+        _ideaCandidates = candidates;
+        _ideaCandidateIndex = 0;
       });
       showCenterNotice(context, copy.editReady);
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _assistError = friendlyError(error, fallback: copy.editFailure);
+        _ideaAssistError = friendlyError(error, fallback: copy.editFailure);
       });
     } finally {
       if (mounted) {
-        setState(() => _isGeneratingAssist = false);
+        setState(() => _isGeneratingIdeaPrompt = false);
       }
     }
   }
 
+  Future<void> _runImagePromptAssist(
+    String sourcePath, {
+    bool divergent = false,
+  }) async {
+    final brand = ref.read(brandProvider);
+    final copy = promptAssistCopyFor(brand);
+    setState(() {
+      _assistMode = _PromptAssistMode.image;
+      _isRecognizingImagePrompt = true;
+      _imageAssistError = null;
+    });
+    try {
+      final candidates = await ref
+          .read(gatewayClientProvider)
+          .identifyImagePromptCandidates(
+            sourcePath,
+            divergent: divergent,
+          );
+      if (!mounted) return;
+      if (candidates.isEmpty) {
+        setState(() {
+          _imageCandidates = const [];
+          _imageCandidateIndex = 0;
+          _imageAssistError =
+              divergent ? copy.imageDivergeNoResult : copy.imageNoResult;
+        });
+        return;
+      }
+      setState(() {
+        _imageCandidates = candidates;
+        _imageCandidateIndex = 0;
+      });
+      showCenterNotice(
+        context,
+        divergent ? copy.imageDivergeReady : copy.imageReady,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _imageAssistError = friendlyError(
+          error,
+          fallback: divergent ? copy.imageDivergeFailure : copy.imageFailure,
+        );
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isRecognizingImagePrompt = false);
+      }
+    }
+  }
+
+  Future<void> _pickAndRecognizeImagePrompt({bool divergent = false}) async {
+    final picked = await _assistImagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 92,
+      maxWidth: 1600,
+    );
+    if (picked == null) return;
+    setState(() {
+      _assistImageFile = File(picked.path);
+    });
+    await _runImagePromptAssist(
+      picked.path,
+      divergent: divergent,
+    );
+  }
+
+  String? get _currentEditImagePath =>
+      _assistImageFile?.path ?? _imageFile?.path;
+
+  List<String> get _activeCandidates =>
+      _assistMode == _PromptAssistMode.idea ? _ideaCandidates : _imageCandidates;
+
+  int get _activeCandidateIndex => _assistMode == _PromptAssistMode.idea
+      ? _ideaCandidateIndex
+      : _imageCandidateIndex;
+
+  String? get _activeAssistError =>
+      _assistMode == _PromptAssistMode.idea ? _ideaAssistError : _imageAssistError;
+
+  bool get _isActiveAssistLoading =>
+      _assistMode == _PromptAssistMode.idea
+          ? _isGeneratingIdeaPrompt
+          : _isRecognizingImagePrompt;
+
   String? get _activeCandidate {
-    if (_assistCandidates.isEmpty) return null;
-    final index =
-        _assistCandidateIndex.clamp(0, _assistCandidates.length - 1).toInt();
-    return _assistCandidates[index];
+    final candidates = _activeCandidates;
+    if (candidates.isEmpty) return null;
+    final index = _activeCandidateIndex.clamp(0, candidates.length - 1).toInt();
+    return candidates[index];
   }
 
   void _setAssistCandidateIndex(int index) {
-    if (_assistCandidates.isEmpty) return;
-    final next = index.clamp(0, _assistCandidates.length - 1).toInt();
-    setState(() => _assistCandidateIndex = next);
+    final candidates = _activeCandidates;
+    if (candidates.isEmpty) return;
+    final next = index.clamp(0, candidates.length - 1).toInt();
+    setState(() {
+      if (_assistMode == _PromptAssistMode.idea) {
+        _ideaCandidateIndex = next;
+      } else {
+        _imageCandidateIndex = next;
+      }
+    });
   }
 
   void _replaceWithCurrentCandidate() {
@@ -235,7 +341,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
       showCenterNotice(context, copy.pickEditSource);
       return;
     }
-    final prompts = _assistCandidates
+    final prompts = _activeCandidates
         .map((item) => item.trim())
         .where((item) => item.isNotEmpty)
         .toList(growable: false);
@@ -304,7 +410,8 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
 
   Future<void> _openAllCandidatesDialog(AppBrand brand) async {
     final copy = promptAssistCopyFor(brand);
-    if (_assistCandidates.isEmpty) return;
+    final candidates = _activeCandidates;
+    if (candidates.isEmpty) return;
     _dismissPromptAssistFocus();
     await showDialog<void>(
       context: context,
@@ -341,10 +448,10 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                     Flexible(
                       child: ListView.separated(
                         shrinkWrap: true,
-                        itemCount: _assistCandidates.length,
+                        itemCount: candidates.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 10),
                         itemBuilder: (context, index) {
-                          final candidate = _assistCandidates[index];
+                          final candidate = candidates[index];
                           return Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
@@ -416,7 +523,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                       children: [
                         Expanded(
                           child: Text(
-                            copy.editCountLabel(_assistCandidates.length),
+                            copy.editCountLabel(candidates.length),
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ),
@@ -434,8 +541,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                             Icons.auto_awesome_motion_outlined,
                             size: 18,
                           ),
-                          label: Text(
-                              copy.editBatchLabel(_assistCandidates.length)),
+                          label: Text(copy.editBatchLabel(candidates.length)),
                         ),
                       ],
                     ),
@@ -1020,6 +1126,9 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
 
   Widget _buildPromptAssist(AppBrand brand) {
     final copy = promptAssistCopyFor(brand);
+    final isIdea = _assistMode == _PromptAssistMode.idea;
+    final isLoading = _isActiveAssistLoading;
+    final error = _activeAssistError;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -1031,83 +1140,183 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Text(
+            _imageFile == null ? copy.editIntroNoImage() : copy.editIntroWithImage(),
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              if (_imageFile != null)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.file(
-                    _imageFile!,
-                    width: 54,
-                    height: 54,
-                    fit: BoxFit.cover,
-                  ),
-                )
-              else
-                Container(
-                  width: 54,
-                  height: 54,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .surface
-                        .withValues(alpha: 0.55),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(Icons.auto_fix_high, color: brand.primaryColor),
-                ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  _imageFile == null
-                      ? copy.editIntroNoImage()
-                      : copy.editIntroWithImage(),
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
+              ChoiceChip(
+                label: Text(copy.ideaChip),
+                selected: isIdea,
+                onSelected: (_) =>
+                    setState(() => _assistMode = _PromptAssistMode.idea),
+              ),
+              ChoiceChip(
+                label: Text(copy.imageChip),
+                selected: !isIdea,
+                onSelected: (_) =>
+                    setState(() => _assistMode = _PromptAssistMode.image),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _ideaController,
-                  minLines: 1,
-                  maxLines: 2,
-                  style: const TextStyle(fontSize: 13, height: 1.28),
-                  onTapOutside: (_) =>
-                      FocusManager.instance.primaryFocus?.unfocus(),
-                  decoration: const InputDecoration(
-                    labelText: '简单想法',
-                    hintText: '保留人物姿态，改成雨夜霓虹感',
-                    isDense: true,
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          if (isIdea)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _ideaController,
+                    minLines: 1,
+                    maxLines: 2,
+                    style: const TextStyle(fontSize: 13, height: 1.28),
+                    onTapOutside: (_) =>
+                        FocusManager.instance.primaryFocus?.unfocus(),
+                    decoration: InputDecoration(
+                      labelText: '${copy.editVerb}意图',
+                      hintText: brand.editPromptHint,
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: _isGeneratingAssist
-                    ? null
-                    : _generatePromptFromIdeaAndImage,
-                icon: _isGeneratingAssist
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  onPressed: isLoading ? null : _generatePromptFromIdea,
+                  icon: isLoading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.auto_awesome_outlined),
+                  label: Text(copy.ideaAction),
+                ),
+              ],
+            )
+          else
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    if (_assistImageFile != null)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(
+                          _assistImageFile!,
+                          width: 54,
+                          height: 54,
+                          fit: BoxFit.cover,
+                        ),
                       )
-                    : const Icon(Icons.auto_awesome_outlined),
-                label: Text(copy.ideaAction),
-              ),
-            ],
-          ),
-          if (_assistError != null && _assistError!.isNotEmpty) ...[
+                    else if (_imageFile != null)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(
+                          _imageFile!,
+                          width: 54,
+                          height: 54,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    else
+                      Container(
+                        width: 54,
+                        height: 54,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surface
+                              .withValues(alpha: 0.55),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(Icons.image_search_outlined,
+                            color: brand.primaryColor),
+                      ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _assistImageFile != null
+                            ? copy.imageSelectedText
+                            : _imageFile != null
+                                ? '当前原图可直接${copy.imageInferVerb}，也可另选参考图。'
+                                : copy.imageEmptyText,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: isLoading
+                          ? null
+                          : () => _pickAndRecognizeImagePrompt(),
+                      icon: const Icon(Icons.upload_file_outlined),
+                      label: Text(
+                        _assistImageFile == null ? '上传参考图' : '更换参考图',
+                      ),
+                    ),
+                    FilledButton.icon(
+                      onPressed: isLoading
+                          ? null
+                          : () {
+                              final sourcePath = _currentEditImagePath;
+                              if (sourcePath == null) {
+                                showCenterNotice(context, copy.pickEditSource);
+                                return;
+                              }
+                              _dismissPromptAssistFocus();
+                              unawaited(_runImagePromptAssist(sourcePath));
+                            },
+                      icon: isLoading
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.image_search_outlined),
+                      label: Text(copy.imageInferVerb),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: isLoading
+                          ? null
+                          : () {
+                              final sourcePath = _currentEditImagePath;
+                              if (sourcePath == null) {
+                                showCenterNotice(context, copy.pickEditSource);
+                                return;
+                              }
+                              _dismissPromptAssistFocus();
+                              unawaited(
+                                _runImagePromptAssist(
+                                  sourcePath,
+                                  divergent: true,
+                                ),
+                              );
+                            },
+                      icon: const Icon(Icons.auto_awesome_motion_outlined),
+                      label: Text(copy.imageDivergeVerb),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          if (error != null && error.isNotEmpty) ...[
             const SizedBox(height: 10),
-            Text(_assistError!, style: TextStyle(color: brand.warningColor)),
+            Text(error, style: TextStyle(color: brand.warningColor)),
           ],
           _candidateSwitcher(brand),
         ],
@@ -1173,10 +1382,10 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
 
   Widget _candidateSwitcher(AppBrand brand) {
     final copy = promptAssistCopyFor(brand);
-    if (_assistCandidates.isEmpty) return const SizedBox.shrink();
-    final index =
-        _assistCandidateIndex.clamp(0, _assistCandidates.length - 1).toInt();
-    final candidate = _assistCandidates[index];
+    final candidates = _activeCandidates;
+    if (candidates.isEmpty) return const SizedBox.shrink();
+    final index = _activeCandidateIndex.clamp(0, candidates.length - 1).toInt();
+    final candidate = candidates[index];
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 12),
@@ -1194,7 +1403,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  copy.editSwitcherLabel(index, _assistCandidates.length),
+                  copy.editSwitcherLabel(index, candidates.length),
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
@@ -1211,7 +1420,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
               ),
               IconButton(
                 tooltip: copy.nextEditTooltip(),
-                onPressed: index >= _assistCandidates.length - 1
+                onPressed: index >= candidates.length - 1
                     ? null
                     : () => _setAssistCandidateIndex(index + 1),
                 icon: const Icon(Icons.chevron_right),

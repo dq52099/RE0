@@ -297,12 +297,14 @@ class GatewayClient {
   Future<List<String>> identifyImagePromptCandidates(
     String imagePath, {
     String? idea,
+    bool divergent = false,
   }) async {
     return _guard(() async {
       final ideaText = idea?.trim();
       final formData = FormData.fromMap({
         'count': 3,
         if (ideaText != null && ideaText.isNotEmpty) 'idea': ideaText,
+        if (divergent) 'divergent': '1',
         'image': await MultipartFile.fromFile(imagePath),
       });
       final res = await _dio.post(
@@ -313,18 +315,20 @@ class GatewayClient {
     }, fallback: '图片识别咒文失败。');
   }
 
-  Future<List<String>> generateEditPromptCandidates({
-    required String idea,
-    required String imagePath,
-  }) async {
+  Future<List<String>> generateEditPromptCandidates(String idea) async {
     final ideaText = idea.trim();
     if (ideaText.isEmpty) return const [];
 
-    try {
-      return await identifyImagePromptCandidates(imagePath, idea: ideaText);
-    } catch (error) {
-      throw gatewayException(error, fallback: '结合图片推荐提示词失败。');
-    }
+    return _guard(() async {
+      final res = await _dio.post(
+        '/api/ai/image-prompt-candidates',
+        data: {
+          'idea': ideaText,
+          'count': 3,
+        },
+      );
+      return _promptCandidates(res.data);
+    }, fallback: 'AI 推荐改图提示词失败。');
   }
 
   Future<Map<String, dynamic>> getHistory(

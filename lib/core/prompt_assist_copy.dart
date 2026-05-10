@@ -35,14 +35,19 @@ class PromptAssistCopy {
   String get imageNoResult => '$imageInferVerb后没有得到可用$generateNoun，请换张图片再试。';
   String get imageReady => '已$imageInferVerb出$generateNoun，可查看全部或切换使用。';
   String get imageFailure => '图片$imageInferVerb失败，未得到可用$generateNoun。';
+  String get imageDivergeVerb => '发散';
+  String get imageDivergeReady => '已发散出$generateNoun，可查看全部或切换使用。';
+  String get imageDivergeNoResult =>
+      '发散后没有得到可用$generateNoun，请换张图片再试。';
+  String get imageDivergeFailure => '图片发散失败，未得到可用$generateNoun。';
   String get generateNoCurrent => '当前没有可用$generateNoun';
   String get generateEmptyCurrent => '当前$generateNoun为空';
   String get generateAllTitle => '全部$generateNoun';
   String get generateFullTitle => '完整$generateNoun';
   String get fillGenerate => '填入$generateNoun';
   String get writeGenerate => '请先编写$generateNoun';
-  String get imageEmptyText => '选择本地图片后$imageInferVerb 3 条$generateNoun';
-  String get imageSelectedText => '已选择图片，可重新$imageInferVerb或更换图片';
+  String get imageEmptyText => '上传参考图后，可用$imageInferVerb 3 条$generateNoun';
+  String get imageSelectedText => '已选择参考图，可重新$imageInferVerb或更换图片';
 
   String generateBusy(AppBrand brand) =>
       '${brand.generateActionLabel}正在进行，请稍后再试';
@@ -70,7 +75,7 @@ class PromptAssistCopy {
     return '${brand.historyTabLabel}的$generateSlot已满（已用 $used / 上限 $total）。$requestText继续$generateOverflowVerb会挤掉最早的记录；请先到${brand.historyTabLabel}手动清理后再试。';
   }
 
-  String get editNoResult => '没有生成可用$editNoun，请换个想法或图片再试。';
+  String get editNoResult => '没有生成可用$editNoun，请换个$editVerb意图或参考图再试。';
   String get editReady => '已生成$editNoun，可查看全部或切换使用。';
   String get editFailure => '$editNoun生成失败。';
   String get editNoCurrent => '当前没有可用$editNoun';
@@ -89,8 +94,8 @@ class PromptAssistCopy {
   String editUseThisLabel() => '使用当前$editNoun';
   String editCountLabel(int count) => '共 $count 条$editNoun';
   String editBatchLabel(int count) => '使用当前$count条$editNoun';
-  String editIntroNoImage() => '先选择图片，再输入简单想法，推荐 3 条$editNoun';
-  String editIntroWithImage() => '结合当前图片和简单想法，推荐 3 条$editNoun';
+  String editIntroNoImage() => '先输入$editVerb意图，再生成 3 条$editNoun';
+  String editIntroWithImage() => '结合当前原图和$editVerb意图，生成 3 条$editNoun';
   String editSwitcherLabel(int index, int total) =>
       '$editNoun ${index + 1}/$total';
   String previousEditTooltip() => '上一条$editNoun';

@@ -77,10 +77,11 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
   }
 
   Future<void> _generatePromptFromIdea() async {
-    final copy = promptAssistCopyFor(ref.read(brandProvider));
+    final brand = ref.read(brandProvider);
+    final copy = promptAssistCopyFor(brand);
     final idea = _ideaController.text.trim();
     if (idea.isEmpty) {
-      showCenterNotice(context, '请先写下简单想法');
+      showCenterNotice(context, '请先写下${brand.generateActionLabel}思路');
       return;
     }
     FocusScope.of(context).unfocus();
@@ -879,12 +880,14 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                     minLines: 1,
                     maxLines: 2,
                     style: const TextStyle(fontSize: 13, height: 1.28),
-                    decoration: const InputDecoration(
-                      labelText: '简单想法',
-                      hintText: '一个银发少女站在雪山上，二次元风格',
+                    decoration: InputDecoration(
+                      labelText: '${brand.generateActionLabel}思路',
+                      hintText: brand.generatePromptHint,
                       isDense: true,
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                     ),
                   ),
                 ),
