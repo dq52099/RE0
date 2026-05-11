@@ -1007,13 +1007,13 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
-              if (capabilities.imageModes.canSwitch) ...[
-                const SizedBox(width: 12),
-                _buildImageModeSwitch(capabilities, selectedMode),
-              ],
             ],
           ),
           const SizedBox(height: 8),
+          if (capabilities.imageModes.canSwitch) ...[
+            _buildImageModeSwitchRow(brand, capabilities, selectedMode),
+            const SizedBox(height: 8),
+          ],
           _buildImageModePriceRow(brand, capabilities),
           const SizedBox(height: 8),
           Text(
@@ -1025,29 +1025,41 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     );
   }
 
-  Widget _buildImageModeSwitch(
+  Widget _buildImageModeSwitchRow(
+    AppBrand brand,
     ImageCapabilities capabilities,
     String selectedMode,
   ) {
-    return SegmentedButton<String>(
-      segments: const [
-        ButtonSegment(value: 'vip', label: Text('VIP')),
-        ButtonSegment(value: 'general', label: Text('一般')),
-      ],
-      selected: {selectedMode},
-      onSelectionChanged: (values) {
-        final next = values.first;
-        ref.read(selectedImageModeProvider.notifier).state = next;
-        ref.read(selectedImageModeBaseProvider.notifier).state =
-            capabilities.imageModes.current;
-      },
-      style: ButtonStyle(
-        visualDensity: VisualDensity.compact,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        textStyle: WidgetStateProperty.all(
-          Theme.of(context).textTheme.labelSmall,
+    return Row(
+      children: [
+        Icon(Icons.alt_route_rounded, size: 18, color: brand.primaryColor),
+        const SizedBox(width: 12),
+        Text(
+          '线路:',
+          style: Theme.of(context).textTheme.bodyMedium,
         ),
-      ),
+        const SizedBox(width: 10),
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(value: 'vip', label: Text('VIP')),
+            ButtonSegment(value: 'general', label: Text('一般')),
+          ],
+          selected: {selectedMode},
+          onSelectionChanged: (values) {
+            final next = values.first;
+            ref.read(selectedImageModeProvider.notifier).state = next;
+            ref.read(selectedImageModeBaseProvider.notifier).state =
+                capabilities.imageModes.current;
+          },
+          style: ButtonStyle(
+            visualDensity: VisualDensity.compact,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            textStyle: WidgetStateProperty.all(
+              Theme.of(context).textTheme.labelSmall,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
