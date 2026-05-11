@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/api_error.dart';
 import 'core/app_update_service.dart';
+import 'core/brand_background.dart';
 import 'core/providers.dart';
 import 'features/auth/login_screen.dart';
 import 'features/home/home_screen.dart';
@@ -52,12 +53,6 @@ class _StartupGateState extends ConsumerState<_StartupGate> {
   void initState() {
     super.initState();
     _future = _checkSavedAuth();
-  }
-
-  void _retryStartup() {
-    setState(() {
-      _future = _checkSavedAuth();
-    });
   }
 
   AppUpdateInfo _buildForcedUpdateInfo(Map<String, dynamic> data) {
@@ -114,12 +109,7 @@ class _StartupGateState extends ConsumerState<_StartupGate> {
             return _StartupResult.forceUpdate(info);
           }
         } catch (error) {
-          return _StartupResult.forceUpdateError(
-            friendlyError(
-              error,
-              fallback: '更新检查失败，请保持联网后重试。',
-            ),
-          );
+          debugPrint('Force update check skipped: $error');
         }
       }
       final auth = await client.checkAuth();
@@ -181,20 +171,14 @@ class _StartupGateState extends ConsumerState<_StartupGate> {
         }
         final result = snapshot.data!;
         final forceUpdateInfo = result.forceUpdateInfo;
-        final forceUpdateError = result.forceUpdateError;
-        if (forceUpdateInfo != null || forceUpdateError != null) {
+        if (forceUpdateInfo != null) {
           return _ForcedUpdateScreen(
             info: forceUpdateInfo,
-            errorMessage: forceUpdateError,
             isDownloading: _isDownloadingUpdate,
             progress: _updateProgress,
-            onDownload:
-                _isDownloadingUpdate || forceUpdateInfo == null
-                    ? null
-                    : () => _downloadForcedUpdate(forceUpdateInfo),
-            onRetry: _isDownloadingUpdate || forceUpdateError == null
+            onDownload: _isDownloadingUpdate
                 ? null
-                : _retryStartup,
+                : () => _downloadForcedUpdate(forceUpdateInfo),
           );
         }
         return result.showHome ? const HomeScreen() : const LoginScreen();
@@ -207,129 +191,181 @@ class _StartupResult {
   const _StartupResult._({
     required this.showHome,
     this.forceUpdateInfo,
-    this.forceUpdateError,
   });
 
   const _StartupResult.home() : this._(showHome: true);
   const _StartupResult.login() : this._(showHome: false);
   const _StartupResult.forceUpdate(AppUpdateInfo info)
       : this._(showHome: false, forceUpdateInfo: info);
-  const _StartupResult.forceUpdateError(String message)
-      : this._(showHome: false, forceUpdateError: message);
 
   final bool showHome;
   final AppUpdateInfo? forceUpdateInfo;
-  final String? forceUpdateError;
 }
 
-class _ForcedUpdateScreen extends StatelessWidget {
+class _ForcedUpdateScreen extends ConsumerWidget {
   const _ForcedUpdateScreen({
-    this.info,
-    this.errorMessage,
+    required this.info,
     required this.isDownloading,
     required this.progress,
     required this.onDownload,
-    required this.onRetry,
   });
 
-  final AppUpdateInfo? info;
-  final String? errorMessage;
+  final AppUpdateInfo info;
   final bool isDownloading;
   final double? progress;
   final VoidCallback? onDownload;
-  final VoidCallback? onRetry;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final brand = ref.watch(brandProvider);
     final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     return PopScope(
       canPop: false,
       child: Scaffold(
-        body: Stack(
-          children: [
-            const ModalBarrier(dismissible: false, color: Colors.black54),
-            SafeArea(
-              child: Center(
+        body: BrandBackground(
+          child: SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 420),
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Material(
-                      color: colorScheme.surface,
-                      borderRadius: BorderRadius.circular(20),
-                      clipBehavior: Clip.antiAlias,
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Icon(
-                              Icons.system_update_alt,
-                              size: 48,
-                              color: colorScheme.primary,
+                  constraints: const BoxConstraints(maxWidth: 460),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colorScheme.surface.withValues(alpha: 0.94),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: brand.primaryColor.withValues(alpha: 0.28),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: brand.primaryColor.withValues(alpha: 0.14),
+                          blurRadius: 32,
+                          offset: const Offset(0, 16),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 56,
+                                height: 56,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: brand.primaryColor.withValues(
+                                      alpha: 0.35,
+                                    ),
+                                  ),
+                                ),
+                                clipBehavior: Clip.antiAlias,
+                                child: Image.asset(
+                                  'assets/icon.png',
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '版本更新',
+                                      style: textTheme.titleLarge,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '请先安装最新版本，再继续使用。',
+                                      style: textTheme.bodySmall,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _UpdatePill(
+                                icon: Icons.system_update_alt,
+                                label: '新版本',
+                                value: info.latestVersionName,
+                              ),
+                              _UpdatePill(
+                                icon: Icons.inventory_2_outlined,
+                                label: '安装包',
+                                value: _formatBytes(info.fileSize),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 18),
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: brand.panelColor.withValues(alpha: 0.42),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: brand.primaryColor.withValues(
+                                  alpha: 0.18,
+                                ),
+                              ),
                             ),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxHeight: 170),
+                              child: SingleChildScrollView(
+                                child: Text(
+                                  _cleanReleaseNotes(info.releaseNotes),
+                                  style: textTheme.bodyMedium,
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (isDownloading) ...[
                             const SizedBox(height: 18),
-                            Text(
-                              info != null
-                                  ? '需要更新到 ${info!.latestVersionName}'
-                                  : '需要更新',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              info?.releaseNotes ??
-                                  errorMessage ??
-                                  '当前版本需要先完成更新后才能继续使用。',
-                              textAlign: TextAlign.center,
-                              maxLines: 6,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (info != null) ...[
-                              const SizedBox(height: 8),
-                              Text(
-                                _formatBytes(info!.fileSize),
-                                textAlign: TextAlign.center,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ],
-                            if (isDownloading) ...[
-                              const SizedBox(height: 22),
-                              LinearProgressIndicator(value: progress),
-                            ],
-                            const SizedBox(height: 24),
-                            FilledButton.icon(
-                              onPressed: onDownload ?? onRetry,
-                              icon: Icon(
-                                onDownload != null
-                                    ? Icons.download
-                                    : Icons.refresh,
-                              ),
-                              label: Text(
-                                isDownloading
-                                    ? '下载中'
-                                    : onDownload != null
-                                        ? '下载更新'
-                                        : '重试检测',
-                              ),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(999),
+                              child: LinearProgressIndicator(value: progress),
                             ),
                           ],
-                        ),
+                          const SizedBox(height: 20),
+                          FilledButton.icon(
+                            onPressed: onDownload,
+                            icon: Icon(
+                              isDownloading
+                                  ? Icons.downloading
+                                  : Icons.download_rounded,
+                            ),
+                            label: Text(isDownloading ? '正在下载' : '下载安装'),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            '安装完成后重新打开应用即可继续。',
+                            textAlign: TextAlign.center,
+                            style: textTheme.bodySmall,
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
   String _formatBytes(int bytes) {
-    if (bytes <= 0) return '安装包大小未知';
+    if (bytes <= 0) return '大小未知';
     const units = ['B', 'KB', 'MB', 'GB'];
     var size = bytes.toDouble();
     var index = 0;
@@ -338,6 +374,58 @@ class _ForcedUpdateScreen extends StatelessWidget {
       index += 1;
     }
     return '${size.toStringAsFixed(index == 0 ? 0 : 1)} ${units[index]}';
+  }
+
+  String _cleanReleaseNotes(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return '包含稳定性修复与体验优化。';
+    return trimmed.replaceFirst(RegExp(r'^本次更新：\s*'), '');
+  }
+}
+
+class _UpdatePill extends StatelessWidget {
+  const _UpdatePill({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: colorScheme.primary.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: colorScheme.primary.withValues(alpha: 0.22),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: colorScheme.primary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.primary,
+                  fontWeight: FontWeight.w500,
+                ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
