@@ -1251,26 +1251,13 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.collections_bookmark_outlined,
-                  size: 18, color: brand.primaryColor),
+              Icon(Icons.bolt, color: brand.successColor),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  '${brand.generateActionLabel}:$retentionText',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Icon(Icons.bolt, size: 18, color: brand.successColor),
-              const SizedBox(width: 6),
-              Flexible(
                 child: Text(
                   '${brand.generateQuotaLabel}: $remain',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.right,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
@@ -1279,7 +1266,27 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          _buildImageModeRow(brand, capabilities, selectedMode),
+          Row(
+            children: [
+              Icon(Icons.collections_bookmark_outlined,
+                  size: 18, color: brand.primaryColor),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '${brand.generateActionLabel} 记忆: $retentionText',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ),
+              if (capabilities.imageModes.canSwitch) ...[
+                const SizedBox(width: 12),
+                _buildImageModeSwitch(capabilities, selectedMode),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          _buildImageModePriceRow(brand, capabilities),
           const SizedBox(height: 8),
           Text(
             utcMidnightLocalResetHint(),
@@ -1290,54 +1297,41 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     );
   }
 
-  Widget _buildImageModeRow(
-    AppBrand brand,
+  Widget _buildImageModeSwitch(
     ImageCapabilities capabilities,
     String selectedMode,
   ) {
-    final canSwitch = capabilities.imageModes.canSwitch;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(Icons.route_outlined, size: 18, color: brand.primaryColor),
-            const SizedBox(width: 12),
-            Text(
-              '模式: ',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            if (canSwitch)
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'vip', label: Text('VIP')),
-                  ButtonSegment(value: 'general', label: Text('一般')),
-                ],
-                selected: {selectedMode},
-                onSelectionChanged: (values) {
-                  final next = values.first;
-                  ref.read(selectedImageModeProvider.notifier).state = next;
-                  ref.read(selectedImageModeBaseProvider.notifier).state =
-                      capabilities.imageModes.current;
-                },
-                style: ButtonStyle(
-                  visualDensity: VisualDensity.compact,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  textStyle: WidgetStateProperty.all(
-                    Theme.of(context).textTheme.labelMedium,
-                  ),
-                ),
-              )
-            else
-              Text(
-                imageModeLabel(selectedMode),
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-          ],
+    return SegmentedButton<String>(
+      segments: const [
+        ButtonSegment(value: 'vip', label: Text('VIP')),
+        ButtonSegment(value: 'general', label: Text('一般')),
+      ],
+      selected: {selectedMode},
+      onSelectionChanged: (values) {
+        final next = values.first;
+        ref.read(selectedImageModeProvider.notifier).state = next;
+        ref.read(selectedImageModeBaseProvider.notifier).state =
+            capabilities.imageModes.current;
+      },
+      style: ButtonStyle(
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        textStyle: WidgetStateProperty.all(
+          Theme.of(context).textTheme.labelSmall,
         ),
-        const SizedBox(height: 6),
-        Padding(
-          padding: const EdgeInsets.only(left: 30),
+      ),
+    );
+  }
+
+  Widget _buildImageModePriceRow(
+    AppBrand brand,
+    ImageCapabilities capabilities,
+  ) {
+    return Row(
+      children: [
+        Icon(Icons.route_outlined, size: 18, color: brand.primaryColor),
+        const SizedBox(width: 12),
+        Expanded(
           child: ImageQuotaPriceLine(
             capabilities: capabilities.imageModes,
             accentColor: brand.primaryColor,

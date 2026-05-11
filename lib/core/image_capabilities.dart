@@ -244,6 +244,9 @@ class ImageModeCapabilities {
 
   bool get hasVipDiscount => vipQuotaMultiplier < 1;
 
+  String get vipMultiplierLabel =>
+      _formatCompactNumber(vipQuotaMultiplier <= 0 ? 1.0 : vipQuotaMultiplier);
+
   String get vipDiscountLabel {
     final multiplier = vipQuotaMultiplier <= 0 ? 1.0 : vipQuotaMultiplier;
     if ((multiplier - 1).abs() < 0.0001) return '原价';
