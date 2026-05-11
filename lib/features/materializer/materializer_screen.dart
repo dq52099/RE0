@@ -11,6 +11,7 @@ import '../../core/cached_gateway_image.dart';
 import '../../core/compact_dropdown_field.dart';
 import '../../core/compact_save_notice.dart';
 import '../../core/image_capabilities.dart';
+import '../../core/image_quota_price_line.dart';
 import '../../core/prompt_assist_copy.dart';
 import '../../core/providers.dart';
 import '../../core/timezone_reset_hint.dart';
@@ -1250,24 +1251,30 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.bolt, color: brand.successColor),
-              const SizedBox(width: 12),
-              Text(
-                '${brand.generateQuotaLabel}: $remain',
-                style:
-                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
               Icon(Icons.collections_bookmark_outlined,
                   size: 18, color: brand.primaryColor),
               const SizedBox(width: 12),
-              Text(
-                '记忆: $retentionText',
-                style: Theme.of(context).textTheme.bodyMedium,
+              Expanded(
+                child: Text(
+                  '${brand.generateActionLabel}:$retentionText',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Icon(Icons.bolt, size: 18, color: brand.successColor),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  '${brand.generateQuotaLabel}: $remain',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
               ),
             ],
           ),
@@ -1331,13 +1338,9 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
         const SizedBox(height: 6),
         Padding(
           padding: const EdgeInsets.only(left: 30),
-          child: Text(
-            capabilities.imageModes.quotaSummaryText,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: brand.primaryColor.withValues(alpha: 0.82),
-                ),
+          child: ImageQuotaPriceLine(
+            capabilities: capabilities.imageModes,
+            accentColor: brand.primaryColor,
           ),
         ),
       ],

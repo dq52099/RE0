@@ -221,19 +221,38 @@ class ImageModeCapabilities {
     required this.current,
     required this.allowed,
     this.vipQuotaMultiplier = 0.5,
+    this.vipQuotaPerImage,
     this.generalQuotaPerImage = 1,
   });
 
   final String current;
   final List<String> allowed;
   final double vipQuotaMultiplier;
+  final int? vipQuotaPerImage;
   final int generalQuotaPerImage;
 
+  int get vipBaseQuotaPerImage => 2;
+
   bool get canSwitch => allowed.contains('vip') && allowed.contains('general');
-  int get vipQuotaPerImage =>
-      vipQuotaMultiplier <= 0 ? 1 : (1 / vipQuotaMultiplier).ceil();
+  int get effectiveVipQuotaPerImage {
+    final explicit = vipQuotaPerImage;
+    if (explicit != null && explicit > 0) return explicit;
+    return vipQuotaMultiplier <= 0
+        ? 1
+        : (vipBaseQuotaPerImage * vipQuotaMultiplier).ceil();
+  }
+
+  bool get hasVipDiscount => vipQuotaMultiplier < 1;
+
+  String get vipDiscountLabel {
+    final multiplier = vipQuotaMultiplier <= 0 ? 1.0 : vipQuotaMultiplier;
+    if ((multiplier - 1).abs() < 0.0001) return '原价';
+    if (multiplier < 1) return '${_formatCompactNumber(multiplier * 10)}折';
+    return '${_formatCompactNumber(multiplier)}倍';
+  }
+
   String get quotaSummaryText =>
-      'VIP:${vipQuotaPerImage}额度/次，一般:${generalQuotaPerImage}额度/次';
+      'VIP 原价${vipBaseQuotaPerImage}额度/张，折后${effectiveVipQuotaPerImage}额度/张（$vipDiscountLabel） · 一般${generalQuotaPerImage}额度/张';
 
   factory ImageModeCapabilities.fromJson(Map<String, dynamic> json) {
     final allowed = (json['allowed'] as List? ?? const [])
@@ -248,6 +267,7 @@ class ImageModeCapabilities {
       allowed: allowed.isEmpty ? [fallback] : allowed,
       vipQuotaMultiplier:
           _doubleValue(json['vip_quota_multiplier'], fallback: 0.5),
+      vipQuotaPerImage: _optionalIntValue(json['vip_quota_per_image']),
       generalQuotaPerImage:
           _intValue(json['general_quota_per_image'], fallback: 1),
     );
@@ -263,6 +283,17 @@ class ImageModeCapabilities {
     final parsed = int.tryParse(value?.toString() ?? '');
     if (parsed == null || parsed <= 0) return fallback;
     return parsed;
+  }
+
+  static int? _optionalIntValue(dynamic value) {
+    final parsed = int.tryParse(value?.toString() ?? '');
+    if (parsed == null || parsed <= 0) return null;
+    return parsed;
+  }
+
+  static String _formatCompactNumber(double value) {
+    final fixed = value.toStringAsFixed(1);
+    return fixed.endsWith('.0') ? fixed.substring(0, fixed.length - 2) : fixed;
   }
 }
 

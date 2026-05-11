@@ -2405,7 +2405,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                         const TextInputType.numberWithOptions(decimal: true),
                     decoration: const InputDecoration(
                       labelText: 'VIP 额度倍率',
-                      helperText: '0.5 表示每张图片消耗 2 额度；1 表示每张图片消耗 1 额度',
+                      helperText: '按基础价 2 额度/张计算；0.5 即 5 折，实际 1 额度/张',
                     ),
                   ),
                   const SizedBox(height: 18),
