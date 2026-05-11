@@ -422,6 +422,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 Wrap(
+                                  alignment: WrapAlignment.end,
                                   spacing: 8,
                                   runSpacing: 8,
                                   children: [
@@ -918,6 +919,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                   padding: const EdgeInsets.all(10),
                   decoration: actionBarDecoration,
                   child: Wrap(
+                    alignment: WrapAlignment.end,
                     spacing: 8,
                     runSpacing: 8,
                     crossAxisAlignment: WrapCrossAlignment.center,
@@ -983,6 +985,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                   padding: const EdgeInsets.all(10),
                   decoration: actionBarDecoration,
                   child: Wrap(
+                    alignment: WrapAlignment.end,
                     spacing: 8,
                     runSpacing: 8,
                     crossAxisAlignment: WrapCrossAlignment.center,

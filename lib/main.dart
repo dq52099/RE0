@@ -245,111 +245,166 @@ class _ForcedUpdateScreen extends ConsumerWidget {
                         ),
                       ],
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: Stack(
                         children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 56,
-                                height: 56,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: brand.primaryColor.withValues(
-                                      alpha: 0.35,
+                          Positioned.fill(
+                            child: Image.asset(
+                              brand.backgroundAsset,
+                              fit: BoxFit.cover,
+                              alignment: Alignment.center,
+                              filterQuality: FilterQuality.medium,
+                            ),
+                          ),
+                          Positioned.fill(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    brand.backgroundOverlay.withValues(
+                                      alpha: 0.18,
                                     ),
-                                  ),
-                                ),
-                                clipBehavior: Clip.antiAlias,
-                                child: Image.asset(
-                                  'assets/icon.png',
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      '版本更新',
-                                      style: textTheme.titleLarge,
+                                    brand.primaryColor.withValues(
+                                      alpha: 0.52,
                                     ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '请先安装最新版本，再继续使用。',
-                                      style: textTheme.bodySmall,
+                                    brand.backgroundOverlay.withValues(
+                                      alpha: 0.84,
                                     ),
                                   ],
                                 ),
                               ),
-                            ],
+                            ),
                           ),
-                          const SizedBox(height: 20),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              _UpdatePill(
-                                icon: Icons.system_update_alt,
-                                label: '新版本',
-                                value: info.latestVersionName,
-                              ),
-                              _UpdatePill(
-                                icon: Icons.inventory_2_outlined,
-                                label: '安装包',
-                                value: _formatBytes(info.fileSize),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 18),
-                          Container(
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: brand.panelColor.withValues(alpha: 0.42),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: brand.primaryColor.withValues(
-                                  alpha: 0.18,
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 56,
+                                      height: 56,
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.surface.withValues(
+                                          alpha: 0.12,
+                                        ),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: colorScheme.onSurface.withValues(
+                                            alpha: 0.28,
+                                          ),
+                                        ),
+                                      ),
+                                      clipBehavior: Clip.antiAlias,
+                                      child: Image.asset(
+                                        'assets/icon.png',
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            '版本更新',
+                                            style:
+                                                textTheme.titleLarge?.copyWith(
+                                              color: colorScheme.onSurface,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            '请先安装最新版本，再继续使用。',
+                                            style: textTheme.bodySmall?.copyWith(
+                                              color: colorScheme.onSurface
+                                                  .withValues(alpha: 0.88),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                            ),
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxHeight: 170),
-                              child: SingleChildScrollView(
-                                child: Text(
-                                  _cleanReleaseNotes(info.releaseNotes),
-                                  style: textTheme.bodyMedium,
+                                const SizedBox(height: 20),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    _UpdatePill(
+                                      icon: Icons.system_update_alt,
+                                      label: '新版本',
+                                      value: info.latestVersionName,
+                                    ),
+                                    _UpdatePill(
+                                      icon: Icons.inventory_2_outlined,
+                                      label: '安装包',
+                                      value: _formatBytes(info.fileSize),
+                                    ),
+                                  ],
                                 ),
-                              ),
+                                const SizedBox(height: 18),
+                                Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        colorScheme.surface.withValues(alpha: 0.9),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: brand.primaryColor.withValues(
+                                        alpha: 0.18,
+                                      ),
+                                    ),
+                                  ),
+                                  child: ConstrainedBox(
+                                    constraints:
+                                        const BoxConstraints(maxHeight: 170),
+                                    child: SingleChildScrollView(
+                                      child: Text(
+                                        _cleanReleaseNotes(info.releaseNotes),
+                                        style: textTheme.bodyMedium,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                if (isDownloading) ...[
+                                  const SizedBox(height: 18),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(999),
+                                    child:
+                                        LinearProgressIndicator(value: progress),
+                                  ),
+                                ],
+                                const SizedBox(height: 20),
+                                FilledButton.icon(
+                                  onPressed: onDownload,
+                                  icon: Icon(
+                                    isDownloading
+                                        ? Icons.downloading
+                                        : Icons.download_rounded,
+                                  ),
+                                  label: Text(
+                                    isDownloading ? '正在下载' : '下载安装',
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  '安装完成后重新打开应用即可继续。',
+                                  textAlign: TextAlign.center,
+                                  style: textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurface
+                                        .withValues(alpha: 0.9),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                          if (isDownloading) ...[
-                            const SizedBox(height: 18),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(999),
-                              child: LinearProgressIndicator(value: progress),
-                            ),
-                          ],
-                          const SizedBox(height: 20),
-                          FilledButton.icon(
-                            onPressed: onDownload,
-                            icon: Icon(
-                              isDownloading
-                                  ? Icons.downloading
-                                  : Icons.download_rounded,
-                            ),
-                            label: Text(isDownloading ? '正在下载' : '下载安装'),
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            '安装完成后重新打开应用即可继续。',
-                            textAlign: TextAlign.center,
-                            style: textTheme.bodySmall,
                           ),
                         ],
                       ),

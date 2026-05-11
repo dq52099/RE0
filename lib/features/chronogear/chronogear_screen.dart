@@ -1254,20 +1254,11 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                   padding: const EdgeInsets.all(10),
                   decoration: actionBarDecoration,
                   child: Wrap(
+                    alignment: WrapAlignment.end,
                     spacing: 8,
                     runSpacing: 8,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      FilledButton.icon(
-                        style: primaryButtonStyle,
-                        onPressed: isLoading
-                            ? null
-                            : () => _generatePromptFromIdea(),
-                        icon: _isGeneratingIdeaPrompt
-                            ? loadingIndicator
-                            : const Icon(Icons.auto_awesome_outlined),
-                        label: Text(copy.ideaAction),
-                      ),
                       OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(
@@ -1292,6 +1283,16 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                             ? loadingIndicator
                             : const Icon(Icons.auto_awesome_motion_outlined),
                         label: Text(copy.editDivergeAction),
+                      ),
+                      FilledButton.icon(
+                        style: primaryButtonStyle,
+                        onPressed: isLoading
+                            ? null
+                            : () => _generatePromptFromIdea(),
+                        icon: _isGeneratingIdeaPrompt
+                            ? loadingIndicator
+                            : const Icon(Icons.auto_awesome_outlined),
+                        label: Text(copy.ideaAction),
                       ),
                     ],
                   ),
@@ -1358,41 +1359,18 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                   padding: const EdgeInsets.all(10),
                   decoration: actionBarDecoration,
                   child: Wrap(
+                    alignment: WrapAlignment.end,
                     spacing: 8,
                     runSpacing: 8,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      IconButton.outlined(
-                        constraints: const BoxConstraints.tightFor(
-                          width: 40,
-                          height: 40,
-                        ),
-                        padding: EdgeInsets.zero,
-                        tooltip: _assistImageFile == null
-                            ? '上传参考图'
-                            : '更换参考图',
-                        onPressed: isLoading
-                            ? null
-                            : () => _pickAndRecognizeImagePrompt(),
-                        icon: const Icon(Icons.upload_file_outlined, size: 20),
-                      ),
                       FilledButton.icon(
                         style: primaryButtonStyle,
                         onPressed: isLoading
                             ? null
-                            : () {
-                                final sourcePath = _currentEditImagePath;
-                                if (sourcePath == null) {
-                                  showCenterNotice(context, copy.pickEditSource);
-                                  return;
-                                }
-                                _dismissPromptAssistFocus();
-                                unawaited(_runImagePromptAssist(sourcePath));
-                              },
-                        icon: _isRecognizingImagePrompt
-                            ? loadingIndicator
-                            : const Icon(Icons.image_search_outlined),
-                        label: Text(copy.imageInferVerb),
+                            : () => _pickAndRecognizeImagePrompt(),
+                        icon: const Icon(Icons.upload_file_outlined),
+                        label: Text(_assistImageFile == null ? '选择' : '更换'),
                       ),
                       OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
@@ -1431,6 +1409,24 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                             ? loadingIndicator
                             : const Icon(Icons.auto_awesome_motion_outlined),
                         label: Text(copy.editDivergeAction),
+                      ),
+                      FilledButton.icon(
+                        style: primaryButtonStyle,
+                        onPressed: isLoading
+                            ? null
+                            : () {
+                                final sourcePath = _currentEditImagePath;
+                                if (sourcePath == null) {
+                                  showCenterNotice(context, copy.pickEditSource);
+                                  return;
+                                }
+                                _dismissPromptAssistFocus();
+                                unawaited(_runImagePromptAssist(sourcePath));
+                              },
+                        icon: _isRecognizingImagePrompt
+                            ? loadingIndicator
+                            : const Icon(Icons.image_search_outlined),
+                        label: Text(copy.imageInferVerb),
                       ),
                     ],
                   ),
