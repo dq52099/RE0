@@ -2188,6 +2188,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     );
     var profile =
         _settingValue(byKey, 'provider_image_profile', fallback: 'gpt-image-2');
+    final vipImageQuotaMultiplier = TextEditingController(
+      text: _settingValue(byKey, 'vip_image_quota_multiplier', fallback: '0.5'),
+    );
     var responseFormat =
         _settingValue(byKey, 'default_response_format', fallback: 'url');
     var quality =
@@ -2285,6 +2288,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         'general_provider_model': generalProviderModel.text.trim(),
         'general_provider_image_model': generalProviderImageModel.text.trim(),
         'provider_image_profile': profile,
+        'vip_image_quota_multiplier':
+            double.tryParse(vipImageQuotaMultiplier.text),
         'provider_timeout_seconds': int.tryParse(providerTimeout.text),
         'default_response_format': responseFormat,
         'default_image_quality': quality,
@@ -2392,6 +2397,16 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
                     decoration: const InputDecoration(labelText: '签到改图奖励倍数'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: vipImageQuotaMultiplier,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'VIP 额度倍率',
+                      helperText: '0.5 表示每张图片消耗 2 额度；1 表示每张图片消耗 1 额度',
+                    ),
                   ),
                   const SizedBox(height: 18),
                 ],
@@ -3966,6 +3981,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         key == 'allow_public_registration' ||
         key == 'registration_email_required' ||
         key == 'registration_invite_required' ||
+        key == 'vip_image_quota_multiplier' ||
         key.startsWith('daily_checkin_')) {
       return '基础设置';
     }
@@ -4014,6 +4030,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       'provider_active_slot': '线路',
       'provider_model': 'VIP 模型',
       'general_provider_image_model': '普通图片模型',
+      'vip_image_quota_multiplier': 'VIP 额度倍率',
       'notification_retention_days': '已读通知清理',
       'notification_category_limit': '每类显示上限',
       'email_service_enabled': '邮件总开关',

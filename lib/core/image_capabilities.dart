@@ -220,12 +220,20 @@ class ImageModeCapabilities {
   const ImageModeCapabilities({
     required this.current,
     required this.allowed,
+    this.vipQuotaMultiplier = 0.5,
+    this.generalQuotaPerImage = 1,
   });
 
   final String current;
   final List<String> allowed;
+  final double vipQuotaMultiplier;
+  final int generalQuotaPerImage;
 
   bool get canSwitch => allowed.contains('vip') && allowed.contains('general');
+  int get vipQuotaPerImage =>
+      vipQuotaMultiplier <= 0 ? 1 : (1 / vipQuotaMultiplier).ceil();
+  String get quotaSummaryText =>
+      'VIP:${vipQuotaPerImage}额度/次，一般:${generalQuotaPerImage}额度/次';
 
   factory ImageModeCapabilities.fromJson(Map<String, dynamic> json) {
     final allowed = (json['allowed'] as List? ?? const [])
@@ -238,7 +246,23 @@ class ImageModeCapabilities {
     return ImageModeCapabilities(
       current: current == 'vip' || current == 'general' ? current! : fallback,
       allowed: allowed.isEmpty ? [fallback] : allowed,
+      vipQuotaMultiplier:
+          _doubleValue(json['vip_quota_multiplier'], fallback: 0.5),
+      generalQuotaPerImage:
+          _intValue(json['general_quota_per_image'], fallback: 1),
     );
+  }
+
+  static double _doubleValue(dynamic value, {required double fallback}) {
+    final parsed = double.tryParse(value?.toString() ?? '');
+    if (parsed == null || parsed <= 0) return fallback;
+    return parsed;
+  }
+
+  static int _intValue(dynamic value, {required int fallback}) {
+    final parsed = int.tryParse(value?.toString() ?? '');
+    if (parsed == null || parsed <= 0) return fallback;
+    return parsed;
   }
 }
 

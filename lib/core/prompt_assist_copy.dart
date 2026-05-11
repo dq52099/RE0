@@ -41,8 +41,8 @@ class PromptAssistCopy {
   String get generateFullTitle => '完整$generateNoun';
   String get fillGenerate => '填入$generateNoun';
   String get writeGenerate => '请先编写$generateNoun';
-  String get imageEmptyText => '上传参考图后，可用$imageInferVerb 3 条$generateNoun';
-  String get imageSelectedText => '已选择参考图，可重新$imageInferVerb或更换图片';
+  String get imageEmptyText => '上传参考图后，可点按看详情，再用$imageInferVerb 3 条$generateNoun';
+  String get imageSelectedText => '已选择参考图，点按可看详情，可重新$imageInferVerb或更换参考图';
 
   String generateBusy(AppBrand brand) =>
       '${brand.generateActionLabel}正在进行，请稍后再试';

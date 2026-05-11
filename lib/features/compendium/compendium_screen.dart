@@ -1062,7 +1062,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
               brand: brand,
               imageUrl: imageUrl,
               sourceUrl: item['source_image_url']?.toString() ?? '',
-              height: 238,
+              height: _historyImageHeight(),
               badge: _qualityModeLabel(item),
               onMainTap: () {
                 _dismissKeyboard();
@@ -1079,7 +1079,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
               caption: item['prompt']?.toString(),
             ),
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1154,7 +1154,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                 ),
                 const SizedBox(height: 8),
                 _promptPanel(brand, item),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -1185,7 +1185,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                   const SizedBox(height: 8),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: brand.warningColor.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(12),
@@ -1282,81 +1282,67 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
 
   Widget _promptPanel(AppBrand brand, Map<String, dynamic> item) {
     final prompt = item['prompt']?.toString().trim() ?? '';
-    final radius = BorderRadius.circular(14);
-    return SizedBox(
-      height: 118,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: brand.primaryColor.withValues(alpha: 0.08),
-          borderRadius: radius,
-          border: Border.all(color: brand.primaryColor.withValues(alpha: 0.18)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.notes_outlined,
-                  size: 16,
-                  color: brand.primaryColor,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: brand.primaryColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: brand.primaryColor.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.notes_outlined,
+            size: 16,
+            color: brand.primaryColor,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(6),
+                onTap: prompt.isEmpty ? null : () => _showPromptDetails(item),
+                onLongPress:
+                    prompt.isEmpty ? null : () => _copyPromptText(prompt),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 1),
                   child: Text(
-                    '提示词',
-                    style: TextStyle(
-                      color: brand.primaryColor,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  tooltip: '复制提示词',
-                  constraints: const BoxConstraints.tightFor(
-                    width: 28,
-                    height: 28,
-                  ),
-                  padding: EdgeInsets.zero,
-                  onPressed:
-                      prompt.isEmpty ? null : () => _copyPromptText(prompt),
-                  icon: const Icon(Icons.content_copy_outlined, size: 16),
-                  color: brand.primaryColor,
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(6),
-                  onTap: prompt.isEmpty ? null : () => _showPromptDetails(item),
-                  onLongPress:
-                      prompt.isEmpty ? null : () => _copyPromptText(prompt),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Text(
-                      prompt.isEmpty ? '未记录提示词' : prompt,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        height: 1.35,
-                      ),
+                    prompt.isEmpty ? '未记录提示词' : prompt,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
+                      height: 1.28,
                     ),
                   ),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 6),
+          IconButton(
+            tooltip: '复制提示词',
+            constraints: const BoxConstraints.tightFor(
+              width: 28,
+              height: 28,
+            ),
+            padding: EdgeInsets.zero,
+            onPressed: prompt.isEmpty ? null : () => _copyPromptText(prompt),
+            icon: const Icon(Icons.content_copy_outlined, size: 16),
+            color: brand.primaryColor,
+          ),
+        ],
       ),
     );
+  }
+
+  double _historyImageHeight() {
+    final width = MediaQuery.sizeOf(context).width;
+    return (width * 0.8).clamp(280.0, 420.0).toDouble();
   }
 
   Widget _metaPill(IconData icon, String text) {

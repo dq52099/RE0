@@ -118,8 +118,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     }
   }
 
-  Future<void> _pickAndRecognizeImagePrompt() async {
-    final copy = promptAssistCopyFor(ref.read(brandProvider));
+  Future<void> _pickAssistImagePrompt() async {
     final picked = await _assistImagePicker.pickImage(
       source: ImageSource.gallery,
       imageQuality: 92,
@@ -129,13 +128,30 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     setState(() {
       _assistMode = _PromptAssistMode.image;
       _assistImageFile = File(picked.path);
+      _imageCandidates = const [];
+      _imageCandidateIndex = 0;
+      _imageAssistError = null;
+      _lastAppliedCandidate = null;
+    });
+  }
+
+  Future<void> _recognizeSelectedImagePrompt() async {
+    final copy = promptAssistCopyFor(ref.read(brandProvider));
+    final imageFile = _assistImageFile;
+    if (imageFile == null) {
+      showCenterNotice(context, '请先选择参考图');
+      return;
+    }
+    _dismissPromptAssistFocus();
+    setState(() {
+      _assistMode = _PromptAssistMode.image;
       _isRecognizingImagePrompt = true;
       _imageAssistError = null;
     });
     try {
       final candidates = await ref
           .read(gatewayClientProvider)
-          .identifyImagePromptCandidates(picked.path);
+          .identifyImagePromptCandidates(imageFile.path);
       if (!mounted) return;
       if (candidates.isEmpty) {
         setState(() {
@@ -864,6 +880,16 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
           ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     );
+    final imageButtonStyle = FilledButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      minimumSize: const Size(128, 46),
+      visualDensity: VisualDensity.compact,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -943,31 +969,11 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
               children: [
                 Row(
                   children: [
-                    if (_assistImageFile != null)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.file(
-                          _assistImageFile!,
-                          width: 54,
-                          height: 54,
-                          fit: BoxFit.cover,
-                        ),
-                      )
-                    else
-                      Container(
-                        width: 54,
-                        height: 54,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surface
-                              .withValues(alpha: 0.55),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(Icons.image_search_outlined,
-                            color: brand.primaryColor),
-                      ),
+                    _referenceImageThumb(
+                      file: _assistImageFile,
+                      brand: brand,
+                      title: '参考图详情',
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -985,23 +991,27 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                   padding: const EdgeInsets.all(10),
                   decoration: actionBarDecoration,
                   child: Wrap(
-                    alignment: WrapAlignment.end,
+                    alignment: WrapAlignment.start,
                     spacing: 8,
                     runSpacing: 8,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       FilledButton.icon(
+                        style: imageButtonStyle,
+                        onPressed: isLoading ? null : _pickAssistImagePrompt,
+                        icon: const Icon(Icons.add_photo_alternate_outlined),
+                        label: Text(
+                          _assistImageFile == null ? '选择' : '更换',
+                        ),
+                      ),
+                      FilledButton.icon(
                         style: primaryButtonStyle,
                         onPressed:
-                            isLoading ? null : _pickAndRecognizeImagePrompt,
+                            isLoading ? null : _recognizeSelectedImagePrompt,
                         icon: isLoading
                             ? loadingIndicator
                             : const Icon(Icons.image_search_outlined),
-                        label: Text(
-                          _assistImageFile == null
-                              ? '选择'
-                              : copy.imageInferVerb,
-                        ),
+                        label: Text(copy.imageInferVerb),
                       ),
                     ],
                   ),
@@ -1014,6 +1024,87 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
           ],
           _candidateSwitcher(brand),
         ],
+      ),
+    );
+  }
+
+  Widget _referenceImageThumb({
+    required File? file,
+    required AppBrand brand,
+    required String title,
+  }) {
+    final hasFile = file != null;
+    final preview = Material(
+      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.55),
+      borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+        width: 64,
+        height: 64,
+        child: hasFile
+            ? Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.file(file, fit: BoxFit.cover),
+                  Positioned(
+                    right: 4,
+                    top: 4,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const Icon(
+                        Icons.open_in_full_rounded,
+                        size: 12,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.55),
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      alignment: Alignment.center,
+                      child: const Text(
+                        '详情',
+                        style: TextStyle(color: Colors.white, fontSize: 10),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : Icon(Icons.image_search_outlined, color: brand.primaryColor),
+      ),
+    );
+    if (!hasFile) return preview;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => _openReferenceImagePreview(file, title),
+        child: preview,
+      ),
+    );
+  }
+
+  void _openReferenceImagePreview(File file, String title) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ImagePreviewScreen(
+          items: [
+            PreviewImageEntry(
+              url: '',
+              filePath: file.path,
+              title: title,
+            ),
+          ],
+          showDownload: false,
+        ),
       ),
     );
   }
@@ -1198,40 +1289,57 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     String selectedMode,
   ) {
     final canSwitch = capabilities.imageModes.canSwitch;
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(Icons.route_outlined, size: 18, color: brand.primaryColor),
-        const SizedBox(width: 12),
-        Text(
-          '模式: ',
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
-        if (canSwitch)
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'vip', label: Text('VIP')),
-              ButtonSegment(value: 'general', label: Text('一般')),
-            ],
-            selected: {selectedMode},
-            onSelectionChanged: (values) {
-              final next = values.first;
-              ref.read(selectedImageModeProvider.notifier).state = next;
-              ref.read(selectedImageModeBaseProvider.notifier).state =
-                  capabilities.imageModes.current;
-            },
-            style: ButtonStyle(
-              visualDensity: VisualDensity.compact,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              textStyle: WidgetStateProperty.all(
-                Theme.of(context).textTheme.labelMedium,
-              ),
+        Row(
+          children: [
+            Icon(Icons.route_outlined, size: 18, color: brand.primaryColor),
+            const SizedBox(width: 12),
+            Text(
+              '模式: ',
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
-          )
-        else
-          Text(
-            imageModeLabel(selectedMode),
-            style: Theme.of(context).textTheme.bodyMedium,
+            if (canSwitch)
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'vip', label: Text('VIP')),
+                  ButtonSegment(value: 'general', label: Text('一般')),
+                ],
+                selected: {selectedMode},
+                onSelectionChanged: (values) {
+                  final next = values.first;
+                  ref.read(selectedImageModeProvider.notifier).state = next;
+                  ref.read(selectedImageModeBaseProvider.notifier).state =
+                      capabilities.imageModes.current;
+                },
+                style: ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  textStyle: WidgetStateProperty.all(
+                    Theme.of(context).textTheme.labelMedium,
+                  ),
+                ),
+              )
+            else
+              Text(
+                imageModeLabel(selectedMode),
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Padding(
+          padding: const EdgeInsets.only(left: 30),
+          child: Text(
+            capabilities.imageModes.quotaSummaryText,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: brand.primaryColor.withValues(alpha: 0.82),
+                ),
           ),
+        ),
       ],
     );
   }

@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_error.dart';
+import '../../core/app_brand.dart';
 import '../../core/cached_gateway_image.dart';
 import '../../core/image_save_flow.dart';
 import '../../core/providers.dart';
@@ -9,11 +12,13 @@ import '../../core/providers.dart';
 class PreviewImageEntry {
   const PreviewImageEntry({
     required this.url,
+    this.filePath,
     this.title,
     this.caption,
   });
 
   final String url;
+  final String? filePath;
   final String? title;
   final String? caption;
 }
@@ -79,6 +84,7 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
     final brand = ref.watch(brandProvider);
     final current = widget.items[_currentIndex];
     final caption = (current.caption ?? '').trim();
+    final canDownload = widget.showDownload && current.url.trim().isNotEmpty;
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -126,15 +132,11 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
                         width: constraints.maxWidth,
                         height: constraints.maxHeight,
                         child: Center(
-                          child: CachedGatewayImage(
-                            url: item.url,
+                          child: _previewImage(
+                            brand: brand,
+                            item: item,
                             width: constraints.maxWidth,
                             height: constraints.maxHeight,
-                            fit: BoxFit.contain,
-                            showDownload: false,
-                            accentColor: brand.primaryColor,
-                            cacheWidth:
-                                _previewCacheWidth(constraints.maxWidth),
                           ),
                         ),
                       ),
@@ -144,13 +146,41 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
               },
             ),
           ),
-          if (caption.isNotEmpty || widget.showDownload)
+          if (caption.isNotEmpty || canDownload)
             _bottomPanel(
               caption: caption,
               accentColor: brand.primaryColor,
+              showDownload: canDownload,
             ),
         ],
       ),
+    );
+  }
+
+  Widget _previewImage({
+    required AppBrand brand,
+    required PreviewImageEntry item,
+    required double width,
+    required double height,
+  }) {
+    final filePath = item.filePath?.trim() ?? '';
+    if (filePath.isNotEmpty) {
+      return Image.file(
+        File(filePath),
+        width: width,
+        height: height,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+      );
+    }
+    return CachedGatewayImage(
+      url: item.url,
+      width: width,
+      height: height,
+      fit: BoxFit.contain,
+      showDownload: false,
+      accentColor: brand.primaryColor,
+      cacheWidth: _previewCacheWidth(width),
     );
   }
 
@@ -163,6 +193,7 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
   Widget _bottomPanel({
     required String caption,
     required Color accentColor,
+    required bool showDownload,
   }) {
     return SafeArea(
       top: false,
@@ -190,7 +221,7 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
                       ),
                     ),
             ),
-            if (widget.showDownload) ...[
+            if (showDownload) ...[
               const SizedBox(width: 12),
               _downloadButton(accentColor),
             ],
@@ -247,6 +278,8 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
 
   Future<void> _saveCurrentImage() async {
     if (_isSaving || widget.items.isEmpty) return;
+    final current = widget.items[_currentIndex];
+    if (current.url.trim().isEmpty) return;
     setState(() => _isSaving = true);
     try {
       await saveImageWithUserFlow(
