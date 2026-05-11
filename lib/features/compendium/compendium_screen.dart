@@ -786,8 +786,8 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
           fontSize: 11,
           fontWeight: FontWeight.normal,
         );
-    final pageText = _total == 0 ? '第 0/0 页' : '第 $_page/$_totalPages 页';
-    final totalText = '共 $_total 张';
+    final pageText = _total == 0 ? '第0/0页' : '第$_page/$_totalPages页';
+    final totalText = '共$_total张';
     return Column(
       children: [
         if (_isLoading)
@@ -844,7 +844,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                       value: value,
                       height: 34,
                       child: Text(
-                        '$value 张',
+                        '$value张',
                         style: textStyle,
                       ),
                     ),
@@ -868,7 +868,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('每页 $_pageSize', style: textStyle),
+                    Text('每页$_pageSize张', style: textStyle),
                     const SizedBox(width: 3),
                     Icon(
                       Icons.keyboard_arrow_down,
@@ -1515,7 +1515,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   String _qualityModeLabel(Map<String, dynamic> item) {
     final tier = _qualityLabel(item);
     final mode = imageModeLabelFromItem(item);
-    return '$tier · $mode';
+    return '$tier·$mode';
   }
 
   String? _sizeTierLabel(String? value) {
@@ -1612,22 +1612,25 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   }
 
   Widget _imageBadge(String text) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.58),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        child: Text(
-          text,
-          maxLines: 1,
-          softWrap: false,
-          overflow: TextOverflow.visible,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 120),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.58),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Text(
+            text,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ),

@@ -84,9 +84,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   static const _invitesPageSize = 30;
   static const _backupRecordsPageSize = 5;
   static const _mailProviderLabels = {
-    'claw163': '163 API 通道',
-    'resend': 'Resend 通道',
-    'smtp': 'SMTP 通道',
+    'claw163': 'Claw163',
+    'resend': 'Resend',
+    'smtp': 'SMTP',
     'none': '不发送',
   };
   static const _mailSlotLabels = {
@@ -385,7 +385,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 '${item.value ?? 0}',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       color: brand.primaryColor,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w700,
                     ),
               ),
               const SizedBox(width: 4),
@@ -981,7 +981,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           children: [
             _infoCard(
               title: '邮件服务',
-              subtitle: '邮箱验证码和系统通知共用这套发送线路。',
+              subtitle: '验证码和系统通知共用这套邮件服务，主通道优先，备用通道只在失败后接管。',
               active: mailEnabled,
               lines: [
                 '当前线路: ${_mailSlotLabels[activeSlot] ?? activeSlot}',
@@ -994,13 +994,13 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
             _infoCard(
               title: '线路说明',
               subtitle:
-                  '163 API、Resend、SMTP 都可以用；只有在主通道或备用通道里选中的服务才会发送邮件。开启自动切换后，当前线路失败才会尝试备用通道并保存成功线路；关闭时只使用当前线路。',
+                  '主通道和备用通道只是发送顺序。下面分别配置 Claw163、Resend 和 SMTP，只有被选中的线路才会真正发邮件。',
               lines: const [],
             ),
             _settingsSectionTitle('通道配置'),
             const SizedBox(height: 8),
             _infoCard(
-              title: '163 API 通道',
+              title: 'Claw163 通道',
               subtitle: '使用 claw.163.com 发件邮箱和服务密钥。',
               active: runtime['openclaw_mail_configured'] == true,
               lines: [
@@ -1010,7 +1010,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
             ),
             _infoCard(
               title: 'Resend 通道',
-              subtitle: '使用 Resend API，适合作为备用通道。',
+              subtitle: '使用 Resend，适合作为备用通道。',
               active: runtime['resend_configured'] == true,
               lines: [
                 '配置: ${runtime['resend_configured'] == true ? '已配置' : '未完整配置'}',
@@ -1019,7 +1019,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               ],
             ),
             _infoCard(
-              title: 'SMTP 通道',
+              title: 'SMTP',
               subtitle: '通用邮箱 SMTP。只有主通道或备用通道选择 SMTP 时才会使用。',
               active: runtime['email_smtp_configured'] == true,
               lines: [
@@ -1440,8 +1440,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 Expanded(
                   child: Text(
                     title,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 16),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          height: 1.2,
+                        ),
                   ),
                 ),
                 if (badge != null) _pill(badge),
@@ -1517,7 +1519,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         color: ref.read(brandProvider).primaryColor.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(text, style: const TextStyle(fontSize: 12)),
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      ),
     );
   }
 
@@ -1580,7 +1585,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     child: Text(
                       title,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w700,
                           ),
                     ),
                   ),
@@ -2618,7 +2623,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '邮箱验证码和系统通知共用这套邮件服务。选择“不发送”即可关闭对应线路。',
+                    '邮箱验证码和系统通知共用这套邮件服务。主通道优先发送，备用通道只在失败后接管；选择“不发送”即可停用对应线路。',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 12),
@@ -2666,20 +2671,20 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     subtitle: const Text('关闭时只使用当前线路；开启后失败才尝试备用通道并保存成功线路'),
                   ),
                   const SizedBox(height: 18),
-                  _settingsSectionTitle('163 API 通道'),
+                  _settingsSectionTitle('Claw163 通道'),
                   const SizedBox(height: 8),
                   SwitchListTile(
                     value: openclawMailEnabled,
                     onChanged: (value) =>
                         setDialogState(() => openclawMailEnabled = value),
-                    title: const Text('启用 163 API 通道'),
-                    subtitle: const Text('只有主通道或备用通道选择 163 API 时才会使用'),
+                    title: const Text('启用 Claw163 通道'),
+                    subtitle: const Text('只有主通道或备用通道选择 Claw163 时才会使用'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: openclawMailUser,
                     decoration: const InputDecoration(
-                      labelText: '163 API 发件邮箱',
+                      labelText: 'Claw163 发件邮箱',
                       helperText: '例如：bot.image@claw.163.com',
                     ),
                   ),
@@ -2688,7 +2693,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     controller: openclawMailApiKey,
                     obscureText: true,
                     decoration: const InputDecoration(
-                      labelText: '163 API 服务密钥，留空不修改',
+                      labelText: 'Claw163 服务密钥，留空不修改',
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -2704,7 +2709,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   TextField(
                     controller: resendBase,
                     decoration: const InputDecoration(
-                      labelText: 'Resend API 地址',
+                      labelText: 'Resend 地址',
                       helperText: '默认 https://api.resend.com',
                     ),
                   ),
@@ -2726,7 +2731,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  _settingsSectionTitle('SMTP 通道'),
+                  _settingsSectionTitle('SMTP'),
                   const SizedBox(height: 8),
                   TextField(
                     controller: smtpHost,
@@ -2767,13 +2772,13 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  _settingsSectionTitle('兼容邮件接口'),
+                  _settingsSectionTitle('旧接口兼容'),
                   const SizedBox(height: 8),
                   TextField(
                     controller: hermesBase,
                     decoration: const InputDecoration(
                       labelText: '兼容接口地址',
-                      helperText: '仅用于旧的系统通知接口；主/备用通道优先',
+                      helperText: '一般留空。仅旧部署需要，主/备用通道优先',
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -4011,9 +4016,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       'general_provider_image_model': '普通图片模型',
       'notification_retention_days': '已读通知清理',
       'notification_category_limit': '每类显示上限',
-      'email_service_enabled': '邮件服务',
-      'openclaw_mail_enabled': '163 API 通道',
-      'openclaw_mail_user': '163 API 发件邮箱',
+      'email_service_enabled': '邮件总开关',
+      'openclaw_mail_enabled': 'Claw163 通道',
+      'openclaw_mail_user': 'Claw163 发件邮箱',
       'email_code_primary_provider': '主通道',
       'email_code_backup_provider': '备用通道',
       'email_code_active_slot': '当前使用线路',
@@ -4251,17 +4256,17 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       {
         'key': 'email_service_enabled',
         'value': 'true',
-        'description': '是否启用邮件服务',
+        'description': '是否启用邮件总开关',
       },
       {
         'key': 'email_code_primary_provider',
         'value': 'claw163',
-        'description': '主通道使用的邮件通道',
+        'description': '主通道优先使用的邮件通道，可选 Claw163、Resend、SMTP 或关闭',
       },
       {
         'key': 'email_code_backup_provider',
         'value': 'resend',
-        'description': '备用通道使用的邮件通道',
+        'description': '备用通道失败接管时使用的邮件通道',
       },
       {
         'key': 'email_code_active_slot',
@@ -4276,22 +4281,22 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       {
         'key': 'openclaw_mail_enabled',
         'value': 'false',
-        'description': '163 API 通道是否可用',
+        'description': 'Claw163 通道是否可用',
       },
       {
         'key': 'openclaw_mail_user',
         'value': '',
-        'description': '163 API 发件邮箱',
+        'description': 'Claw163 发件邮箱',
       },
       {
         'key': 'openclaw_mail_api_key',
         'value': 'xxx',
-        'description': '163 API 服务密钥',
+        'description': 'Claw163 服务密钥',
       },
       {
         'key': 'resend_base_url',
         'value': 'https://api.resend.com',
-        'description': 'Resend API 地址',
+        'description': 'Resend 地址',
       },
       {
         'key': 'resend_api_key',
@@ -4321,12 +4326,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       {
         'key': 'hermes_base_url',
         'value': '',
-        'description': '兼容邮件接口地址',
+        'description': '旧接口兼容地址',
       },
       {
         'key': 'hermes_api_key',
         'value': 'xxx',
-        'description': '兼容邮件接口密钥',
+        'description': '旧接口兼容密钥',
       },
       {
         'key': 'email_smtp_host',

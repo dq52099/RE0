@@ -94,22 +94,55 @@ jobs:
           printf '%s\n' \
             '本次更新：' \
             '' \
-            '- AI 推荐词查看全部弹框恢复单条使用和多条逐条使用，出图/改图结果陆续显示。' \
-            '- 推荐词弹框改为更宽且限高的布局，减少窄长弹窗造成的阅读负担。' \
-            '- 推荐词操作文案改为“使用当前…”体系，避免“用这条”和“三条一起”等歧义。' \
-            '- 推荐词、生图和改图相关文案按当前主题适配，覆盖 RE0、希卡之石、原神、星穹铁道、鸣潮、绝区零、燕云十六声。' \
+            '- 强制更新开启后，启动时会直接进入不可关闭的更新界面，支持重试检测与下载安装。' \
+            '- 改图侧的推演/发散入口与按钮样式已收口，文本和图片两侧保持一致。' \
+            '- 继续保留既有的文案收口、历史分页、通知、备份和邮件通道优化。' \
             '- 发布签名配置未改动。' \
             > build/release/notes.md
+
+      - name: Prepare mobile manifest
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            apk_name="RE0-${GITHUB_REF_NAME}.apk"
+          else
+            apk_name="RE0-dev-${GITHUB_SHA::7}.apk"
+          fi
+          export APK_NAME="${apk_name}"
+          export VERSION_NAME="${{ steps.app_version.outputs.name }}"
+          export VERSION_CODE="${{ steps.app_version.outputs.code }}"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          notes_path = Path("build/release/notes.md")
+          release_notes = notes_path.read_text(encoding="utf-8").strip() if notes_path.exists() else "包含最新修复与体验优化。"
+          manifest = {
+              "apk_name": os.environ["APK_NAME"],
+              "version_code": int(os.environ["VERSION_CODE"]),
+              "version_name": os.environ["VERSION_NAME"],
+              "release_notes": release_notes,
+          }
+          Path("build/release/manifest.json").write_text(
+              json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: RE0-apk
-          path: build/release/*.apk
+          path: |
+            build/release/*.apk
+            build/release/manifest.json
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           body_path: build/release/notes.md
-          files: build/release/*.apk
+          files: |
+            build/release/*.apk
+            build/release/manifest.json

@@ -55,7 +55,9 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
   int _ideaCandidateIndex = 0;
   int _imageCandidateIndex = 0;
   bool _isGeneratingIdeaPrompt = false;
+  bool _isDivergingIdeaPrompt = false;
   bool _isRecognizingImagePrompt = false;
+  bool _isDivergingImagePrompt = false;
   String? _ideaAssistError;
   String? _imageAssistError;
   String? _lastAppliedCandidate;
@@ -95,7 +97,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     }
   }
 
-  Future<void> _generatePromptFromIdea() async {
+  Future<void> _generatePromptFromIdea({bool divergent = false}) async {
     final brand = ref.read(brandProvider);
     final copy = promptAssistCopyFor(brand);
     final idea = _ideaController.text.trim();
@@ -106,19 +108,27 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     _dismissPromptAssistFocus();
     setState(() {
       _assistMode = _PromptAssistMode.idea;
-      _isGeneratingIdeaPrompt = true;
+      if (divergent) {
+        _isDivergingIdeaPrompt = true;
+      } else {
+        _isGeneratingIdeaPrompt = true;
+      }
       _ideaAssistError = null;
     });
     try {
       final candidates = await ref
           .read(gatewayClientProvider)
-          .generateEditPromptCandidates(idea);
+          .generateEditPromptCandidates(
+            idea,
+            divergent: divergent,
+          );
       if (!mounted) return;
       if (candidates.isEmpty) {
         setState(() {
           _ideaCandidates = const [];
           _ideaCandidateIndex = 0;
-          _ideaAssistError = copy.editNoResult;
+          _ideaAssistError =
+              divergent ? copy.editDivergeNoResult : copy.editNoResult;
         });
         return;
       }
@@ -126,15 +136,27 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
         _ideaCandidates = candidates;
         _ideaCandidateIndex = 0;
       });
-      showCenterNotice(context, copy.editReady);
+      showCenterNotice(
+        context,
+        divergent ? copy.editDivergeReady : copy.editReady,
+      );
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _ideaAssistError = friendlyError(error, fallback: copy.editFailure);
+        _ideaAssistError = friendlyError(
+          error,
+          fallback: divergent ? copy.editDivergeFailure : copy.editFailure,
+        );
       });
     } finally {
       if (mounted) {
-        setState(() => _isGeneratingIdeaPrompt = false);
+        setState(() {
+          if (divergent) {
+            _isDivergingIdeaPrompt = false;
+          } else {
+            _isGeneratingIdeaPrompt = false;
+          }
+        });
       }
     }
   }
@@ -147,7 +169,11 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     final copy = promptAssistCopyFor(brand);
     setState(() {
       _assistMode = _PromptAssistMode.image;
-      _isRecognizingImagePrompt = true;
+      if (divergent) {
+        _isDivergingImagePrompt = true;
+      } else {
+        _isRecognizingImagePrompt = true;
+      }
       _imageAssistError = null;
     });
     try {
@@ -163,7 +189,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
           _imageCandidates = const [];
           _imageCandidateIndex = 0;
           _imageAssistError =
-              divergent ? copy.imageDivergeNoResult : copy.imageNoResult;
+              divergent ? copy.editDivergeNoResult : copy.imageNoResult;
         });
         return;
       }
@@ -173,19 +199,25 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
       });
       showCenterNotice(
         context,
-        divergent ? copy.imageDivergeReady : copy.imageReady,
+        divergent ? copy.editDivergeReady : copy.imageReady,
       );
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _imageAssistError = friendlyError(
           error,
-          fallback: divergent ? copy.imageDivergeFailure : copy.imageFailure,
+          fallback: divergent ? copy.editDivergeFailure : copy.imageFailure,
         );
       });
     } finally {
       if (mounted) {
-        setState(() => _isRecognizingImagePrompt = false);
+        setState(() {
+          if (divergent) {
+            _isDivergingImagePrompt = false;
+          } else {
+            _isRecognizingImagePrompt = false;
+          }
+        });
       }
     }
   }
@@ -221,8 +253,8 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
 
   bool get _isActiveAssistLoading =>
       _assistMode == _PromptAssistMode.idea
-          ? _isGeneratingIdeaPrompt
-          : _isRecognizingImagePrompt;
+          ? _isGeneratingIdeaPrompt || _isDivergingIdeaPrompt
+          : _isRecognizingImagePrompt || _isDivergingImagePrompt;
 
   String? get _activeCandidate {
     final candidates = _activeCandidates;
@@ -419,11 +451,14 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
         final media = MediaQuery.of(context);
         return Dialog(
           insetPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
-          child: SizedBox(
-            width: media.size.width - 24,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: media.size.height * 0.72),
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 560,
+              maxHeight: media.size.height * 0.72,
+            ),
+            child: SizedBox(
+              width: double.infinity,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
                 child: Column(
@@ -947,7 +982,7 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
               Text(
                 '${brand.editQuotaLabel}: $remain',
                 style:
-                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
               ),
             ],
           ),
@@ -1068,20 +1103,26 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
   Widget _resultRouteBadge(String modeLabel, String channelLabel) {
     final text = channelLabel.isEmpty
         ? '模式 $modeLabel'
-        : '模式 $modeLabel · 通道 $channelLabel';
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.58),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        child: Text(
-          text,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
+        : '模式 $modeLabel·通道 $channelLabel';
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 156),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.58),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Text(
+            text,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ),
@@ -1129,6 +1170,26 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     final isIdea = _assistMode == _PromptAssistMode.idea;
     final isLoading = _isActiveAssistLoading;
     final error = _activeAssistError;
+    const loadingIndicator = SizedBox(
+      width: 16,
+      height: 16,
+      child: CircularProgressIndicator(strokeWidth: 2),
+    );
+    final actionBarDecoration = BoxDecoration(
+      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.42),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: brand.primaryColor.withValues(alpha: 0.1)),
+    );
+    final primaryButtonStyle = FilledButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      minimumSize: const Size(0, 40),
+      visualDensity: VisualDensity.compact,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -1141,7 +1202,9 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            _imageFile == null ? copy.editIntroNoImage() : copy.editIntroWithImage(),
+            _imageFile == null
+                ? copy.editIntroNoImage()
+                : copy.editIntroWithImage(),
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 12),
@@ -1165,39 +1228,73 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
           ),
           const SizedBox(height: 12),
           if (isIdea)
-            Row(
+            Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _ideaController,
-                    minLines: 1,
-                    maxLines: 2,
-                    style: const TextStyle(fontSize: 13, height: 1.28),
-                    onTapOutside: (_) =>
-                        FocusManager.instance.primaryFocus?.unfocus(),
-                    decoration: InputDecoration(
-                      labelText: '${copy.editVerb}意图',
-                      hintText: brand.editPromptHint,
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
+                TextField(
+                  controller: _ideaController,
+                  minLines: 1,
+                  maxLines: 2,
+                  style: const TextStyle(fontSize: 13, height: 1.28),
+                  onTapOutside: (_) =>
+                      FocusManager.instance.primaryFocus?.unfocus(),
+                  decoration: InputDecoration(
+                    labelText: '${copy.editVerb}意图',
+                    hintText: brand.editPromptHint,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                FilledButton.icon(
-                  onPressed: isLoading ? null : _generatePromptFromIdea,
-                  icon: isLoading
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.auto_awesome_outlined),
-                  label: Text(copy.ideaAction),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: actionBarDecoration,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      FilledButton.icon(
+                        style: primaryButtonStyle,
+                        onPressed: isLoading
+                            ? null
+                            : () => _generatePromptFromIdea(),
+                        icon: _isGeneratingIdeaPrompt
+                            ? loadingIndicator
+                            : const Icon(Icons.auto_awesome_outlined),
+                        label: Text(copy.ideaAction),
+                      ),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          minimumSize: const Size(0, 40),
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          textStyle:
+                              Theme.of(context).textTheme.labelLarge?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                        ),
+                        onPressed: isLoading
+                            ? null
+                            : () => _generatePromptFromIdea(divergent: true),
+                        icon: _isDivergingIdeaPrompt
+                            ? loadingIndicator
+                            : const Icon(Icons.auto_awesome_motion_outlined),
+                        label: Text(copy.editDivergeAction),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             )
@@ -1256,61 +1353,87 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: isLoading
-                          ? null
-                          : () => _pickAndRecognizeImagePrompt(),
-                      icon: const Icon(Icons.upload_file_outlined),
-                      label: Text(
-                        _assistImageFile == null ? '上传参考图' : '更换参考图',
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: actionBarDecoration,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      IconButton.outlined(
+                        constraints: const BoxConstraints.tightFor(
+                          width: 40,
+                          height: 40,
+                        ),
+                        padding: EdgeInsets.zero,
+                        tooltip: _assistImageFile == null
+                            ? '上传参考图'
+                            : '更换参考图',
+                        onPressed: isLoading
+                            ? null
+                            : () => _pickAndRecognizeImagePrompt(),
+                        icon: const Icon(Icons.upload_file_outlined, size: 20),
                       ),
-                    ),
-                    FilledButton.icon(
-                      onPressed: isLoading
-                          ? null
-                          : () {
-                              final sourcePath = _currentEditImagePath;
-                              if (sourcePath == null) {
-                                showCenterNotice(context, copy.pickEditSource);
-                                return;
-                              }
-                              _dismissPromptAssistFocus();
-                              unawaited(_runImagePromptAssist(sourcePath));
-                            },
-                      icon: isLoading
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.image_search_outlined),
-                      label: Text(copy.imageInferVerb),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: isLoading
-                          ? null
-                          : () {
-                              final sourcePath = _currentEditImagePath;
-                              if (sourcePath == null) {
-                                showCenterNotice(context, copy.pickEditSource);
-                                return;
-                              }
-                              _dismissPromptAssistFocus();
-                              unawaited(
-                                _runImagePromptAssist(
-                                  sourcePath,
-                                  divergent: true,
-                                ),
-                              );
-                            },
-                      icon: const Icon(Icons.auto_awesome_motion_outlined),
-                      label: Text(copy.imageDivergeVerb),
-                    ),
-                  ],
+                      FilledButton.icon(
+                        style: primaryButtonStyle,
+                        onPressed: isLoading
+                            ? null
+                            : () {
+                                final sourcePath = _currentEditImagePath;
+                                if (sourcePath == null) {
+                                  showCenterNotice(context, copy.pickEditSource);
+                                  return;
+                                }
+                                _dismissPromptAssistFocus();
+                                unawaited(_runImagePromptAssist(sourcePath));
+                              },
+                        icon: _isRecognizingImagePrompt
+                            ? loadingIndicator
+                            : const Icon(Icons.image_search_outlined),
+                        label: Text(copy.imageInferVerb),
+                      ),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          minimumSize: const Size(0, 40),
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          textStyle:
+                              Theme.of(context).textTheme.labelLarge?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                        ),
+                        onPressed: isLoading
+                            ? null
+                            : () {
+                                final sourcePath = _currentEditImagePath;
+                                if (sourcePath == null) {
+                                  showCenterNotice(context, copy.pickEditSource);
+                                  return;
+                                }
+                                _dismissPromptAssistFocus();
+                                unawaited(
+                                  _runImagePromptAssist(
+                                    sourcePath,
+                                    divergent: true,
+                                  ),
+                                );
+                              },
+                        icon: _isDivergingImagePrompt
+                            ? loadingIndicator
+                            : const Icon(Icons.auto_awesome_motion_outlined),
+                        label: Text(copy.editDivergeAction),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),

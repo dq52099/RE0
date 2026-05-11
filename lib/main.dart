@@ -54,6 +54,48 @@ class _StartupGateState extends ConsumerState<_StartupGate> {
     _future = _checkSavedAuth();
   }
 
+  void _retryStartup() {
+    setState(() {
+      _future = _checkSavedAuth();
+    });
+  }
+
+  AppUpdateInfo _buildForcedUpdateInfo(Map<String, dynamic> data) {
+    final service = ref.read(appUpdateProvider);
+    final latestVersionNameRaw = data['latest_version_name']?.toString().trim();
+    final appNameRaw = data['app_name']?.toString().trim();
+    final packageNameRaw = data['package_name']?.toString().trim();
+    final available = data['available'] == true;
+    final downloadUrl = data['download_url']?.toString().trim() ?? '';
+    if (available && downloadUrl.isEmpty) {
+      throw StateError('更新包下载地址缺失。');
+    }
+    final releaseNotes = data['release_notes']?.toString().trim();
+    return AppUpdateInfo(
+      appName:
+          appNameRaw == null || appNameRaw.isEmpty ? service.appName : appNameRaw,
+      packageName: packageNameRaw == null || packageNameRaw.isEmpty
+          ? service.packageName
+          : packageNameRaw,
+      latestVersionName: latestVersionNameRaw == null || latestVersionNameRaw.isEmpty
+          ? service.currentVersionName
+          : latestVersionNameRaw,
+      latestVersionCode:
+          _asInt(data['latest_version_code'], service.currentVersionCode),
+      currentVersionCode:
+          _asInt(data['current_version_code'], service.currentVersionCode),
+      available: available,
+      downloadUrl: downloadUrl,
+      fileSize: _asInt(data['file_size']),
+      sha256: data['sha256']?.toString() ?? '',
+      releaseNotes: (releaseNotes == null || releaseNotes.isEmpty)
+          ? '包含最新修复与体验优化。'
+          : releaseNotes,
+      releaseUrl: data['download_url']?.toString() ?? '',
+      forceUpdate: data['force_update'] == true,
+    );
+  }
+
   Future<_StartupResult> _checkSavedAuth() async {
     try {
       final client = ref.read(gatewayClientProvider);
@@ -62,12 +104,22 @@ class _StartupGateState extends ConsumerState<_StartupGate> {
       final forceUpdate = bootstrap['force_app_update_enabled'] == true;
       if (forceUpdate) {
         try {
-          final info = await ref.read(appUpdateProvider).checkForUpdate();
+          final info = _buildForcedUpdateInfo(
+            await client.checkAppUpdate(
+              ref.read(appUpdateProvider).appId,
+              ref.read(appUpdateProvider).currentVersionCode,
+            ),
+          );
           if (info.available) {
             return _StartupResult.forceUpdate(info);
           }
-        } catch (_) {
-          return const _StartupResult.login();
+        } catch (error) {
+          return _StartupResult.forceUpdateError(
+            friendlyError(
+              error,
+              fallback: '更新检查失败，请保持联网后重试。',
+            ),
+          );
         }
       }
       final auth = await client.checkAuth();
@@ -128,16 +180,21 @@ class _StartupGateState extends ConsumerState<_StartupGate> {
           );
         }
         final result = snapshot.data!;
-        if (result.forceUpdateInfo != null) {
+        final forceUpdateInfo = result.forceUpdateInfo;
+        final forceUpdateError = result.forceUpdateError;
+        if (forceUpdateInfo != null || forceUpdateError != null) {
           return _ForcedUpdateScreen(
-            info: result.forceUpdateInfo!,
+            info: forceUpdateInfo,
+            errorMessage: forceUpdateError,
             isDownloading: _isDownloadingUpdate,
             progress: _updateProgress,
-            onDownload: _isDownloadingUpdate
+            onDownload:
+                _isDownloadingUpdate || forceUpdateInfo == null
+                    ? null
+                    : () => _downloadForcedUpdate(forceUpdateInfo),
+            onRetry: _isDownloadingUpdate || forceUpdateError == null
                 ? null
-                : () {
-                    _downloadForcedUpdate(result.forceUpdateInfo!);
-                  },
+                : _retryStartup,
           );
         }
         return result.showHome ? const HomeScreen() : const LoginScreen();
@@ -150,29 +207,37 @@ class _StartupResult {
   const _StartupResult._({
     required this.showHome,
     this.forceUpdateInfo,
+    this.forceUpdateError,
   });
 
   const _StartupResult.home() : this._(showHome: true);
   const _StartupResult.login() : this._(showHome: false);
   const _StartupResult.forceUpdate(AppUpdateInfo info)
       : this._(showHome: false, forceUpdateInfo: info);
+  const _StartupResult.forceUpdateError(String message)
+      : this._(showHome: false, forceUpdateError: message);
 
   final bool showHome;
   final AppUpdateInfo? forceUpdateInfo;
+  final String? forceUpdateError;
 }
 
 class _ForcedUpdateScreen extends StatelessWidget {
   const _ForcedUpdateScreen({
-    required this.info,
+    this.info,
+    this.errorMessage,
     required this.isDownloading,
     required this.progress,
     required this.onDownload,
+    required this.onRetry,
   });
 
-  final AppUpdateInfo info;
+  final AppUpdateInfo? info;
+  final String? errorMessage;
   final bool isDownloading;
   final double? progress;
   final VoidCallback? onDownload;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -180,52 +245,84 @@ class _ForcedUpdateScreen extends StatelessWidget {
     return PopScope(
       canPop: false,
       child: Scaffold(
-        body: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Icon(Icons.system_update_alt,
-                        size: 48, color: colorScheme.primary),
-                    const SizedBox(height: 18),
-                    Text(
-                      '需要更新到 ${info.latestVersionName}',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.titleLarge,
+        body: Stack(
+          children: [
+            const ModalBarrier(dismissible: false, color: Colors.black54),
+            SafeArea(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Material(
+                      color: colorScheme.surface,
+                      borderRadius: BorderRadius.circular(20),
+                      clipBehavior: Clip.antiAlias,
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Icon(
+                              Icons.system_update_alt,
+                              size: 48,
+                              color: colorScheme.primary,
+                            ),
+                            const SizedBox(height: 18),
+                            Text(
+                              info != null
+                                  ? '需要更新到 ${info!.latestVersionName}'
+                                  : '需要更新',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              info?.releaseNotes ??
+                                  errorMessage ??
+                                  '当前版本需要先完成更新后才能继续使用。',
+                              textAlign: TextAlign.center,
+                              maxLines: 6,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (info != null) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                _formatBytes(info!.fileSize),
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                            if (isDownloading) ...[
+                              const SizedBox(height: 22),
+                              LinearProgressIndicator(value: progress),
+                            ],
+                            const SizedBox(height: 24),
+                            FilledButton.icon(
+                              onPressed: onDownload ?? onRetry,
+                              icon: Icon(
+                                onDownload != null
+                                    ? Icons.download
+                                    : Icons.refresh,
+                              ),
+                              label: Text(
+                                isDownloading
+                                    ? '下载中'
+                                    : onDownload != null
+                                        ? '下载更新'
+                                        : '重试检测',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: 10),
-                    Text(
-                      info.releaseNotes,
-                      textAlign: TextAlign.center,
-                      maxLines: 5,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _formatBytes(info.fileSize),
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    if (isDownloading) ...[
-                      const SizedBox(height: 22),
-                      LinearProgressIndicator(value: progress),
-                    ],
-                    const SizedBox(height: 24),
-                    FilledButton.icon(
-                      onPressed: onDownload,
-                      icon: const Icon(Icons.download),
-                      label: Text(isDownloading ? '下载中' : '下载更新'),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -242,4 +339,10 @@ class _ForcedUpdateScreen extends StatelessWidget {
     }
     return '${size.toStringAsFixed(index == 0 ? 0 : 1)} ${units[index]}';
   }
+}
+
+int _asInt(dynamic value, [int fallback = 0]) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(value?.toString() ?? '') ?? fallback;
 }

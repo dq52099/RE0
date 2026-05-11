@@ -356,11 +356,14 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
         final media = MediaQuery.of(context);
         return Dialog(
           insetPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
-          child: SizedBox(
-            width: media.size.width - 24,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: media.size.height * 0.72),
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 560,
+              maxHeight: media.size.height * 0.72,
+            ),
+            child: SizedBox(
+              width: double.infinity,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
                 child: Column(
@@ -840,6 +843,26 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     final isLoading =
         isIdea ? _isGeneratingIdeaPrompt : _isRecognizingImagePrompt;
     final error = isIdea ? _ideaAssistError : _imageAssistError;
+    const loadingIndicator = SizedBox(
+      width: 16,
+      height: 16,
+      child: CircularProgressIndicator(strokeWidth: 2),
+    );
+    final actionBarDecoration = BoxDecoration(
+      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.42),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: brand.primaryColor.withValues(alpha: 0.1)),
+    );
+    final primaryButtonStyle = FilledButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      minimumSize: const Size(0, 40),
+      visualDensity: VisualDensity.compact,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -871,89 +894,114 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
           ),
           const SizedBox(height: 12),
           if (isIdea)
-            Row(
+            Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _ideaController,
-                    minLines: 1,
-                    maxLines: 2,
-                    style: const TextStyle(fontSize: 13, height: 1.28),
-                    decoration: InputDecoration(
-                      labelText: '${brand.generateActionLabel}思路',
-                      hintText: brand.generatePromptHint,
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
+                TextField(
+                  controller: _ideaController,
+                  minLines: 1,
+                  maxLines: 2,
+                  style: const TextStyle(fontSize: 13, height: 1.28),
+                  decoration: InputDecoration(
+                    labelText: '${brand.generateActionLabel}思路',
+                    hintText: brand.generatePromptHint,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                FilledButton.icon(
-                  onPressed: isLoading ? null : _generatePromptFromIdea,
-                  icon: isLoading
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.auto_awesome_outlined),
-                  label: Text(copy.ideaAction),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: actionBarDecoration,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      FilledButton.icon(
+                        style: primaryButtonStyle,
+                        onPressed: isLoading ? null : _generatePromptFromIdea,
+                        icon: isLoading
+                            ? loadingIndicator
+                            : const Icon(Icons.auto_awesome_outlined),
+                        label: Text(copy.ideaAction),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             )
           else
-            Row(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (_assistImageFile != null)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.file(
-                      _assistImageFile!,
-                      width: 54,
-                      height: 54,
-                      fit: BoxFit.cover,
+                Row(
+                  children: [
+                    if (_assistImageFile != null)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(
+                          _assistImageFile!,
+                          width: 54,
+                          height: 54,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    else
+                      Container(
+                        width: 54,
+                        height: 54,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surface
+                              .withValues(alpha: 0.55),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(Icons.image_search_outlined,
+                            color: brand.primaryColor),
+                      ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _assistImageFile == null
+                            ? copy.imageEmptyText
+                            : copy.imageSelectedText,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
                     ),
-                  )
-                else
-                  Container(
-                    width: 54,
-                    height: 54,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .surface
-                          .withValues(alpha: 0.55),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(Icons.image_search_outlined,
-                        color: brand.primaryColor),
-                  ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    _assistImageFile == null
-                        ? copy.imageEmptyText
-                        : copy.imageSelectedText,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                FilledButton.icon(
-                  onPressed: isLoading ? null : _pickAndRecognizeImagePrompt,
-                  icon: isLoading
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.image_search_outlined),
-                  label: Text(
-                      _assistImageFile == null ? '选择' : copy.imageInferVerb),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: actionBarDecoration,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      FilledButton.icon(
+                        style: primaryButtonStyle,
+                        onPressed:
+                            isLoading ? null : _pickAndRecognizeImagePrompt,
+                        icon: isLoading
+                            ? loadingIndicator
+                            : const Icon(Icons.image_search_outlined),
+                        label: Text(
+                          _assistImageFile == null
+                              ? '选择'
+                              : copy.imageInferVerb,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -1113,7 +1161,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
               Text(
                 '${brand.generateQuotaLabel}: $remain',
                 style:
-                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
               ),
             ],
           ),
@@ -1234,20 +1282,26 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
   Widget _resultRouteBadge(String modeLabel, String channelLabel) {
     final text = channelLabel.isEmpty
         ? '模式 $modeLabel'
-        : '模式 $modeLabel · 通道 $channelLabel';
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.58),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        child: Text(
-          text,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
+        : '模式 $modeLabel·通道 $channelLabel';
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 156),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.58),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Text(
+            text,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ),

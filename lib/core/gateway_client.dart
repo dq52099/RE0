@@ -315,17 +315,22 @@ class GatewayClient {
     }, fallback: '图片识别咒文失败。');
   }
 
-  Future<List<String>> generateEditPromptCandidates(String idea) async {
+  Future<List<String>> generateEditPromptCandidates(
+    String idea, {
+    bool divergent = false,
+  }) async {
     final ideaText = idea.trim();
     if (ideaText.isEmpty) return const [];
 
     return _guard(() async {
+      final formData = FormData.fromMap({
+        'idea': ideaText,
+        'count': 3,
+        if (divergent) 'divergent': '1',
+      });
       final res = await _dio.post(
         '/api/ai/image-prompt-candidates',
-        data: {
-          'idea': ideaText,
-          'count': 3,
-        },
+        data: formData,
       );
       return _promptCandidates(res.data);
     }, fallback: 'AI 推荐改图提示词失败。');

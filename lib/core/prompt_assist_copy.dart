@@ -35,11 +35,6 @@ class PromptAssistCopy {
   String get imageNoResult => '$imageInferVerb后没有得到可用$generateNoun，请换张图片再试。';
   String get imageReady => '已$imageInferVerb出$generateNoun，可查看全部或切换使用。';
   String get imageFailure => '图片$imageInferVerb失败，未得到可用$generateNoun。';
-  String get imageDivergeVerb => '发散';
-  String get imageDivergeReady => '已发散出$generateNoun，可查看全部或切换使用。';
-  String get imageDivergeNoResult =>
-      '发散后没有得到可用$generateNoun，请换张图片再试。';
-  String get imageDivergeFailure => '图片发散失败，未得到可用$generateNoun。';
   String get generateNoCurrent => '当前没有可用$generateNoun';
   String get generateEmptyCurrent => '当前$generateNoun为空';
   String get generateAllTitle => '全部$generateNoun';
@@ -78,6 +73,11 @@ class PromptAssistCopy {
   String get editNoResult => '没有生成可用$editNoun，请换个$editVerb意图或参考图再试。';
   String get editReady => '已生成$editNoun，可查看全部或切换使用。';
   String get editFailure => '$editNoun生成失败。';
+  String get editDivergeAction => '推演+发散';
+  String get editDivergeReady => '已发散出$editNoun，可查看全部或切换使用。';
+  String get editDivergeNoResult =>
+      '发散后没有得到可用$editNoun，请换个$editVerb意图或参考图再试。';
+  String get editDivergeFailure => '$editNoun发散失败。';
   String get editNoCurrent => '当前没有可用$editNoun';
   String get editEmptyCurrent => '当前$editNoun为空';
   String get editAllTitle => '全部$editNoun';
@@ -94,8 +94,8 @@ class PromptAssistCopy {
   String editUseThisLabel() => '使用当前$editNoun';
   String editCountLabel(int count) => '共 $count 条$editNoun';
   String editBatchLabel(int count) => '使用当前$count条$editNoun';
-  String editIntroNoImage() => '先输入$editVerb意图，再生成 3 条$editNoun';
-  String editIntroWithImage() => '结合当前原图和$editVerb意图，生成 3 条$editNoun';
+  String editIntroNoImage() => '先输入$editVerb意图，可推演并发散 3 条$editNoun';
+  String editIntroWithImage() => '结合当前原图和$editVerb意图，可推演并发散 3 条$editNoun';
   String editSwitcherLabel(int index, int total) =>
       '$editNoun ${index + 1}/$total';
   String previousEditTooltip() => '上一条$editNoun';
@@ -139,7 +139,7 @@ PromptAssistCopy promptAssistCopyFor(AppBrand brand) {
         editVerb: '回归',
         editSlot: '回归席位',
         editOverflowVerb: '回响',
-        ideaChip: '按思路推演',
+        ideaChip: '推演+发散',
         ideaAction: '推演',
         imageChip: '以图反推',
         imageInferVerb: '反推',
