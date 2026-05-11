@@ -73,7 +73,7 @@ class PromptAssistCopy {
   String get editNoResult => '没有生成可用$editNoun，请换个$editVerb意图或参考图再试。';
   String get editReady => '已生成$editNoun，可查看全部或切换使用。';
   String get editFailure => '$editNoun生成失败。';
-  String get editDivergeAction => '推演+发散';
+  String get editDivergeAction => '发散';
   String get editDivergeReady => '已发散出$editNoun，可查看全部或切换使用。';
   String get editDivergeNoResult =>
       '发散后没有得到可用$editNoun，请换个$editVerb意图或参考图再试。';
@@ -94,8 +94,8 @@ class PromptAssistCopy {
   String editUseThisLabel() => '使用当前$editNoun';
   String editCountLabel(int count) => '共 $count 条$editNoun';
   String editBatchLabel(int count) => '使用当前$count条$editNoun';
-  String editIntroNoImage() => '先输入$editVerb意图，可推演并发散 3 条$editNoun';
-  String editIntroWithImage() => '结合当前原图和$editVerb意图，可推演并发散 3 条$editNoun';
+  String editIntroNoImage() => '先输入$editVerb意图，再生成 3 条$editNoun';
+  String editIntroWithImage() => '结合当前原图和$editVerb意图，生成 3 条$editNoun';
   String editSwitcherLabel(int index, int total) =>
       '$editNoun ${index + 1}/$total';
   String previousEditTooltip() => '上一条$editNoun';
@@ -139,7 +139,7 @@ PromptAssistCopy promptAssistCopyFor(AppBrand brand) {
         editVerb: '回归',
         editSlot: '回归席位',
         editOverflowVerb: '回响',
-        ideaChip: '推演+发散',
+        ideaChip: '按思路推演',
         ideaAction: '推演',
         imageChip: '以图反推',
         imageInferVerb: '反推',
