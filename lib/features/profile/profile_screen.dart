@@ -77,6 +77,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         );
   }
 
+  void _refreshDailyImageDrawStatus() {
+    setState(() {
+      _dailyImageDrawFuture =
+          ref.read(gatewayClientProvider).getDailyImageDrawStatus();
+    });
+  }
+
   Future<void> _clearCache() async {
     setState(() => _isClearingCache = true);
     try {
@@ -1262,29 +1269,59 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final todayDraw = _mapValue(status['today_draw']);
     final rarity = todayDraw['rarity']?.toString() ?? 'R';
     final score = todayDraw['quality_score']?.toString() ?? '0';
-    final poolCount = int.tryParse(status['pool_count']?.toString() ?? '') ?? 0;
     if (drawnToday) {
       return '今日已抽 $rarity · $score 分';
     }
-    if (poolCount > 0) {
-      return '奖池 $poolCount 张，可抽一次';
-    }
-    return '还没有可抽的成功图片';
+    return '今日可抽一次';
   }
 
   Widget _buildDailyImageDrawCard(AppBrand brand) {
     return FutureBuilder<Map<String, dynamic>>(
       future: _dailyImageDrawFuture,
       builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return _menuCard(
+            child: ListTile(
+              leading: Icon(Icons.casino_outlined, color: brand.primaryColor),
+              title: const Text('每日一图'),
+              subtitle: _menuSubtitle('正在读取今日状态'),
+              trailing: const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        }
+        if (snapshot.hasError) {
+          return _menuCard(
+            child: ListTile(
+              leading: Icon(Icons.casino_outlined, color: brand.warningColor),
+              title: const Text('每日一图'),
+              subtitle: _menuSubtitle(
+                friendlyError(
+                  snapshot.error ?? StateError('每日一图状态为空。'),
+                  fallback: '每日一图暂时没接通，请稍后重试。',
+                ),
+              ),
+              trailing: Text(
+                '重试',
+                style: TextStyle(
+                  color: brand.primaryColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              onTap: _refreshDailyImageDrawStatus,
+            ),
+          );
+        }
         final status = snapshot.data ?? const <String, dynamic>{};
         final drawnToday = status['drawn_today'] == true;
-        final poolCount =
-            int.tryParse(status['pool_count']?.toString() ?? '') ?? 0;
+        final canDraw = status['can_draw'] == true || !drawnToday;
         final subtitle = drawnToday
             ? '${_dailyDrawStatusText(status)}\n${resetHintFromResponse(status)}'
-            : poolCount > 0
-                ? '从成功图片里抽一张，按质量给出 R / SR / SSR / UR\n${resetHintFromResponse(status)}'
-                : '还没有可抽的成功图片，先完成一次生图或改图\n${resetHintFromResponse(status)}';
+            : '每天生成一张新的随机主题图，按质量给出 R / SR / SSR / UR\n${resetHintFromResponse(status)}';
         return _menuCard(
           child: ListTile(
             leading: Icon(Icons.casino_outlined, color: brand.primaryColor),
@@ -1297,13 +1334,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : Text(
-                    drawnToday
-                        ? '查看记录'
-                        : poolCount > 0
-                            ? '去抽卡'
-                            : '无可抽图片',
+                    drawnToday ? '查看记录' : '去抽卡',
                     style: TextStyle(
-                      color: drawnToday || poolCount > 0
+                      color: drawnToday || canDraw
                           ? brand.primaryColor
                           : Theme.of(context)
                               .colorScheme
@@ -1498,11 +1531,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             final todayDraw = _mapValue(dialogStatus['today_draw']);
             final recentDraws =
                 _mapList(dialogStatus['recent_draws']).take(5).toList();
-            final poolCount =
-                int.tryParse(dialogStatus['pool_count']?.toString() ?? '') ?? 0;
+            final canDraw = dialogStatus['can_draw'] == true || !drawnToday;
 
             Future<void> drawNow() async {
-              if (drawing || poolCount <= 0) return;
+              if (drawing || !canDraw || drawnToday) return;
               setDialogState(() => drawing = true);
               final startedAt = DateTime.now();
               final nextStatus = await _drawDailyImage(showNotice: false);
@@ -1529,9 +1561,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ? '${brand.generateActionLabel}正在回应'
                         : drawnToday
                             ? '今日已抽到一张图片'
-                            : poolCount > 0
-                                ? '今日可抽一次，从成功图片里随机出货'
-                                : '还没有可抽的成功图片，先完成一次生图或改图',
+                            : '今日可抽一次，将生成一张新的随机主题图',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 12),
@@ -1550,7 +1580,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     )
                   else if (todayDraw.isEmpty)
                     Text(
-                      '评分按图片清晰度、线路、发布状态和改图来源计算。',
+                      '评分按图片清晰度、线路模式和生成完成度计算。',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: Theme.of(context)
                                 .colorScheme
@@ -1609,8 +1639,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   child: const Text('关闭'),
                 ),
                 FilledButton.icon(
-                  onPressed:
-                      drawing || drawnToday || poolCount <= 0 ? null : drawNow,
+                  onPressed: drawing || drawnToday || !canDraw ? null : drawNow,
                   icon: drawing
                       ? const SizedBox(
                           width: 16,
@@ -1619,11 +1648,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         )
                       : const Icon(Icons.casino_outlined),
                   label: Text(
-                    drawnToday
-                        ? '今日已抽'
-                        : poolCount <= 0
-                            ? '暂无可抽图片'
-                            : '抽一张',
+                    drawnToday ? '今日已抽' : '生成今日一图',
                   ),
                 ),
               ],

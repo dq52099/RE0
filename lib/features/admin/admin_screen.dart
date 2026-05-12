@@ -142,16 +142,20 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               ),
             ),
             body: BrandBackground(
-              child: TabBarView(
-                children: sections
-                    .map(
-                      (item) => KeyedSubtree(
-                        key: ValueKey('${item.key}-$_revision'),
-                        child: _sectionBody(
-                            tabContext, brand, item, user, sections),
-                      ),
-                    )
-                    .toList(),
+              child: ScrollConfiguration(
+                behavior: const _AdminScrollBehavior(),
+                child: TabBarView(
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: sections
+                      .map(
+                        (item) => KeyedSubtree(
+                          key: ValueKey('${item.key}-$_revision'),
+                          child: _sectionBody(
+                              tabContext, brand, item, user, sections),
+                        ),
+                      )
+                      .toList(),
+                ),
               ),
             ),
           );
@@ -330,6 +334,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               Icons.key_outlined, 'apiKeys', '对外调用密钥'),
         ];
         return ListView(
+          physics: const ClampingScrollPhysics(),
+          clipBehavior: Clip.hardEdge,
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.all(16),
           children: items
               .map((item) => _overviewCard(tabContext, brand, sections, item))
@@ -1348,24 +1355,24 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   }
 
   Widget _adminList({required List<Widget> children, Widget? action}) {
-    return RefreshIndicator(
-      onRefresh: () async => _reload(),
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (action != null) ...[
-            Align(alignment: Alignment.centerLeft, child: action),
-            const SizedBox(height: 12),
-          ],
-          if (children.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(top: 80),
-              child: Center(child: Text('暂无数据')),
-            )
-          else
-            ...children,
+    return ListView(
+      physics: const ClampingScrollPhysics(),
+      clipBehavior: Clip.hardEdge,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: const EdgeInsets.all(16),
+      children: [
+        if (action != null) ...[
+          Align(alignment: Alignment.centerLeft, child: action),
+          const SizedBox(height: 12),
         ],
-      ),
+        if (children.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: 80),
+            child: Center(child: Text('暂无数据')),
+          )
+        else
+          ...children,
+      ],
     );
   }
 
@@ -4525,6 +4532,24 @@ class _AdminSection {
 
   final String key;
   final String label;
+}
+
+class _AdminScrollBehavior extends MaterialScrollBehavior {
+  const _AdminScrollBehavior();
+
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) {
+    return const ClampingScrollPhysics();
+  }
 }
 
 class _OverviewItem {

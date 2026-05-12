@@ -1,6 +1,6 @@
 name: re0
 description: 从零开始的异世界生图
-version: 1.2.27+10227
+version: 1.2.28+10228
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
