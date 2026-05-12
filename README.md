@@ -45,7 +45,7 @@ GitHub Actions 位于 `.github/workflows/build-apk.yml`。
 - App 内手动更新源配置在 `lib/core/providers.dart`，默认读取 `dq52099/RE0` 的 latest release；启动强制更新读取默认网关的 `/api/mobile/apps/re0/update`。
 - 强制更新发布时请同时同步 `RE0-<tag>.apk` 和 `manifest.json` 到网关的 `apks/re0/` 目录，否则启动拦截会拿不到新包。
 - Release APK 使用 GitHub Secrets 中的固定 release keystore 签名。需要配置 `RE0_KEYSTORE_BASE64`、`RE0_KEYSTORE_PASSWORD`、`RE0_KEY_ALIAS`、`RE0_KEY_PASSWORD`。
-- 当前发布版本号为 `1.2.26+10226`，后续直接按常规版本号递增即可。
+- 当前发布版本号为 `1.2.27+10227`，后续直接按常规版本号递增即可。
 
 ## 构建
 

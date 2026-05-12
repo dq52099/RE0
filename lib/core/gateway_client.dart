@@ -453,6 +453,26 @@ class GatewayClient {
     }, fallback: '签到失败，请稍后重试。');
   }
 
+  Future<Map<String, dynamic>> getDailyImageDrawStatus() async {
+    return _guard(() async {
+      final res = await _dio.get(
+        '/api/me/daily-image-draw',
+        queryParameters: _timezoneParameters(),
+      );
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '读取每日一图状态失败。');
+  }
+
+  Future<Map<String, dynamic>> performDailyImageDraw() async {
+    return _guard(() async {
+      final res = await _dio.post(
+        '/api/me/daily-image-draw',
+        data: _timezoneParameters(),
+      );
+      return Map<String, dynamic>.from(res.data as Map);
+    }, fallback: '抽取每日一图失败。');
+  }
+
   Future<Map<String, dynamic>> getPointsSummary() async {
     return _guard(() async {
       final res = await _dio.get(

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
@@ -9,6 +10,7 @@ import '../../core/api_error.dart';
 import '../../core/app_brand.dart';
 import '../../core/app_update_service.dart';
 import '../../core/brand_background.dart';
+import '../../core/cached_gateway_image.dart';
 import '../../core/compact_dropdown_field.dart';
 import '../../core/compact_save_notice.dart';
 import '../../core/gateway_avatar.dart';
@@ -40,9 +42,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _isDownloadingUpdate = false;
   bool _isUpdatingAvatar = false;
   bool _isCheckingIn = false;
+  bool _isDrawingDailyImage = false;
   double? _updateProgress;
   Future<int>? _cacheSizeFuture;
   Future<Map<String, dynamic>>? _checkInStatusFuture;
+  Future<Map<String, dynamic>>? _dailyImageDrawFuture;
   Future<Map<String, dynamic>>? _notificationsFuture;
   AppUpdateInfo? _latestUpdateInfo;
   bool _hasAutoCheckedUpdate = false;
@@ -66,6 +70,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _cacheSizeFuture = ref.read(imageCacheProvider).cacheSizeBytes();
     _checkInStatusFuture =
         ref.read(gatewayClientProvider).getDailyCheckInStatus();
+    _dailyImageDrawFuture =
+        ref.read(gatewayClientProvider).getDailyImageDrawStatus();
     _notificationsFuture = ref.read(gatewayClientProvider).getMyNotifications(
           limit: 20,
         );
@@ -138,6 +144,49 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     } finally {
       if (mounted) {
         setState(() => _isCheckingIn = false);
+      }
+    }
+  }
+
+  Map<String, dynamic> _mapValue(Object? value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return <String, dynamic>{};
+  }
+
+  List<Map<String, dynamic>> _mapList(Object? value) {
+    return (value as List? ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>?> _drawDailyImage(
+      {bool showNotice = true}) async {
+    if (_isDrawingDailyImage) return null;
+    setState(() => _isDrawingDailyImage = true);
+    try {
+      final result =
+          await ref.read(gatewayClientProvider).performDailyImageDraw();
+      final status = _mapValue(result['status']);
+      final draw = _mapValue(result['draw']);
+      if (!mounted) return null;
+      setState(() => _dailyImageDrawFuture = Future.value(status));
+      final rarity = draw['rarity']?.toString() ?? 'R';
+      final score = draw['quality_score']?.toString() ?? '0';
+      if (showNotice) {
+        showCenterNotice(context, '今日一图：$rarity · $score 分');
+      }
+      return status;
+    } catch (error) {
+      if (!mounted) return null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(error, fallback: '抽取每日一图失败。'))),
+      );
+      return null;
+    } finally {
+      if (mounted) {
+        setState(() => _isDrawingDailyImage = false);
       }
     }
   }
@@ -611,7 +660,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               }
               if (!RegExp(r'^[^@\s]+@(qq\.com|163\.com|claw\.163\.com)$')
                   .hasMatch(emailText.toLowerCase())) {
-                showCenterNotice(context, '当前仅支持 qq.com、163.com 和 claw.163.com 邮箱。');
+                showCenterNotice(
+                    context, '当前仅支持 qq.com、163.com 和 claw.163.com 邮箱。');
                 return;
               }
               setDialogState(() => binding = true);
@@ -793,6 +843,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 );
               },
             ),
+            _buildDailyImageDrawCard(brand),
             _menuCard(
               child: ListTile(
                 leading: Icon(Icons.collections_bookmark_outlined,
@@ -1198,6 +1249,412 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
+  String _formatDailyDrawDate(String raw) {
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) return raw;
+    final month = parsed.month.toString().padLeft(2, '0');
+    final day = parsed.day.toString().padLeft(2, '0');
+    return '$month-$day';
+  }
+
+  String _dailyDrawStatusText(Map<String, dynamic> status) {
+    final drawnToday = status['drawn_today'] == true;
+    final todayDraw = _mapValue(status['today_draw']);
+    final rarity = todayDraw['rarity']?.toString() ?? 'R';
+    final score = todayDraw['quality_score']?.toString() ?? '0';
+    final poolCount = int.tryParse(status['pool_count']?.toString() ?? '') ?? 0;
+    if (drawnToday) {
+      return '今日已抽 $rarity · $score 分';
+    }
+    if (poolCount > 0) {
+      return '奖池 $poolCount 张，可抽一次';
+    }
+    return '还没有可抽的成功图片';
+  }
+
+  Widget _buildDailyImageDrawCard(AppBrand brand) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _dailyImageDrawFuture,
+      builder: (context, snapshot) {
+        final status = snapshot.data ?? const <String, dynamic>{};
+        final drawnToday = status['drawn_today'] == true;
+        final poolCount =
+            int.tryParse(status['pool_count']?.toString() ?? '') ?? 0;
+        final subtitle = drawnToday
+            ? '${_dailyDrawStatusText(status)}\n${resetHintFromResponse(status)}'
+            : poolCount > 0
+                ? '从成功图片里抽一张，按质量给出 R / SR / SSR / UR\n${resetHintFromResponse(status)}'
+                : '还没有可抽的成功图片，先完成一次生图或改图\n${resetHintFromResponse(status)}';
+        return _menuCard(
+          child: ListTile(
+            leading: Icon(Icons.casino_outlined, color: brand.primaryColor),
+            title: const Text('每日一图'),
+            subtitle: _menuSubtitle(subtitle),
+            trailing: _isDrawingDailyImage
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(
+                    drawnToday
+                        ? '查看记录'
+                        : poolCount > 0
+                            ? '去抽卡'
+                            : '无可抽图片',
+                    style: TextStyle(
+                      color: drawnToday || poolCount > 0
+                          ? brand.primaryColor
+                          : Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.38),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+            onTap: _isDrawingDailyImage
+                ? null
+                : () => _showDailyImageDrawDialog(status),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDailyDrawPreview(
+    Map<String, dynamic> draw, {
+    required AppBrand brand,
+    bool isDrawing = false,
+  }) {
+    late final Widget child;
+    if (isDrawing) {
+      child = _DailyImageDrawSummon(
+        key: const ValueKey('drawing'),
+        brand: brand,
+        label: '${brand.generateActionLabel}回路展开中',
+      );
+    } else {
+      final imageUrl = draw['image_url']?.toString().trim() ?? '';
+      if (imageUrl.isEmpty) {
+        child = Container(
+          key: const ValueKey('empty'),
+          height: 170,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color:
+                  Theme.of(context).colorScheme.outline.withValues(alpha: 0.08),
+            ),
+          ),
+          child: Text(
+            '抽卡后显示今日图片',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.55),
+                ),
+          ),
+        );
+      } else {
+        child = GestureDetector(
+          key: ValueKey(imageUrl),
+          onTap: () => _openDailyImagePreview(draw),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Stack(
+              children: [
+                CachedGatewayImage(
+                  url: imageUrl,
+                  height: 180,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  showDownload: false,
+                ),
+                Positioned(
+                  left: 10,
+                  bottom: 10,
+                  child: _dailyDrawRarityBadge(draw, brand),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    }
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 420),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) {
+        final scale = Tween<double>(begin: 0.96, end: 1).animate(animation);
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(scale: scale, child: child),
+        );
+      },
+      child: child,
+    );
+  }
+
+  Widget _dailyDrawRarityBadge(Map<String, dynamic> draw, AppBrand brand) {
+    final rarity = draw['rarity']?.toString() ?? 'R';
+    final score = draw['quality_score']?.toString() ?? '0';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.48),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: brand.primaryColor.withValues(alpha: 0.54)),
+      ),
+      child: Text(
+        '$rarity · $score 分',
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDailyDrawRecordTile(Map<String, dynamic> draw) {
+    final imageUrl = draw['image_url']?.toString().trim() ?? '';
+    final rarity = draw['rarity']?.toString() ?? 'R';
+    final score = draw['quality_score']?.toString() ?? '0';
+    final qualityLabel = draw['quality_mode_label']?.toString() ?? 'Auto';
+    final modeLabel = draw['image_mode_label']?.toString() ?? '一般';
+    final dateLabel = _formatDailyDrawDate(draw['draw_date']?.toString() ?? '');
+    return InkWell(
+      onTap: imageUrl.isEmpty ? null : () => _openDailyImagePreview(draw),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: SizedBox(
+                width: 56,
+                height: 56,
+                child: imageUrl.isEmpty
+                    ? Container(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surface
+                            .withValues(alpha: 0.32),
+                        child: const Icon(Icons.image_outlined, size: 18),
+                      )
+                    : CachedGatewayImage(
+                        url: imageUrl,
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.cover,
+                        showDownload: false,
+                      ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$dateLabel · $rarity · $score 分',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$qualityLabel / $modeLabel',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.58),
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            if (imageUrl.isNotEmpty) const Icon(Icons.chevron_right),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showDailyImageDrawDialog(Map<String, dynamic> status) async {
+    var dialogStatus = Map<String, dynamic>.from(status);
+    var drawing = false;
+    final brand = ref.read(brandProvider);
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final drawnToday = dialogStatus['drawn_today'] == true;
+            final todayDraw = _mapValue(dialogStatus['today_draw']);
+            final recentDraws =
+                _mapList(dialogStatus['recent_draws']).take(5).toList();
+            final poolCount =
+                int.tryParse(dialogStatus['pool_count']?.toString() ?? '') ?? 0;
+
+            Future<void> drawNow() async {
+              if (drawing || poolCount <= 0) return;
+              setDialogState(() => drawing = true);
+              final startedAt = DateTime.now();
+              final nextStatus = await _drawDailyImage(showNotice: false);
+              final elapsed = DateTime.now().difference(startedAt);
+              const minRevealDelay = Duration(milliseconds: 920);
+              if (elapsed < minRevealDelay) {
+                await Future.delayed(minRevealDelay - elapsed);
+              }
+              if (!dialogContext.mounted || !mounted) return;
+              if (nextStatus != null) {
+                dialogStatus = nextStatus;
+              }
+              setDialogState(() => drawing = false);
+            }
+
+            return _wideDialog(
+              title: '每日一图',
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    drawing
+                        ? '${brand.generateActionLabel}正在回应'
+                        : drawnToday
+                            ? '今日已抽到一张图片'
+                            : poolCount > 0
+                                ? '今日可抽一次，从成功图片里随机出货'
+                                : '还没有可抽的成功图片，先完成一次生图或改图',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildDailyDrawPreview(
+                    todayDraw,
+                    brand: brand,
+                    isDrawing: drawing,
+                  ),
+                  const SizedBox(height: 12),
+                  if (drawing)
+                    Text(
+                      '命运牌面正在翻开...',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: brand.primaryColor.withValues(alpha: 0.82),
+                          ),
+                    )
+                  else if (todayDraw.isEmpty)
+                    Text(
+                      '评分按图片清晰度、线路、发布状态和改图来源计算。',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.58),
+                          ),
+                    )
+                  else
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _chip(
+                          brand,
+                          '评分',
+                          '${todayDraw['rarity']?.toString() ?? 'R'} · ${todayDraw['quality_score']?.toString() ?? 0}',
+                          icon: Icons.stars_outlined,
+                        ),
+                        _chip(
+                          brand,
+                          '清晰度',
+                          todayDraw['quality_mode_label']?.toString() ?? 'Auto',
+                          icon: Icons.tune,
+                        ),
+                        _chip(
+                          brand,
+                          '线路',
+                          todayDraw['image_mode_label']?.toString() ?? '一般',
+                          icon: Icons.alt_route_rounded,
+                        ),
+                      ],
+                    ),
+                  const SizedBox(height: 14),
+                  Text(
+                    '最近记录',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  if (recentDraws.isEmpty)
+                    Text(
+                      '暂无记录',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.55),
+                          ),
+                    )
+                  else
+                    ...recentDraws.map(_buildDailyDrawRecordTile),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('关闭'),
+                ),
+                FilledButton.icon(
+                  onPressed:
+                      drawing || drawnToday || poolCount <= 0 ? null : drawNow,
+                  icon: drawing
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.casino_outlined),
+                  label: Text(
+                    drawnToday
+                        ? '今日已抽'
+                        : poolCount <= 0
+                            ? '暂无可抽图片'
+                            : '抽一张',
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _openDailyImagePreview(Map<String, dynamic> draw) {
+    final imageUrl = draw['image_url']?.toString().trim() ?? '';
+    if (imageUrl.isEmpty) return;
+    final rarity = draw['rarity']?.toString() ?? 'R';
+    final score = draw['quality_score']?.toString() ?? '0';
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ImagePreviewScreen(
+          showDownload: true,
+          items: [
+            PreviewImageEntry(
+              url: imageUrl,
+              title: '每日一图',
+              caption: '$rarity · $score 分',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _avatar(Map<String, dynamic>? user, AppBrand brand) {
     final avatarUrl = user?['avatar_url']?.toString().trim() ?? '';
     final displayName = user?['display_name']?.toString().trim() ?? '';
@@ -1496,5 +1953,167 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         .toList();
     if (lines.isEmpty) return '包含最新修复与体验优化。';
     return lines.join('\n');
+  }
+}
+
+class _DailyImageDrawSummon extends StatefulWidget {
+  const _DailyImageDrawSummon({
+    super.key,
+    required this.brand,
+    required this.label,
+  });
+
+  final AppBrand brand;
+  final String label;
+
+  @override
+  State<_DailyImageDrawSummon> createState() => _DailyImageDrawSummonState();
+}
+
+class _DailyImageDrawSummonState extends State<_DailyImageDrawSummon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = widget.brand;
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final value = _controller.value;
+        final wave = math.sin(value * math.pi * 2);
+        final pulse = 0.97 + wave * 0.035;
+        final cardTilt = wave * 0.07;
+        return Container(
+          height: 180,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: brand.primaryColor.withValues(alpha: 0.24),
+            ),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                brand.panelColor.withValues(alpha: 0.26),
+                brand.primaryColor.withValues(alpha: 0.16),
+                brand.warningColor.withValues(alpha: 0.10),
+              ],
+            ),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Transform.rotate(
+                angle: value * math.pi * 2,
+                child: Container(
+                  width: 124,
+                  height: 124,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(30),
+                    border: Border.all(
+                      color: brand.primaryColor.withValues(alpha: 0.36),
+                      width: 1.4,
+                    ),
+                  ),
+                ),
+              ),
+              Transform.rotate(
+                angle: -value * math.pi * 1.4,
+                child: Container(
+                  width: 96,
+                  height: 96,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.18),
+                    ),
+                  ),
+                ),
+              ),
+              Transform.scale(
+                scale: pulse,
+                child: Transform.rotate(
+                  angle: cardTilt,
+                  child: Container(
+                    width: 82,
+                    height: 108,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          brand.primaryColor.withValues(alpha: 0.88),
+                          brand.panelColor.withValues(alpha: 0.84),
+                        ],
+                      ),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.34),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: brand.primaryColor.withValues(alpha: 0.26),
+                          blurRadius: 26,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.auto_awesome,
+                          color: Colors.white.withValues(alpha: 0.94),
+                          size: 28,
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          '今日',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 14,
+                child: Text(
+                  widget.label,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.82),
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
