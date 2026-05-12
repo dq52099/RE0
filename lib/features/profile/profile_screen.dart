@@ -1529,8 +1529,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           builder: (context, setDialogState) {
             final drawnToday = dialogStatus['drawn_today'] == true;
             final todayDraw = _mapValue(dialogStatus['today_draw']);
-            final recentDraws =
-                _mapList(dialogStatus['recent_draws']).take(5).toList();
+            final recentDraws = _mapList(dialogStatus['recent_draws']);
             final canDraw = dialogStatus['can_draw'] == true || !drawnToday;
 
             Future<void> drawNow() async {
@@ -1630,7 +1629,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ),
                     )
                   else
-                    ...recentDraws.map(_buildDailyDrawRecordTile),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 280),
+                      child: ListView.separated(
+                        primary: false,
+                        shrinkWrap: true,
+                        padding: EdgeInsets.zero,
+                        physics: const ClampingScrollPhysics(),
+                        itemCount: recentDraws.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 2),
+                        itemBuilder: (_, index) =>
+                            _buildDailyDrawRecordTile(recentDraws[index]),
+                      ),
+                    ),
                 ],
               ),
               actions: [

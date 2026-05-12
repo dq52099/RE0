@@ -2235,6 +2235,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final notificationCategoryLimit = TextEditingController(
       text: _settingValue(byKey, 'notification_category_limit', fallback: '50'),
     );
+    final dailyImageDrawHistoryLimit = TextEditingController(
+      text:
+          _settingValue(byKey, 'daily_image_draw_history_limit', fallback: '7'),
+    );
     var forceUpdateEnabled = _settingBool(byKey, 'force_app_update_enabled');
     var forceReloginEnabled = _settingBool(byKey, 'force_relogin_enabled');
     final dialogCategory = category ?? '全部设置';
@@ -2331,6 +2335,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
             int.tryParse(notificationRetentionDays.text.trim()),
         'notification_category_limit':
             int.tryParse(notificationCategoryLimit.text.trim()),
+        'daily_image_draw_history_limit':
+            int.tryParse(dailyImageDrawHistoryLimit.text.trim()),
         'force_app_update_enabled': forceUpdateEnabled,
         'force_relogin_enabled': forceReloginEnabled,
       };
@@ -2349,6 +2355,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           final showBasic = category == null || category == '基础设置';
           final showProvider = category == null || category == '生成线路';
           final showAi = category == null || category == 'AI 辅助';
+          final showDailyImage = category == null || category == '每日一图';
           final showNotification = category == null || category == '通知设置';
           final showMail = category == null || category == '邮件通道';
           final showPolicy = category == null || category == '系统策略';
@@ -2413,6 +2420,19 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     decoration: const InputDecoration(
                       labelText: 'VIP 额度倍率',
                       helperText: '按基础价 2 额度/张计算；0.5 即 5 折，实际 1 额度/张',
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                ],
+                if (showDailyImage) ...[
+                  _settingsSectionTitle('每日一图'),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: dailyImageDrawHistoryLimit,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '最近记录数量',
+                      helperText: '默认 7 条；超过后只保留最新记录，记录区可滑动查看',
                     ),
                   ),
                   const SizedBox(height: 18),
@@ -2852,6 +2872,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     );
     notificationRetentionDays.dispose();
     notificationCategoryLimit.dispose();
+    dailyImageDrawHistoryLimit.dispose();
     if (payload == null) return;
     await _save(
         () => ref.read(gatewayClientProvider).saveAdminSystemSettings(payload),
@@ -3962,6 +3983,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     }
     const order = [
       '基础设置',
+      '每日一图',
       '生成线路',
       'AI 辅助',
       '通知设置',
@@ -3991,6 +4013,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         key == 'vip_image_quota_multiplier' ||
         key.startsWith('daily_checkin_')) {
       return '基础设置';
+    }
+    if (key.startsWith('daily_image_draw_')) {
+      return '每日一图';
     }
     if (key.startsWith('feedback_ai_') || key.startsWith('prompt_ai_')) {
       return 'AI 辅助';
@@ -4038,6 +4063,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       'provider_model': 'VIP 模型',
       'general_provider_image_model': '普通图片模型',
       'vip_image_quota_multiplier': 'VIP 额度倍率',
+      'daily_image_draw_history_limit': '每日一图记录',
       'notification_retention_days': '已读通知清理',
       'notification_category_limit': '每类显示上限',
       'email_service_enabled': '邮件总开关',
@@ -4211,6 +4237,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         'key': 'registration_invite_required',
         'value': 'true',
         'description': '注册时是否必须填写可用邀请码',
+      },
+      {
+        'key': 'daily_image_draw_history_limit',
+        'value': '7',
+        'description': '每日一图最近记录保留条数，超过后自动清理最旧记录',
       },
       {
         'key': 'general_provider_base_url',
