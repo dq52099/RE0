@@ -988,7 +988,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           children: [
             _infoCard(
               title: '邮件服务',
-              subtitle: '验证码和系统通知共用这套邮件服务，主通道优先，备用通道只在失败后接管。',
+              subtitle: '验证码和系统通知共用这套邮件服务，当前线路优先，另一条线路只在失败后临时兜底。',
               active: mailEnabled,
               lines: [
                 '当前线路: ${_mailSlotLabels[activeSlot] ?? activeSlot}',
@@ -2665,7 +2665,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '邮箱验证码和系统通知共用这套邮件服务。主通道优先发送，备用通道只在失败后接管；选择“不发送”即可停用对应线路。',
+                    '邮箱验证码和系统通知共用这套邮件服务。当前线路优先发送，另一条线路只在失败后临时兜底；选择“不发送”即可停用对应线路。',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 12),
@@ -2710,7 +2710,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     onChanged: (value) =>
                         setDialogState(() => emailAutoSwitchEnabled = value),
                     title: const Text('发送失败后自动切换'),
-                    subtitle: const Text('关闭时只使用当前线路；开启后失败才尝试备用通道并保存成功线路'),
+                    subtitle: const Text('关闭时单次可临时走备用但不保存；开启后会持久切换到成功线路'),
                   ),
                   const SizedBox(height: 18),
                   _settingsSectionTitle('Claw163 通道'),
