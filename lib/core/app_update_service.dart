@@ -32,6 +32,23 @@ class AppUpdateInfo {
   final String releaseNotes;
   final String releaseUrl;
   final bool forceUpdate;
+
+  AppUpdateInfo asForced() {
+    return AppUpdateInfo(
+      appName: appName,
+      packageName: packageName,
+      latestVersionName: latestVersionName,
+      latestVersionCode: latestVersionCode,
+      currentVersionCode: currentVersionCode,
+      available: available,
+      downloadUrl: downloadUrl,
+      fileSize: fileSize,
+      sha256: sha256,
+      releaseNotes: releaseNotes,
+      releaseUrl: releaseUrl,
+      forceUpdate: true,
+    );
+  }
 }
 
 class AppUpdateService {

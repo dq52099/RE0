@@ -67,14 +67,16 @@ class _StartupGateState extends ConsumerState<_StartupGate> {
     }
     final releaseNotes = data['release_notes']?.toString().trim();
     return AppUpdateInfo(
-      appName:
-          appNameRaw == null || appNameRaw.isEmpty ? service.appName : appNameRaw,
+      appName: appNameRaw == null || appNameRaw.isEmpty
+          ? service.appName
+          : appNameRaw,
       packageName: packageNameRaw == null || packageNameRaw.isEmpty
           ? service.packageName
           : packageNameRaw,
-      latestVersionName: latestVersionNameRaw == null || latestVersionNameRaw.isEmpty
-          ? service.currentVersionName
-          : latestVersionNameRaw,
+      latestVersionName:
+          latestVersionNameRaw == null || latestVersionNameRaw.isEmpty
+              ? service.currentVersionName
+              : latestVersionNameRaw,
       latestVersionCode:
           _asInt(data['latest_version_code'], service.currentVersionCode),
       currentVersionCode:
@@ -86,9 +88,32 @@ class _StartupGateState extends ConsumerState<_StartupGate> {
       releaseNotes: (releaseNotes == null || releaseNotes.isEmpty)
           ? '包含最新修复与体验优化。'
           : releaseNotes,
-      releaseUrl: data['download_url']?.toString() ?? '',
+      releaseUrl: data['release_url']?.toString() ??
+          data['download_url']?.toString() ??
+          '',
       forceUpdate: data['force_update'] == true,
     );
+  }
+
+  Future<AppUpdateInfo?> _checkForcedUpdate() async {
+    final client = ref.read(gatewayClientProvider);
+    final service = ref.read(appUpdateProvider);
+    try {
+      final info = _buildForcedUpdateInfo(
+        await client.checkAppUpdate(service.appId, service.currentVersionCode),
+      );
+      if (info.available) return info;
+    } catch (error) {
+      debugPrint('Backend force update check failed: $error');
+    }
+
+    try {
+      final info = await service.checkForUpdate();
+      if (info.available) return info.asForced();
+    } catch (error) {
+      debugPrint('GitHub force update check failed: $error');
+    }
+    return null;
   }
 
   Future<_StartupResult> _checkSavedAuth() async {
@@ -98,19 +123,8 @@ class _StartupGateState extends ConsumerState<_StartupGate> {
       final bootstrap = await client.bootstrap();
       final forceUpdate = bootstrap['force_app_update_enabled'] == true;
       if (forceUpdate) {
-        try {
-          final info = _buildForcedUpdateInfo(
-            await client.checkAppUpdate(
-              ref.read(appUpdateProvider).appId,
-              ref.read(appUpdateProvider).currentVersionCode,
-            ),
-          );
-          if (info.available) {
-            return _StartupResult.forceUpdate(info);
-          }
-        } catch (error) {
-          debugPrint('Force update check skipped: $error');
-        }
+        final info = await _checkForcedUpdate();
+        if (info != null) return _StartupResult.forceUpdate(info);
       }
       final auth = await client.checkAuth();
       ref.read(authStateProvider.notifier).state = auth;
@@ -295,7 +309,8 @@ class _ForcedUpdateScreen extends ConsumerWidget {
                                         ),
                                         borderRadius: BorderRadius.circular(16),
                                         border: Border.all(
-                                          color: colorScheme.onSurface.withValues(
+                                          color:
+                                              colorScheme.onSurface.withValues(
                                             alpha: 0.28,
                                           ),
                                         ),
@@ -323,7 +338,8 @@ class _ForcedUpdateScreen extends ConsumerWidget {
                                           const SizedBox(height: 4),
                                           Text(
                                             '请先安装最新版本，再继续使用。',
-                                            style: textTheme.bodySmall?.copyWith(
+                                            style:
+                                                textTheme.bodySmall?.copyWith(
                                               color: colorScheme.onSurface
                                                   .withValues(alpha: 0.88),
                                             ),
@@ -354,8 +370,8 @@ class _ForcedUpdateScreen extends ConsumerWidget {
                                 Container(
                                   padding: const EdgeInsets.all(14),
                                   decoration: BoxDecoration(
-                                    color:
-                                        colorScheme.surface.withValues(alpha: 0.9),
+                                    color: colorScheme.surface
+                                        .withValues(alpha: 0.9),
                                     borderRadius: BorderRadius.circular(14),
                                     border: Border.all(
                                       color: brand.primaryColor.withValues(
@@ -378,8 +394,8 @@ class _ForcedUpdateScreen extends ConsumerWidget {
                                   const SizedBox(height: 18),
                                   ClipRRect(
                                     borderRadius: BorderRadius.circular(999),
-                                    child:
-                                        LinearProgressIndicator(value: progress),
+                                    child: LinearProgressIndicator(
+                                        value: progress),
                                   ),
                                 ],
                                 const SizedBox(height: 20),

@@ -2356,6 +2356,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           final showProvider = category == null || category == '生成线路';
           final showAi = category == null || category == 'AI 辅助';
           final showDailyImage = category == null || category == '每日一图';
+          final showWelfare = category == null || category == '福利设置';
           final showNotification = category == null || category == '通知设置';
           final showMail = category == null || category == '邮件通道';
           final showPolicy = category == null || category == '系统策略';
@@ -2400,26 +2401,36 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   ),
                   const SizedBox(height: 12),
                   TextField(
-                    controller: generateCheckinMultiplier,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: '签到生图奖励倍数'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: editCheckinMultiplier,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: '签到改图奖励倍数'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
                     controller: vipImageQuotaMultiplier,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
                     decoration: const InputDecoration(
                       labelText: 'VIP 额度倍率',
                       helperText: '按基础价 2 额度/张计算；0.5 即 5 折，实际 1 额度/张',
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                ],
+                if (showWelfare) ...[
+                  _settingsSectionTitle('福利设置'),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: generateCheckinMultiplier,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: '签到生图奖励倍数',
+                      helperText: '每日签到发放的生图额度倍率',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: editCheckinMultiplier,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: '签到改图奖励倍数',
+                      helperText: '每日签到发放的改图额度倍率',
                     ),
                   ),
                   const SizedBox(height: 18),
@@ -3983,6 +3994,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     }
     const order = [
       '基础设置',
+      '福利设置',
       '每日一图',
       '生成线路',
       'AI 辅助',
@@ -4010,9 +4022,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         key == 'allow_public_registration' ||
         key == 'registration_email_required' ||
         key == 'registration_invite_required' ||
-        key == 'vip_image_quota_multiplier' ||
-        key.startsWith('daily_checkin_')) {
+        key == 'vip_image_quota_multiplier') {
       return '基础设置';
+    }
+    if (key.startsWith('daily_checkin_')) {
+      return '福利设置';
     }
     if (key.startsWith('daily_image_draw_')) {
       return '每日一图';
@@ -4063,6 +4077,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       'provider_model': 'VIP 模型',
       'general_provider_image_model': '普通图片模型',
       'vip_image_quota_multiplier': 'VIP 额度倍率',
+      'daily_checkin_generate_multiplier': '签到生图奖励',
+      'daily_checkin_edit_multiplier': '签到改图奖励',
       'daily_image_draw_history_limit': '每日一图记录',
       'notification_retention_days': '已读通知清理',
       'notification_category_limit': '每类显示上限',
