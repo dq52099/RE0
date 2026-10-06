@@ -137,6 +137,10 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
                 title: Text(current.title ?? '图片预览'),
                 backgroundColor: Colors.black,
                 foregroundColor: Colors.white,
+                titleTextStyle: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(color: Colors.white),
                 actions: [
                   if (desktop) ...[
                     IconButton(

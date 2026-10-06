@@ -27,6 +27,12 @@ void main() {
   Future<void> capture(WidgetTester tester, String name) async {
     if (Platform.environment['RE0_CAPTURE_DESKTOP'] != '1') return;
     await tester.runAsync(() async {
+      for (final element in find.byType(Image).evaluate()) {
+        await precacheImage((element.widget as Image).image, element);
+      }
+    });
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
       final boundary = fixtures.boundary.currentContext!.findRenderObject()
           as RenderRepaintBoundary;
       final image = await boundary.toImage();
