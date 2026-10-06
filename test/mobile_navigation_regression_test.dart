@@ -140,11 +140,15 @@ void main() {
     await select(AppBrands.re0.historyTabLabel);
     await tester.pumpAndSettle();
     final pagination = find.text('第1/1页');
-    await tester.ensureVisible(pagination);
+    final scrollable = find
+        .descendant(
+            of: find.byType(CustomScrollView),
+            matching: find.byType(Scrollable))
+        .first;
+    await tester.scrollUntilVisible(pagination, 300, scrollable: scrollable);
     await tester.pumpAndSettle();
     final position = tester.getTopLeft(pagination);
-    final scroll = tester.state<ScrollableState>(find.descendant(
-        of: find.byType(CustomScrollView), matching: find.byType(Scrollable)));
+    final scroll = tester.state<ScrollableState>(scrollable);
     final offset = scroll.position.pixels;
     expect(offset, greaterThan(0));
 

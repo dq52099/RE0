@@ -72,7 +72,7 @@
   "test/image_capabilities_test.dart": "130377c3d2c61f76eb730cad6f4fafe0146e06c96bb09d0d43501bd36d34f32c",
   "test/image_request_recovery_test.dart": "50aa70f0311a611f74412059fc0f060f134d21d18928b5735f32696e9cc986df",
   "test/mobile_admin_regression_test.dart": "9a0128cd203e757061c44828b6b6e755b1a3836a9870794aa244a4eabdf6ac76",
-  "test/mobile_navigation_regression_test.dart": "eedfb07ca96e2246b7076f93165e9e132155c7cd977b21cdd92455148a4b1c6b",
+  "test/mobile_navigation_regression_test.dart": "515742a42d15af34458b460249cb0bd9891831e1170791a7ac91962e7d4a8372",
   "test/prompt_assist_test.dart": "450baf3878401fb0b75b3c436e7946a8733fcb979f9c8dd102a75dbc3a9ad082",
   "test/startup_screen_test.dart": "2ebaaf0862ed711b26511e8d6970e86ec80a6fc731a64e8f5f2e18e94772c04d",
   "test/theme_settings_regression_test.dart": "13e46fb7fad97fc2d318b1f6a0536eea931c93358d990e943a78bf6097d2a8cc",
