@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:image_cropper/image_cropper.dart';
@@ -7,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_error.dart';
+import '../../core/desktop_avatar_crop.dart';
 import '../../core/app_brand.dart';
 import '../../core/app_update_service.dart';
 import '../../core/brand_background.dart';
@@ -272,31 +274,50 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
     if (picked == null) return;
 
-    final cropped = await ImageCropper().cropImage(
-      sourcePath: picked.path,
-      compressFormat: ImageCompressFormat.png,
-      maxWidth: 1024,
-      maxHeight: 1024,
-      uiSettings: [
-        AndroidUiSettings(
-          toolbarTitle: '裁剪头像',
-          toolbarColor: ref.read(brandProvider).primaryColor,
-          lockAspectRatio: true,
-          hideBottomControls: false,
-          toolbarWidgetColor: Colors.white,
-          activeControlsWidgetColor: ref.read(brandProvider).primaryColor,
-          initAspectRatio: CropAspectRatioPreset.square,
-          cropStyle: CropStyle.circle,
-          aspectRatioPresets: [CropAspectRatioPreset.square],
-        ),
-      ],
-    );
-    if (cropped == null) return;
+    if (!mounted) return;
+    File? desktopCrop;
+    String avatarPath;
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      try {
+        desktopCrop = await cropDesktopAvatar(context, picked.path);
+      } catch (_) {
+        if (mounted) showCenterNotice(context, '无法读取这张图片，请换一张重试。');
+        return;
+      }
+      if (desktopCrop == null) return;
+      avatarPath = desktopCrop.path;
+    } else {
+      final cropped = await ImageCropper().cropImage(
+        sourcePath: picked.path,
+        compressFormat: ImageCompressFormat.png,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: '裁剪头像',
+            toolbarColor: ref.read(brandProvider).primaryColor,
+            lockAspectRatio: true,
+            hideBottomControls: false,
+            toolbarWidgetColor: Colors.white,
+            activeControlsWidgetColor: ref.read(brandProvider).primaryColor,
+            initAspectRatio: CropAspectRatioPreset.square,
+            cropStyle: CropStyle.circle,
+            aspectRatioPresets: [CropAspectRatioPreset.square],
+          ),
+        ],
+      );
+      if (cropped == null) return;
+      avatarPath = cropped.path;
+    }
+    if (!mounted) {
+      if (desktopCrop != null) await desktopCrop.delete();
+      return;
+    }
 
     setState(() => _isUpdatingAvatar = true);
     try {
       final updated = await ref.read(gatewayClientProvider).updateMyAvatar(
-            cropped.path,
+            avatarPath,
           );
       ref.read(authStateProvider.notifier).state = updated;
       ref.read(energyProvider.notifier).state = updated['quota_summary'];
@@ -313,6 +334,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         SnackBar(content: Text(friendlyError(error, fallback: '头像上传失败。'))),
       );
     } finally {
+      if (desktopCrop != null) await desktopCrop.delete();
       if (mounted) {
         setState(() => _isUpdatingAvatar = false);
       }

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -107,6 +108,20 @@ class ImageCacheService {
     }
 
     return SavedImage(file: savedFile, galleryUri: galleryUri);
+  }
+
+  Future<SavedImage?> saveImageAs(String url) async {
+    final extension = _extensionFromUrl(url).substring(1);
+    final location = await getSaveLocation(
+      suggestedName: _downloadFileName(url),
+      initialDirectory: (await getDownloadsDirectory())?.path,
+      acceptedTypeGroups: [
+        XTypeGroup(label: '原始图片', extensions: [extension]),
+      ],
+    );
+    if (location == null) return null;
+    final cached = await cachedFileFor(url);
+    return SavedImage(file: await cached.copy(location.path));
   }
 
   Future<bool> hasSavedImageForUrl(

@@ -91,9 +91,8 @@ class AppTabStack extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ClipRect(
-          child: AppEntrance(
-        identity: index,
-        animateOnMount: false,
+        // Tab selection must not translate or fade the whole page, including
+        // its app bar and wallpaper. The navigation indicator supplies feedback.
         child: IndexedStack(
           index: index,
           children: List.generate(children.length, (i) {
@@ -104,7 +103,7 @@ class AppTabStack extends StatelessWidget {
             );
           }),
         ),
-      ));
+      );
 }
 
 /// Keeps Android's predictive back gesture, including canceled swipes.

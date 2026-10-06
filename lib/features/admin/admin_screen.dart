@@ -17,6 +17,7 @@ import '../../core/compact_save_notice.dart';
 import '../../core/local_time_format.dart';
 import '../../core/providers.dart';
 import '../../core/stable_form_dialog.dart';
+import '../../core/value_parsers.dart';
 import '../feedback/admin_feedback_panel.dart';
 
 Map<String, dynamic> buildAdminMailSettingsPayload({
@@ -197,22 +198,25 @@ class _AdminContentState extends ConsumerState<_AdminContent>
             body: BrandBackground(
               child: ScrollConfiguration(
                 behavior: const _AdminScrollBehavior(),
-                child: TabBarView(
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: sections
-                      .map(
-                        (item) => KeyedSubtree(
-                          key: ValueKey(item.key.startsWith('feedback')
-                              ? '${item.key}-$_revision'
-                              : item.key),
-                          child: Builder(
-                            builder: (_) => _sectionBody(
-                                tabContext, brand, item, user, sections),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
+                child: Center(
+                    child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1600),
+                        child: TabBarView(
+                          physics: const NeverScrollableScrollPhysics(),
+                          children: sections
+                              .map(
+                                (item) => KeyedSubtree(
+                                  key: ValueKey(item.key.startsWith('feedback')
+                                      ? '${item.key}-$_revision'
+                                      : item.key),
+                                  child: Builder(
+                                    builder: (_) => _sectionBody(tabContext,
+                                        brand, item, user, sections),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ))),
               ),
             ),
           );
@@ -484,7 +488,7 @@ class _AdminContentState extends ConsumerState<_AdminContent>
         final filtered = data.users
             .where((user) =>
                 (_userStatus == 'all' ||
-                    (user['is_active'] != false) ==
+                    boolish(user['is_active']) ==
                         (_userStatus == 'active')) &&
                 (query.isEmpty ||
                     [
@@ -553,7 +557,7 @@ class _AdminContentState extends ConsumerState<_AdminContent>
                     '${_text(user['display_name'])} (${_text(user['username'])})',
                 subtitle:
                     '角色: ${_text(user['role_name'])}  用户组: ${_text(user['group_name'])}',
-                active: user['is_active'] == true,
+                active: boolish(user['is_active']),
                 trailing: canManage
                     ? Row(
                         mainAxisSize: MainAxisSize.min,
@@ -726,7 +730,7 @@ class _AdminContentState extends ConsumerState<_AdminContent>
             return _infoCard(
               title: _text(group['name']),
               subtitle: _text(group['description']),
-              active: group['is_active'] == true,
+              active: boolish(group['is_active']),
               trailing: canManage
                   ? IconButton(
                       icon: const Icon(Icons.edit),
@@ -765,7 +769,7 @@ class _AdminContentState extends ConsumerState<_AdminContent>
             return _infoCard(
               title: _text(role['name']),
               subtitle: _text(role['description']),
-              active: role['is_active'] == true,
+              active: boolish(role['is_active']),
               trailing: canManage
                   ? IconButton(
                       icon: const Icon(Icons.edit),
@@ -821,7 +825,7 @@ class _AdminContentState extends ConsumerState<_AdminContent>
             return _infoCard(
               title: _text(item['name']),
               subtitle: _text(item['description']),
-              active: item['is_active'] == true,
+              active: boolish(item['is_active']),
               trailing: canManage
                   ? IconButton(
                       icon: const Icon(Icons.edit),
@@ -1927,9 +1931,7 @@ class _AdminContentState extends ConsumerState<_AdminContent>
                   ),
                   const SizedBox(height: 16),
                   Flexible(
-                    child: SingleChildScrollView(
-                      child: content,
-                    ),
+                    child: FormDialogScrollView(child: content),
                   ),
                   const SizedBox(height: 16),
                   const Divider(height: 1),
@@ -1985,8 +1987,8 @@ class _AdminContentState extends ConsumerState<_AdminContent>
     if (!const ['', 'vip', 'general'].contains(imageModeOverride)) {
       imageModeOverride = '';
     }
-    var active = user?['is_active'] != false;
-    var canEditUsername = user?['can_edit_username'] != false;
+    var active = boolish(user?['is_active'] ?? true);
+    var canEditUsername = boolish(user?['can_edit_username'] ?? true);
 
     final payload = await _showManagedDialog<Map<String, dynamic>>(
       context: context,
@@ -2234,7 +2236,7 @@ class _AdminContentState extends ConsumerState<_AdminContent>
     if (!const ['vip', 'general'].contains(imageMode)) {
       imageMode = 'vip';
     }
-    var active = group?['is_active'] != false;
+    var active = boolish(group?['is_active'] ?? true);
     final payload = await _basicEntityDialog(
       title: group == null ? '新增用户组' : '编辑用户组',
       name: name,
@@ -2314,7 +2316,7 @@ class _AdminContentState extends ConsumerState<_AdminContent>
     final selected = (role?['permissions'] as List? ?? [])
         .map((item) => item.toString())
         .toSet();
-    var active = role?['is_active'] != false;
+    var active = boolish(role?['is_active'] ?? true);
 
     final payload = await _showManagedDialog<Map<String, dynamic>>(
       context: context,
@@ -2397,7 +2399,7 @@ class _AdminContentState extends ConsumerState<_AdminContent>
     final description =
         TextEditingController(text: _text(item?['description'], fallback: ''));
     final rawKey = TextEditingController();
-    var active = item?['is_active'] != false;
+    var active = boolish(item?['is_active'] ?? true);
     final payload = await _basicEntityDialog(
       title: item == null ? '新增密钥' : '编辑密钥',
       name: name,

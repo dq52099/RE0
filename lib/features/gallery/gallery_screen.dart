@@ -333,11 +333,15 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
     super.build(context);
     final brand = ref.watch(brandProvider);
     return FrontendPageFrame(
-      maxWidth: 1120,
+      maxWidth: 1600,
       child: RefreshIndicator(
         onRefresh: _refresh,
         child: LayoutBuilder(builder: (context, constraints) {
-          final columns = constraints.maxWidth >= 720 ? 2 : 1;
+          final columns = constraints.maxWidth >= 1300
+              ? 3
+              : constraints.maxWidth >= 720
+                  ? 2
+                  : 1;
           final rows = (_items.length / columns).ceil();
           return ListView.builder(
             controller: _scrollController,
@@ -353,17 +357,15 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                       subtitle: '浏览作品、收藏喜欢的图片，也可以在图片记录里发布自己的作品。',
                       icon: Icons.explore_outlined,
                       child: _toolbar(brand)),
-                  const SizedBox(height: 16),
-                  if (_isLoading) const LinearProgressIndicator(),
-                  if (_isLoading) const SizedBox(height: 16),
-                  if (_error != null) ...[
-                    FrontendStateCard(
-                      title: '读取画廊失败',
-                      message: _error!,
-                      icon: Icons.cloud_off_outlined,
-                      isError: true,
-                      onAction: _isLoading ? null : () => _load(),
-                    ),
+                  SizedBox(
+                    height: 16,
+                    child: _isLoading
+                        ? const Center(
+                            child: LinearProgressIndicator(minHeight: 2))
+                        : null,
+                  ),
+                  if (_error != null && _items.isEmpty) ...[
+                    _loadError(),
                     const SizedBox(height: 16),
                   ],
                   if (_items.isEmpty && !_isLoading && _error == null)
@@ -390,7 +392,13 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
               if (index == rows + 1)
                 return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: _paginationBar());
+                    child: Column(children: [
+                      if (_error != null && _items.isNotEmpty) ...[
+                        _loadError(),
+                        const SizedBox(height: 16),
+                      ],
+                      _paginationBar(),
+                    ]));
               final first = (index - 1) * columns;
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
@@ -412,6 +420,14 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
       ),
     );
   }
+
+  Widget _loadError() => FrontendStateCard(
+        title: _items.isEmpty ? '读取画廊失败' : '刷新画廊失败',
+        message: _error!,
+        icon: Icons.cloud_off_outlined,
+        isError: true,
+        onAction: _isLoading ? null : () => _load(),
+      );
 
   Widget _toolbar(AppBrand brand) {
     return Column(

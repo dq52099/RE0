@@ -34,6 +34,23 @@ class KeyboardStableDialog extends StatelessWidget {
       );
 }
 
+/// Keeps floating labels inside the scroll viewport, including large text.
+class FormDialogScrollView extends StatelessWidget {
+  const FormDialogScrollView({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        // An outlined field paints its floating label above its layout box.
+        // Spacing outside the viewport cannot protect it from scroll clipping.
+        padding: EdgeInsets.fromLTRB(
+            2, MediaQuery.textScalerOf(context).scale(12), 2, 4),
+        child: child,
+      );
+}
+
 class StableFormDialog extends StatelessWidget {
   const StableFormDialog({
     super.key,
@@ -64,11 +81,7 @@ class StableFormDialog extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 Flexible(
-                  child: SingleChildScrollView(
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    child: content,
-                  ),
+                  child: FormDialogScrollView(child: content),
                 ),
                 const SizedBox(height: 16),
                 Wrap(

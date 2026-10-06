@@ -1,6 +1,8 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -63,7 +65,9 @@ class AppUpdateService {
     required this.currentVersionName,
     required this.currentVersionCode,
     required this.currentReleaseTag,
-  }) : _dio = Dio(
+    TargetPlatform? platform,
+  })  : platform = platform ?? defaultTargetPlatform,
+        _dio = Dio(
           BaseOptions(
             connectTimeout: const Duration(seconds: 30),
             receiveTimeout: const Duration(minutes: 5),
@@ -74,6 +78,10 @@ class AppUpdateService {
   static const MethodChannel _channel = MethodChannel('re0/downloads');
 
   final Dio _dio;
+  final TargetPlatform platform;
+  bool get isWindows => platform == TargetPlatform.windows;
+  static const windowsManifestUrl =
+      'https://work.6688667.xyz/boxying-desktop/manifest.json';
   final String repository;
   final String assetNamePrefix;
   final String appId;
@@ -83,8 +91,51 @@ class AppUpdateService {
   final int currentVersionCode;
   final String currentReleaseTag;
 
-  Future<AppUpdateInfo> checkGatewayUpdate(GatewayClient client) async =>
-      fromGatewayData(await client.checkAppUpdate(appId, currentVersionCode));
+  Future<AppUpdateInfo> checkGatewayUpdate(GatewayClient client) async {
+    if (isWindows) return checkWindowsUpdate();
+    return fromGatewayData(
+        await client.checkAppUpdate(appId, currentVersionCode));
+  }
+
+  Future<AppUpdateInfo> checkWindowsUpdate() async {
+    final response = await _dio.get(windowsManifestUrl,
+        options: Options(headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache'
+        }));
+    return fromWindowsManifest(Map<String, dynamic>.from(response.data as Map));
+  }
+
+  AppUpdateInfo fromWindowsManifest(Map<String, dynamic> data) {
+    if (data['platform'] != 'windows-x64') {
+      throw StateError('更新文件不适用于 Windows。');
+    }
+    final code = _asInt(data['version_code']);
+    final url = Uri.tryParse(data['download_url']?.toString() ?? '');
+    final hash = data['sha256']?.toString() ?? '';
+    if (code <= 0 ||
+        url == null ||
+        url.scheme != 'https' ||
+        url.host != Uri.parse(windowsManifestUrl).host ||
+        !url.path.startsWith('/boxying-desktop/') ||
+        !url.path.endsWith('.exe') ||
+        !RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(hash)) {
+      throw StateError('Windows 更新信息不完整，请稍后重试。');
+    }
+    return AppUpdateInfo(
+      appName: appName,
+      packageName: packageName,
+      latestVersionName: data['version_name']?.toString() ?? '',
+      latestVersionCode: code,
+      currentVersionCode: currentVersionCode,
+      available: code > currentVersionCode,
+      downloadUrl: url.toString(),
+      fileSize: _asInt(data['file_size']),
+      sha256: hash.toLowerCase(),
+      releaseNotes: data['release_notes']?.toString() ?? 'Windows 桌面体验更新。',
+      releaseUrl: 'https://work.6688667.xyz/boxying-desktop/',
+    );
+  }
 
   AppUpdateInfo fromGatewayData(Map<String, dynamic> data) {
     String value(String key, String fallback) {
@@ -116,6 +167,7 @@ class AppUpdateService {
   }
 
   Future<AppUpdateInfo> checkForUpdate() async {
+    if (isWindows) return checkWindowsUpdate();
     final response = await _dio.get(
       'https://api.github.com/repos/$repository/releases/latest',
     );
@@ -153,7 +205,7 @@ class AppUpdateService {
     }
 
     final apkFile = File(
-      '${updatesDirectory.path}/$appId-${info.latestVersionCode}.apk',
+      '${updatesDirectory.path}/$appId-${info.latestVersionCode}.${isWindows ? 'exe' : 'apk'}',
     );
     if (await apkFile.exists()) {
       await apkFile.delete();
@@ -166,10 +218,25 @@ class AppUpdateService {
       onReceiveProgress: onProgress,
       options: Options(responseType: ResponseType.bytes),
     );
+    if (info.sha256.isNotEmpty) {
+      final digest = await crypto.sha256.bind(apkFile.openRead()).first;
+      if (digest.toString() != info.sha256.toLowerCase()) {
+        await apkFile.delete();
+        throw StateError('安装包校验失败，请重新下载。');
+      }
+    } else if (isWindows) {
+      await apkFile.delete();
+      throw StateError('Windows 安装包缺少校验信息。');
+    }
     return apkFile;
   }
 
   Future<void> openInstaller(File apkFile) async {
+    if (isWindows) {
+      await Process.start(apkFile.path, const [],
+          mode: ProcessStartMode.detached);
+      return;
+    }
     await _channel.invokeMethod<bool>(
       'openApk',
       {'path': apkFile.path},

@@ -10,6 +10,8 @@ import '../../core/app_motion.dart';
 import '../../core/brand_background.dart';
 import '../../core/cached_gateway_image.dart';
 import '../../core/frontend_widgets.dart';
+import '../../core/creation_workbench.dart';
+import '../../core/creation_draft.dart';
 import '../../core/stable_form_dialog.dart';
 import '../../core/prompt_candidate_toolbar.dart';
 import '../../core/image_settings_panel.dart';
@@ -64,9 +66,21 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
   String? _imageAssistError;
   String? _lastAppliedCandidate;
   File? _assistImageFile;
+  late final CreationDraft _draft;
+
+  @override
+  void initState() {
+    super.initState();
+    _draft = CreationDraft(
+        ref.read(sharedPrefsProvider),
+        ref.read(authStateProvider)?['id']?.toString(),
+        'generate',
+        {'prompt': _spellController, 'idea': _ideaController});
+  }
 
   @override
   void dispose() {
+    _draft.dispose();
     _spellController.dispose();
     _ideaController.dispose();
     super.dispose();
@@ -613,185 +627,181 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     final materializerState = ref.watch(generateImagesProvider);
     final activeTask = ref.watch(activeImageTaskProvider);
 
+    final VoidCallback? submit = activeTask != null
+        ? null
+        : () async {
+            final prompt = _spellController.text.trim();
+            if (prompt.isEmpty) {
+              showCenterNotice(context, copy.writeGenerate);
+              return;
+            }
+            final currentTask = ref.read(activeImageTaskProvider);
+            if (currentTask == ImageTaskKind.edit) {
+              showCenterNotice(context, copy.editBusy(brand));
+              return;
+            }
+            final retentionMessage = _retentionLimitMessage(
+              generateRetention,
+              count,
+            );
+            if (retentionMessage != null) {
+              showCenterNotice(context, retentionMessage);
+              return;
+            }
+            FocusScope.of(context).unfocus();
+            setState(() => _lastSubmittedPrompt = prompt);
+            try {
+              final notice =
+                  await ref.read(generateImagesProvider.notifier).materialize(
+                        prompt,
+                        count,
+                        size,
+                        quality,
+                        background,
+                        outputFormat,
+                        selectedMode,
+                      );
+              if (!mounted || notice == null) return;
+              showCenterNotice(context, notice);
+            } catch (error) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(friendlyError(error))),
+              );
+            }
+          };
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: Text(brand.generateTitle),
       ),
       body: BrandBackground(
-        child: FrontendPageFrame(
-            child: SingleChildScrollView(
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildManaStatus(brand, remain, retentionText, capabilities),
-              const SizedBox(height: 24),
-              FrontendSection(
-                title: brand.promptLabel,
-                icon: Icons.edit_note_rounded,
-                subtitle: '描述你想看到的主体、场景和风格。',
-                child: Column(children: [
-                  _buildPromptField(brand),
-                  const SizedBox(height: 8),
-                  ExpansionTile(
-                    shape: const Border(),
-                    collapsedShape: const Border(),
-                    title: const Text('AI 提示词助手'),
-                    subtitle: const Text('思路推演 · 参考图识别'),
-                    tilePadding: EdgeInsets.zero,
-                    maintainState: true,
-                    children: [_buildPromptAssist(brand)],
-                  ),
-                ]),
-              ),
-              if (activeTask == ImageTaskKind.edit) ...[
-                const SizedBox(height: 12),
-                _buildTaskNotice(copy.editBlocksGenerate(brand)),
-              ],
-              const SizedBox(height: 16),
-              ImageSettingsPanel(
-                options: options,
-                outputFormats: capabilities.outputFormats,
-                count: count,
-                resolution: _resolutionTier,
-                aspect: _aspectRatio,
-                quality: quality,
-                background: background,
-                outputFormat: outputFormat,
-                onCount: (value) => setState(() => _count = value),
-                onResolution: (value) =>
-                    setState(() => _resolutionTier = value),
-                onAspect: (value) => setState(() => _aspectRatio = value),
-                onQuality: (value) => setState(() => _quality = value),
-                onBackground: (value) => setState(() => _background = value),
-                onOutputFormat: (value) =>
-                    setState(() => _outputFormat = value),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: activeTask != null
-                      ? null
-                      : () async {
-                          final prompt = _spellController.text.trim();
-                          if (prompt.isEmpty) {
-                            showCenterNotice(context, copy.writeGenerate);
-                            return;
-                          }
-                          final currentTask = ref.read(activeImageTaskProvider);
-                          if (currentTask == ImageTaskKind.edit) {
-                            showCenterNotice(context, copy.editBusy(brand));
-                            return;
-                          }
-                          final retentionMessage = _retentionLimitMessage(
-                            generateRetention,
-                            count,
-                          );
-                          if (retentionMessage != null) {
-                            showCenterNotice(context, retentionMessage);
-                            return;
-                          }
-                          FocusScope.of(context).unfocus();
-                          setState(() => _lastSubmittedPrompt = prompt);
-                          try {
-                            final notice = await ref
-                                .read(generateImagesProvider.notifier)
-                                .materialize(
-                                  prompt,
-                                  count,
-                                  size,
-                                  quality,
-                                  background,
-                                  outputFormat,
-                                  selectedMode,
-                                );
-                            if (!mounted || notice == null) return;
-                            showCenterNotice(context, notice);
-                          } catch (error) {
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(friendlyError(error))),
-                            );
-                          }
-                        },
-                  child: activeTask == ImageTaskKind.generate
-                      ? Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                              SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2)),
-                              SizedBox(width: 12),
-                              Flexible(child: Text(brand.generateLoadingText)),
-                            ])
-                      : Text(brand.generateButtonLabel,
-                          style: const TextStyle(fontSize: 18)),
+        child: CreationWorkbench(
+          onSubmit: submit,
+          inputs: [
+            _buildManaStatus(brand, remain, retentionText, capabilities),
+            const SizedBox(height: 24),
+            FrontendSection(
+              title: brand.promptLabel,
+              icon: Icons.edit_note_rounded,
+              subtitle: '描述你想看到的主体、场景和风格。',
+              child: Column(children: [
+                _buildPromptField(brand),
+                const SizedBox(height: 8),
+                ExpansionTile(
+                  shape: const Border(),
+                  collapsedShape: const Border(),
+                  title: const Text('AI 提示词助手'),
+                  subtitle: const Text('思路推演 · 参考图识别'),
+                  tilePadding: EdgeInsets.zero,
+                  maintainState: true,
+                  children: [_buildPromptAssist(brand)],
                 ),
+              ]),
+            ),
+            if (activeTask == ImageTaskKind.edit) ...[
+              const SizedBox(height: 12),
+              _buildTaskNotice(copy.editBlocksGenerate(brand)),
+            ],
+            const SizedBox(height: 16),
+            ImageSettingsPanel(
+              options: options,
+              outputFormats: capabilities.outputFormats,
+              count: count,
+              resolution: _resolutionTier,
+              aspect: _aspectRatio,
+              quality: quality,
+              background: background,
+              outputFormat: outputFormat,
+              onCount: (value) => setState(() => _count = value),
+              onResolution: (value) => setState(() => _resolutionTier = value),
+              onAspect: (value) => setState(() => _aspectRatio = value),
+              onQuality: (value) => setState(() => _quality = value),
+              onBackground: (value) => setState(() => _background = value),
+              onOutputFormat: (value) => setState(() => _outputFormat = value),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: submit,
+                child: activeTask == ImageTaskKind.generate
+                    ? Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                            SizedBox(
+                                width: 20,
+                                height: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2)),
+                            SizedBox(width: 12),
+                            Flexible(child: Text(brand.generateLoadingText)),
+                          ])
+                    : Text(brand.generateButtonLabel,
+                        style: const TextStyle(fontSize: 18)),
               ),
-              const SizedBox(height: 20),
-              if (activeTask == ImageTaskKind.generate) ...[
-                const ImageTaskStatusCard(),
-                const SizedBox(height: 16),
-              ],
-              if ((materializerState.valueOrNull ?? []).isNotEmpty) ...[
-                Text('本次结果 · ${materializerState.valueOrNull!.length} 张',
-                    style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 12),
-              ],
-              AppEntrance(
-                identity: materializerState,
-                child: materializerState.when(
-                  data: (items) {
-                    if (items.isEmpty) return const SizedBox();
-                    return Column(
-                      children: List.generate(items.length, (index) {
-                        final item = items[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: GestureDetector(
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => ImagePreviewScreen(
-                                  items: items
-                                      .map(
-                                        (result) => PreviewImageEntry(
-                                          url: result['url']?.toString() ?? '',
-                                          title: brand.generateActionLabel,
-                                          caption:
-                                              result['prompt']?.toString() ??
-                                                  _lastSubmittedPrompt,
-                                        ),
-                                      )
-                                      .where((entry) => entry.url.isNotEmpty)
-                                      .toList(),
-                                  initialIndex: index,
-                                ),
+            ),
+          ],
+          results: [
+            if (activeTask == ImageTaskKind.generate) ...[
+              const ImageTaskStatusCard(),
+              const SizedBox(height: 16),
+            ],
+            if ((materializerState.valueOrNull ?? []).isNotEmpty) ...[
+              Text('本次结果 · ${materializerState.valueOrNull!.length} 张',
+                  style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+            ],
+            AppEntrance(
+              identity: materializerState,
+              child: materializerState.when(
+                data: (items) {
+                  if (items.isEmpty)
+                    return const FrontendStateCard(
+                        title: '创作结果', message: '完成后图片会出现在这里。支持点击预览、缩放与保存。');
+                  return Column(
+                    children: List.generate(items.length, (index) {
+                      final item = items[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: GestureDetector(
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => ImagePreviewScreen(
+                                items: items
+                                    .map(
+                                      (result) => PreviewImageEntry(
+                                        url: result['url']?.toString() ?? '',
+                                        title: brand.generateActionLabel,
+                                        caption: result['prompt']?.toString() ??
+                                            _lastSubmittedPrompt,
+                                      ),
+                                    )
+                                    .where((entry) => entry.url.isNotEmpty)
+                                    .toList(),
+                                initialIndex: index,
                               ),
                             ),
-                            child: _resultImageCard(brand, item),
                           ),
-                        );
-                      }),
-                    );
-                  },
-                  error: (err, _) => FrontendStateCard(
-                    title: brand.generateErrorLabel,
-                    message:
-                        '${friendlyError(err)}\n可调整提示词后重新提交；若请求超时，请先到图片记录查看结果。',
-                    icon: Icons.error_outline,
-                    isError: true,
-                  ),
-                  loading: () => Center(child: Text(brand.generateLoadingText)),
+                          child: _resultImageCard(brand, item),
+                        ),
+                      );
+                    }),
+                  );
+                },
+                error: (err, _) => FrontendStateCard(
+                  title: brand.generateErrorLabel,
+                  message:
+                      '${friendlyError(err)}\n可调整提示词后重新提交；若请求超时，请先到图片记录查看结果。',
+                  icon: Icons.error_outline,
+                  isError: true,
                 ),
-              )
-            ],
-          ),
-        )),
+                loading: () => Center(child: Text(brand.generateLoadingText)),
+              ),
+            )
+          ],
+        ),
       ),
     );
   }

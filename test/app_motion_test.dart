@@ -27,6 +27,33 @@ class DraftPageState extends State<DraftPage> {
 }
 
 void main() {
+  testWidgets('Tab changes keep page geometry fixed on every animation frame',
+      (tester) async {
+    Future<void> show(int index) => tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: AppTabStack(index: index, visited: const {
+              0,
+              1
+            }, children: const [
+              SizedBox.expand(key: ValueKey('page-0')),
+              SizedBox.expand(key: ValueKey('page-1')),
+            ]),
+          ),
+        ));
+    await show(0);
+    await tester.pumpAndSettle();
+    final original = tester.getRect(find.byKey(const ValueKey('page-0')));
+    for (final index in [1, 0, 1]) {
+      await show(index);
+      for (final milliseconds in [0, 16, 40, 100, 220]) {
+        await tester.pump(Duration(milliseconds: milliseconds));
+        expect(tester.getRect(find.byKey(ValueKey('page-$index'))), original,
+            reason: 'Switching tabs must not slide the page or its wallpaper.');
+      }
+    }
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Android predictive back can cancel and commit', (tester) async {
     final navigator = GlobalKey<NavigatorState>();
     late MaterialPageRoute<void> detail;

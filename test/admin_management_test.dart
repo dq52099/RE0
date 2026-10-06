@@ -136,6 +136,7 @@ Future<void> mountAdmin(WidgetTester tester, ManagementGateway gateway,
     {String view = 'settings',
     Size size = const Size(430, 900),
     double scale = 1,
+    List<String> extraPermissions = const [],
     ThemeData? theme}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -164,6 +165,7 @@ Future<void> mountAdmin(WidgetTester tester, ManagementGateway gateway,
                   'user.view',
                   'user.manage',
                   'feedback.view',
+                  ...extraPermissions,
                 ]
               }),
         ],

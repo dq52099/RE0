@@ -9,6 +9,8 @@ import '../../core/app_motion.dart';
 import '../../core/brand_background.dart';
 import '../../core/cached_gateway_image.dart';
 import '../../core/frontend_widgets.dart';
+import '../../core/creation_workbench.dart';
+import '../../core/creation_draft.dart';
 import '../../core/stable_form_dialog.dart';
 import '../../core/prompt_candidate_toolbar.dart';
 import '../../core/image_settings_panel.dart';
@@ -66,9 +68,21 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
   String? _ideaAssistError;
   String? _imageAssistError;
   String? _lastAppliedCandidate;
+  late final CreationDraft _draft;
+
+  @override
+  void initState() {
+    super.initState();
+    _draft = CreationDraft(
+        ref.read(sharedPrefsProvider),
+        ref.read(authStateProvider)?['id']?.toString(),
+        'edit',
+        {'prompt': _spellController, 'idea': _ideaController});
+  }
 
   @override
   void dispose() {
+    _draft.dispose();
     _spellController.dispose();
     _ideaController.dispose();
     super.dispose();
@@ -686,224 +700,219 @@ class _ChronogearScreenState extends ConsumerState<ChronogearScreen> {
     final materializerState = ref.watch(editImagesProvider);
     final activeTask = ref.watch(activeImageTaskProvider);
 
+    final VoidCallback? submit = activeTask != null || _imageFile == null
+        ? null
+        : () async {
+            final prompt = _spellController.text.trim();
+            if (prompt.isEmpty) {
+              showCenterNotice(context, copy.writeEdit);
+              return;
+            }
+            final currentTask = ref.read(activeImageTaskProvider);
+            if (currentTask == ImageTaskKind.generate) {
+              showCenterNotice(context, copy.generateBusy(brand));
+              return;
+            }
+            final retentionMessage = _retentionLimitMessage(
+              editRetention,
+              count,
+            );
+            if (retentionMessage != null) {
+              showCenterNotice(context, retentionMessage);
+              return;
+            }
+            FocusScope.of(context).unfocus();
+            setState(() => _lastSubmittedPrompt = prompt);
+            try {
+              final notice = await ref.read(editImagesProvider.notifier).recall(
+                    prompt,
+                    _imageFile!.path,
+                    count,
+                    size,
+                    quality,
+                    background,
+                    outputFormat,
+                    selectedMode,
+                  );
+              if (!mounted || notice == null) return;
+              showCenterNotice(context, notice);
+            } catch (error) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(friendlyError(error))),
+              );
+            }
+          };
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(title: Text(brand.editTitle)),
       body: BrandBackground(
-        child: FrontendPageFrame(
-            child: SingleChildScrollView(
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildManaStatus(brand, remain, retentionText, capabilities),
-              const SizedBox(height: 24),
-              GestureDetector(
-                onTap: activeTask == null ? _pickImage : null,
-                child: Container(
-                  width: double.infinity,
-                  height: 200,
-                  decoration: BoxDecoration(
-                    color: brand.panelColor.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                        color: brand.primaryColor.withValues(alpha: 0.5)),
-                  ),
-                  child: _imageFile == null
-                      ? Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.add_photo_alternate,
-                              size: 48,
-                              color: brand.primaryColor,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(brand.pickImageText),
-                          ],
-                        )
-                      : ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: Image.file(_imageFile!, fit: BoxFit.contain),
-                        ),
-                ),
-              ),
-              if (_imageFile != null)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: activeTask == null ? _pickImage : null,
-                    icon: const Icon(Icons.photo_library_outlined),
-                    label: const Text('更换参考图'),
-                  ),
-                ),
-              const SizedBox(height: 24),
-              FrontendSection(
-                title: brand.editPromptLabel,
-                icon: Icons.edit_note_rounded,
-                subtitle: '说明要修改的内容，以及需要保留的细节。',
-                child: Column(children: [
-                  _buildPromptField(brand),
-                  const SizedBox(height: 8),
-                  ExpansionTile(
-                    shape: const Border(),
-                    collapsedShape: const Border(),
-                    title: const Text('AI 提示词助手'),
-                    subtitle: const Text('思路推演 · 参考图识别'),
-                    tilePadding: EdgeInsets.zero,
-                    maintainState: true,
-                    children: [_buildPromptAssist(brand)],
-                  ),
-                ]),
-              ),
-              if (activeTask == ImageTaskKind.generate) ...[
-                const SizedBox(height: 12),
-                _buildTaskNotice(copy.generateBlocksEdit(brand)),
-              ],
-              const SizedBox(height: 16),
-              ImageSettingsPanel(
-                options: options,
-                outputFormats: capabilities.outputFormats,
-                count: count,
-                resolution: _resolutionTier,
-                aspect: _aspectRatio,
-                quality: quality,
-                background: background,
-                outputFormat: outputFormat,
-                onCount: (value) => setState(() => _count = value),
-                onResolution: (value) =>
-                    setState(() => _resolutionTier = value),
-                onAspect: (value) => setState(() => _aspectRatio = value),
-                onQuality: (value) => setState(() => _quality = value),
-                onBackground: (value) => setState(() => _background = value),
-                onOutputFormat: (value) =>
-                    setState(() => _outputFormat = value),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
+        child: CreationWorkbench(
+          onSubmit: submit,
+          inputs: [
+            _buildManaStatus(brand, remain, retentionText, capabilities),
+            const SizedBox(height: 24),
+            GestureDetector(
+              onTap: activeTask == null ? _pickImage : null,
+              child: Container(
                 width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: activeTask != null || _imageFile == null
-                      ? null
-                      : () async {
-                          final prompt = _spellController.text.trim();
-                          if (prompt.isEmpty) {
-                            showCenterNotice(context, copy.writeEdit);
-                            return;
-                          }
-                          final currentTask = ref.read(activeImageTaskProvider);
-                          if (currentTask == ImageTaskKind.generate) {
-                            showCenterNotice(context, copy.generateBusy(brand));
-                            return;
-                          }
-                          final retentionMessage = _retentionLimitMessage(
-                            editRetention,
-                            count,
-                          );
-                          if (retentionMessage != null) {
-                            showCenterNotice(context, retentionMessage);
-                            return;
-                          }
-                          FocusScope.of(context).unfocus();
-                          setState(() => _lastSubmittedPrompt = prompt);
-                          try {
-                            final notice = await ref
-                                .read(editImagesProvider.notifier)
-                                .recall(
-                                  prompt,
-                                  _imageFile!.path,
-                                  count,
-                                  size,
-                                  quality,
-                                  background,
-                                  outputFormat,
-                                  selectedMode,
-                                );
-                            if (!mounted || notice == null) return;
-                            showCenterNotice(context, notice);
-                          } catch (error) {
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(friendlyError(error))),
-                            );
-                          }
-                        },
-                  child: activeTask == ImageTaskKind.edit
-                      ? Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                              SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2)),
-                              SizedBox(width: 12),
-                              Flexible(child: Text(brand.editLoadingText)),
-                            ])
-                      : Text(brand.editButtonLabel,
-                          style: const TextStyle(fontSize: 18)),
+                height: 200,
+                decoration: BoxDecoration(
+                  color: brand.panelColor.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                      color: brand.primaryColor.withValues(alpha: 0.5)),
+                ),
+                child: _imageFile == null
+                    ? Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.add_photo_alternate,
+                            size: 48,
+                            color: brand.primaryColor,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(brand.pickImageText),
+                        ],
+                      )
+                    : ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.file(_imageFile!, fit: BoxFit.contain),
+                      ),
+              ),
+            ),
+            if (_imageFile != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: activeTask == null ? _pickImage : null,
+                  icon: const Icon(Icons.photo_library_outlined),
+                  label: const Text('更换参考图'),
                 ),
               ),
-              const SizedBox(height: 20),
-              if (activeTask == ImageTaskKind.edit) ...[
-                const ImageTaskStatusCard(),
-                const SizedBox(height: 16),
-              ],
-              if ((materializerState.valueOrNull ?? []).isNotEmpty) ...[
-                Text('本次结果 · ${materializerState.valueOrNull!.length} 张',
-                    style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 12),
-              ],
-              AppEntrance(
-                identity: materializerState,
-                child: materializerState.when(
-                  data: (items) {
-                    if (items.isEmpty) return const SizedBox();
-                    return Column(
-                      children: List.generate(items.length, (index) {
-                        final item = items[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: GestureDetector(
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => ImagePreviewScreen(
-                                  items: items
-                                      .map(
-                                        (result) => PreviewImageEntry(
-                                          url: result['url']?.toString() ?? '',
-                                          title: brand.editActionLabel,
-                                          caption:
-                                              result['prompt']?.toString() ??
-                                                  _lastSubmittedPrompt,
-                                        ),
-                                      )
-                                      .where((entry) => entry.url.isNotEmpty)
-                                      .toList(),
-                                  initialIndex: index,
-                                ),
+            const SizedBox(height: 24),
+            FrontendSection(
+              title: brand.editPromptLabel,
+              icon: Icons.edit_note_rounded,
+              subtitle: '说明要修改的内容，以及需要保留的细节。',
+              child: Column(children: [
+                _buildPromptField(brand),
+                const SizedBox(height: 8),
+                ExpansionTile(
+                  shape: const Border(),
+                  collapsedShape: const Border(),
+                  title: const Text('AI 提示词助手'),
+                  subtitle: const Text('思路推演 · 参考图识别'),
+                  tilePadding: EdgeInsets.zero,
+                  maintainState: true,
+                  children: [_buildPromptAssist(brand)],
+                ),
+              ]),
+            ),
+            if (activeTask == ImageTaskKind.generate) ...[
+              const SizedBox(height: 12),
+              _buildTaskNotice(copy.generateBlocksEdit(brand)),
+            ],
+            const SizedBox(height: 16),
+            ImageSettingsPanel(
+              options: options,
+              outputFormats: capabilities.outputFormats,
+              count: count,
+              resolution: _resolutionTier,
+              aspect: _aspectRatio,
+              quality: quality,
+              background: background,
+              outputFormat: outputFormat,
+              onCount: (value) => setState(() => _count = value),
+              onResolution: (value) => setState(() => _resolutionTier = value),
+              onAspect: (value) => setState(() => _aspectRatio = value),
+              onQuality: (value) => setState(() => _quality = value),
+              onBackground: (value) => setState(() => _background = value),
+              onOutputFormat: (value) => setState(() => _outputFormat = value),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: submit,
+                child: activeTask == ImageTaskKind.edit
+                    ? Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                            SizedBox(
+                                width: 20,
+                                height: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2)),
+                            SizedBox(width: 12),
+                            Flexible(child: Text(brand.editLoadingText)),
+                          ])
+                    : Text(brand.editButtonLabel,
+                        style: const TextStyle(fontSize: 18)),
+              ),
+            ),
+          ],
+          results: [
+            if (activeTask == ImageTaskKind.edit) ...[
+              const ImageTaskStatusCard(),
+              const SizedBox(height: 16),
+            ],
+            if ((materializerState.valueOrNull ?? []).isNotEmpty) ...[
+              Text('本次结果 · ${materializerState.valueOrNull!.length} 张',
+                  style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+            ],
+            AppEntrance(
+              identity: materializerState,
+              child: materializerState.when(
+                data: (items) {
+                  if (items.isEmpty)
+                    return const FrontendStateCard(
+                        title: '创作结果', message: '完成后图片会出现在这里。支持点击预览、缩放与保存。');
+                  return Column(
+                    children: List.generate(items.length, (index) {
+                      final item = items[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: GestureDetector(
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => ImagePreviewScreen(
+                                items: items
+                                    .map(
+                                      (result) => PreviewImageEntry(
+                                        url: result['url']?.toString() ?? '',
+                                        title: brand.editActionLabel,
+                                        caption: result['prompt']?.toString() ??
+                                            _lastSubmittedPrompt,
+                                      ),
+                                    )
+                                    .where((entry) => entry.url.isNotEmpty)
+                                    .toList(),
+                                initialIndex: index,
                               ),
                             ),
-                            child: _resultImageCard(brand, item),
                           ),
-                        );
-                      }),
-                    );
-                  },
-                  error: (err, _) => FrontendStateCard(
-                    title: brand.editErrorLabel,
-                    message:
-                        '${friendlyError(err)}\n可调整提示词后重新提交；若请求超时，请先到图片记录查看结果。',
-                    icon: Icons.error_outline,
-                    isError: true,
-                  ),
-                  loading: () => Center(child: Text(brand.editLoadingText)),
+                          child: _resultImageCard(brand, item),
+                        ),
+                      );
+                    }),
+                  );
+                },
+                error: (err, _) => FrontendStateCard(
+                  title: brand.editErrorLabel,
+                  message:
+                      '${friendlyError(err)}\n可调整提示词后重新提交；若请求超时，请先到图片记录查看结果。',
+                  icon: Icons.error_outline,
+                  isError: true,
                 ),
-              )
-            ],
-          ),
-        )),
+                loading: () => Center(child: Text(brand.editLoadingText)),
+              ),
+            )
+          ],
+        ),
       ),
     );
   }

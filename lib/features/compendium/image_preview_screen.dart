@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_error.dart';
@@ -43,6 +44,34 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
   late final PageController _pageController;
   late int _currentIndex;
   bool _isSaving = false;
+  final Map<int, TransformationController> _transforms = {};
+
+  TransformationController _transform(int index) =>
+      _transforms.putIfAbsent(index, () => TransformationController());
+
+  void _move(int delta) {
+    final next = _currentIndex + delta;
+    if (next < 0 || next >= widget.items.length) return;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _pageController.jumpToPage(next);
+    } else {
+      _pageController.animateToPage(next,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic);
+    }
+  }
+
+  void _zoom(double factor) {
+    final controller = _transform(_currentIndex);
+    final scale =
+        (controller.value.getMaxScaleOnAxis() * factor).clamp(1.0, 5.0);
+    final size = MediaQuery.sizeOf(context);
+    controller.value = Matrix4.identity()
+      ..translateByDouble(
+          size.width * (1 - scale) / 2, size.height * (1 - scale) / 2, 0, 1)
+      ..scaleByDouble(scale, scale, 1, 1);
+    setState(() {});
+  }
 
   @override
   void initState() {
@@ -60,6 +89,9 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
   @override
   void dispose() {
     _pageController.dispose();
+    for (final controller in _transforms.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -85,76 +117,124 @@ class _ImagePreviewScreenState extends ConsumerState<ImagePreviewScreen> {
     final current = widget.items[_currentIndex];
     final caption = (current.caption ?? '').trim();
     final canDownload = widget.showDownload && current.url.trim().isNotEmpty;
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: Text(current.title ?? '图片预览'),
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        actions: [
-          if (widget.items.length > 1)
-            Center(
-              child: Container(
-                margin: const EdgeInsets.only(right: 12),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(999),
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.14)),
-                ),
-                child: Text(
-                  '${_currentIndex + 1}/${widget.items.length}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 13),
-                ),
-              ),
-            ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: widget.items.length,
-              onPageChanged: (index) {
-                setState(() => _currentIndex = index);
-              },
-              itemBuilder: (context, index) {
-                final item = widget.items[index];
-                return LayoutBuilder(
-                  builder: (context, constraints) {
-                    return InteractiveViewer(
-                      minScale: 0.8,
-                      maxScale: 5,
-                      child: SizedBox(
-                        width: constraints.maxWidth,
-                        height: constraints.maxHeight,
-                        child: Center(
-                          child: _previewImage(
-                            brand: brand,
-                            item: item,
-                            width: constraints.maxWidth,
-                            height: constraints.maxHeight,
-                          ),
+    final desktop = MediaQuery.sizeOf(context).width >= 840;
+    return CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.escape): () =>
+              Navigator.maybePop(context),
+          const SingleActivator(LogicalKeyboardKey.arrowLeft): () => _move(-1),
+          const SingleActivator(LogicalKeyboardKey.arrowRight): () => _move(1),
+          const SingleActivator(LogicalKeyboardKey.equal): () => _zoom(1.25),
+          const SingleActivator(LogicalKeyboardKey.minus): () => _zoom(.8),
+          const SingleActivator(LogicalKeyboardKey.digit0): () =>
+              _transform(_currentIndex).value = Matrix4.identity(),
+        },
+        child: Focus(
+            autofocus: true,
+            child: Scaffold(
+              backgroundColor: Colors.black,
+              appBar: AppBar(
+                title: Text(current.title ?? '图片预览'),
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                titleTextStyle: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(color: Colors.white),
+                actions: [
+                  if (desktop) ...[
+                    IconButton(
+                        tooltip: '上一张（←）',
+                        onPressed: _currentIndex > 0 ? () => _move(-1) : null,
+                        icon: const Icon(Icons.chevron_left)),
+                    IconButton(
+                        tooltip: '下一张（→）',
+                        onPressed: _currentIndex < widget.items.length - 1
+                            ? () => _move(1)
+                            : null,
+                        icon: const Icon(Icons.chevron_right)),
+                    IconButton(
+                        tooltip: '缩小（−）',
+                        onPressed: () => _zoom(.8),
+                        icon: const Icon(Icons.remove)),
+                    IconButton(
+                        tooltip: '适应窗口（0）',
+                        onPressed: () => _transform(_currentIndex).value =
+                            Matrix4.identity(),
+                        icon: const Icon(Icons.fit_screen)),
+                    IconButton(
+                        tooltip: '放大（+）',
+                        onPressed: () => _zoom(1.25),
+                        icon: const Icon(Icons.add)),
+                  ],
+                  if (widget.items.length > 1)
+                    Center(
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 12),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.14)),
+                        ),
+                        child: Text(
+                          '${_currentIndex + 1}/${widget.items.length}',
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 13),
                         ),
                       ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          if (caption.isNotEmpty || canDownload)
-            _bottomPanel(
-              caption: caption,
-              accentColor: brand.primaryColor,
-              showDownload: canDownload,
-            ),
-        ],
-      ),
-    );
+                    ),
+                ],
+              ),
+              body: Column(
+                children: [
+                  Expanded(
+                    child: PageView.builder(
+                      controller: _pageController,
+                      physics:
+                          desktop ? const NeverScrollableScrollPhysics() : null,
+                      itemCount: widget.items.length,
+                      onPageChanged: (index) {
+                        setState(() => _currentIndex = index);
+                      },
+                      itemBuilder: (context, index) {
+                        final item = widget.items[index];
+                        return LayoutBuilder(
+                          builder: (context, constraints) {
+                            return InteractiveViewer(
+                              transformationController: _transform(index),
+                              trackpadScrollCausesScale: desktop,
+                              minScale: 0.8,
+                              maxScale: 5,
+                              child: SizedBox(
+                                width: constraints.maxWidth,
+                                height: constraints.maxHeight,
+                                child: Center(
+                                  child: _previewImage(
+                                    brand: brand,
+                                    item: item,
+                                    width: constraints.maxWidth,
+                                    height: constraints.maxHeight,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  if (caption.isNotEmpty || canDownload)
+                    _bottomPanel(
+                      caption: caption,
+                      accentColor: brand.primaryColor,
+                      showDownload: canDownload,
+                    ),
+                ],
+              ),
+            )));
   }
 
   Widget _previewImage({

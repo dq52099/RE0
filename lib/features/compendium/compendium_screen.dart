@@ -716,96 +716,116 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
                   ),
           IconButton(
             tooltip: '刷新',
-            icon: const Icon(Icons.refresh),
-            onPressed: _refresh,
+            icon: _isLoading
+                ? const SizedBox.square(
+                    dimension: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.refresh),
+            onPressed: _isLoading ? null : _refresh,
           ),
         ],
       ),
       body: BrandBackground(
         child: FrontendPageFrame(
+            maxWidth: 1440,
             child: RefreshIndicator(
-          onRefresh: _refresh,
-          child: CustomScrollView(
-            controller: _scrollController,
-            cacheExtent: 1200,
-            physics: const AlwaysScrollableScrollPhysics(),
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            slivers: [
-              SliverToBoxAdapter(
-                child: Column(
-                  children: [
-                    _searchBar(brand),
-                    _filterBar(brand),
-                  ],
-                ),
-              ),
-              if (_error != null && _items.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: _errorState(_error!),
-                )
-              else if (_items.isEmpty && _isLoading)
-                const SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (_items.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: FrontendStateCard(
-                        title: brand.emptyHistoryText,
-                        message: '生图和改图的结果会保存在这里。成功图片可以保存、分享或发布到画廊。',
-                      )),
-                )
-              else if (visibleItems.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: FrontendStateCard(
-                        title: '没有匹配的图片记录',
-                        message: '试试其他关键词，或清除筛选。',
-                        actionLabel: '清除筛选',
-                        onAction: _resetFiltersAndReload,
-                      )),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.all(16),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final item = visibleItems[index];
-                        return KeyedSubtree(
-                          key: ValueKey(item['id'] ?? item['url'] ?? index),
-                          child: _historyCard(brand, item),
-                        );
-                      },
-                      childCount: visibleItems.length,
+              onRefresh: _refresh,
+              child: CustomScrollView(
+                controller: _scrollController,
+                cacheExtent: 1200,
+                physics: const AlwaysScrollableScrollPhysics(),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Column(
+                      children: [
+                        _searchBar(brand),
+                        _filterBar(brand),
+                      ],
                     ),
                   ),
-                ),
-              if (_error != null && _items.isNotEmpty)
-                SliverToBoxAdapter(
+                  if (_error != null && _items.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: _errorState(_error!),
+                    )
+                  else if (_items.isEmpty && _isLoading)
+                    const SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_items.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: FrontendStateCard(
+                            title: brand.emptyHistoryText,
+                            message: '生图和改图的结果会保存在这里。成功图片可以保存、分享或发布到画廊。',
+                          )),
+                    )
+                  else if (visibleItems.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: FrontendStateCard(
+                            title: '没有匹配的图片记录',
+                            message: '试试其他关键词，或清除筛选。',
+                            actionLabel: '清除筛选',
+                            onAction: _resetFiltersAndReload,
+                          )),
+                    )
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.all(16),
+                      sliver:
+                          SliverLayoutBuilder(builder: (context, constraints) {
+                        final columns =
+                            constraints.crossAxisExtent >= 1000 ? 2 : 1;
+                        return SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                          (context, row) => Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                for (var column = 0;
+                                    column < columns;
+                                    column++) ...[
+                                  if (column > 0) const SizedBox(width: 20),
+                                  Expanded(
+                                      child: row * columns + column <
+                                              visibleItems.length
+                                          ? _historyCard(
+                                              brand,
+                                              visibleItems[
+                                                  row * columns + column])
+                                          : const SizedBox.shrink()),
+                                ]
+                              ]),
+                          childCount: (visibleItems.length / columns).ceil(),
+                        ));
+                      }),
+                    ),
+                  if (_error != null && _items.isNotEmpty)
+                    SliverToBoxAdapter(
+                        child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: FrontendStateCard(
+                                title: '刷新记录失败',
+                                message: _error!,
+                                isError: true,
+                                icon: Icons.cloud_off_outlined,
+                                onAction: _isLoading ? null : _refresh))),
+                  SliverToBoxAdapter(
                     child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: FrontendStateCard(
-                            title: '刷新记录失败',
-                            message: _error!,
-                            isError: true,
-                            icon: Icons.cloud_off_outlined,
-                            onAction: _isLoading ? null : _refresh))),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                  child: _pageControls(),
-                ),
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      child: _pageControls(),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        )),
+            )),
       ),
     );
   }
@@ -819,15 +839,6 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     final totalText = '共$_total张';
     return Column(
       children: [
-        if (_isLoading)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 8),
-            child: SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
         Row(
           children: [
             Expanded(

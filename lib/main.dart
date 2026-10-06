@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/api_error.dart';
@@ -81,7 +82,8 @@ class _StartupGateState extends ConsumerState<_StartupGate> {
       final client = ref.read(gatewayClientProvider);
       await client.init(_defaultServerUrl);
       final bootstrap = await client.bootstrap();
-      final forceUpdate = bootstrap['force_app_update_enabled'] == true;
+      final forceUpdate = defaultTargetPlatform == TargetPlatform.android &&
+          bootstrap['force_app_update_enabled'] == true;
       if (forceUpdate) {
         final info = await _checkForcedUpdate();
         if (info != null) return _StartupResult.forceUpdate(info);
