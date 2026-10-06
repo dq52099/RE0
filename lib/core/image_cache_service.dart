@@ -111,12 +111,12 @@ class ImageCacheService {
   }
 
   Future<SavedImage?> saveImageAs(String url) async {
+    final extension = _extensionFromUrl(url).substring(1);
     final location = await getSaveLocation(
       suggestedName: _downloadFileName(url),
       initialDirectory: (await getDownloadsDirectory())?.path,
-      acceptedTypeGroups: const [
-        XTypeGroup(
-            label: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif']),
+      acceptedTypeGroups: [
+        XTypeGroup(label: '原始图片', extensions: [extension]),
       ],
     );
     if (location == null) return null;

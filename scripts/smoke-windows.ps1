@@ -1,8 +1,8 @@
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
 $installer = (Get-ChildItem 'build/release/*-setup.exe' | Select-Object -First 1).FullName
-$destination = Join-Path $env:RUNNER_TEMP 're0-install-test'
-if (!$env:RUNNER_TEMP) { $destination = Join-Path $env:TEMP 're0-install-test' }
+$testRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { $env:TEMP }
+$destination = Join-Path $testRoot 're0-install-test'
 $install = Start-Process $installer -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=`"$destination`"" -Wait -PassThru
 if ($install.ExitCode -ne 0) { throw "Installer failed: $($install.ExitCode)" }
 $app = Start-Process "$destination/RE0.exe" -WorkingDirectory $destination -PassThru

@@ -145,63 +145,65 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             if (ModalRoute.of(context)?.isCurrent == true) selectTab(index);
           },
       },
-      child: Scaffold(
-        // Resize here so nested page scaffolds receive consumed keyboard insets.
-        resizeToAvoidBottomInset: true,
-        body: wide
-            ? Row(children: [
-                NavigationRail(
-                  extended: MediaQuery.sizeOf(context).width >= 1200,
-                  minExtendedWidth: 200,
-                  backgroundColor: Theme.of(context)
-                      .colorScheme
-                      .surface
-                      .withValues(alpha: .88),
-                  leading: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 20),
-                      child: Column(children: [
-                        ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.asset('assets/icon.png',
-                                width: 44, height: 44)),
-                        const SizedBox(height: 12),
-                        const Text('RE0',
-                            style: TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.w600)),
-                      ])),
-                  trailing: const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: Tooltip(
-                          message:
-                              'Alt + 1…5 切换页面\nCtrl + Enter 提交创作\n预览中使用方向键切图、Esc 返回',
-                          child: Icon(Icons.keyboard_outlined, size: 20))),
-                  scrollable: true,
-                  selectedIndex: _currentIndex,
-                  onDestinationSelected: selectTab,
-                  labelType: MediaQuery.sizeOf(context).width >= 1200
-                      ? NavigationRailLabelType.none
-                      : NavigationRailLabelType.all,
-                  destinations: destinations
-                      .map((item) => NavigationRailDestination(
-                            icon: item.icon,
-                            selectedIcon: item.selectedIcon,
-                            label: Text(item.label),
-                          ))
-                      .toList(),
-                ),
-                const VerticalDivider(width: 1),
-                Expanded(child: pages),
-              ])
-            : pages,
-        bottomNavigationBar: wide || keyboardOpen
-            ? null
-            : NavigationBar(
-                selectedIndex: _currentIndex,
-                onDestinationSelected: selectTab,
-                indicatorColor: brand.primaryColor.withValues(alpha: 0.18),
-                destinations: destinations,
-              ),
-      ),
+      child: Focus(
+          autofocus: true,
+          child: Scaffold(
+            // Resize here so nested page scaffolds receive consumed keyboard insets.
+            resizeToAvoidBottomInset: true,
+            body: wide
+                ? Row(children: [
+                    NavigationRail(
+                      extended: MediaQuery.sizeOf(context).width >= 1200,
+                      minExtendedWidth: 200,
+                      backgroundColor: Theme.of(context)
+                          .colorScheme
+                          .surface
+                          .withValues(alpha: .88),
+                      leading: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          child: Column(children: [
+                            ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.asset('assets/icon.png',
+                                    width: 44, height: 44)),
+                            const SizedBox(height: 12),
+                            const Text('RE0',
+                                style: TextStyle(
+                                    fontSize: 18, fontWeight: FontWeight.w600)),
+                          ])),
+                      trailing: const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Tooltip(
+                              message:
+                                  'Alt + 1…5 切换页面\nCtrl + Enter 提交创作\n预览中使用方向键切图、Esc 返回',
+                              child: Icon(Icons.keyboard_outlined, size: 20))),
+                      scrollable: true,
+                      selectedIndex: _currentIndex,
+                      onDestinationSelected: selectTab,
+                      labelType: MediaQuery.sizeOf(context).width >= 1200
+                          ? NavigationRailLabelType.none
+                          : NavigationRailLabelType.all,
+                      destinations: destinations
+                          .map((item) => NavigationRailDestination(
+                                icon: item.icon,
+                                selectedIcon: item.selectedIcon,
+                                label: Text(item.label),
+                              ))
+                          .toList(),
+                    ),
+                    const VerticalDivider(width: 1),
+                    Expanded(child: pages),
+                  ])
+                : pages,
+            bottomNavigationBar: wide || keyboardOpen
+                ? null
+                : NavigationBar(
+                    selectedIndex: _currentIndex,
+                    onDestinationSelected: selectTab,
+                    indicatorColor: brand.primaryColor.withValues(alpha: 0.18),
+                    destinations: destinations,
+                  ),
+          )),
     );
   }
 }
