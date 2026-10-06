@@ -131,6 +131,7 @@ class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage>
         cacheHeight: widget.cacheHeight,
         filterQuality: FilterQuality.low,
         gaplessPlayback: true,
+        frameBuilder: _fadeDecodedImage,
         errorBuilder: (_, __, ___) => Container(
           width: widget.width,
           height: widget.height ?? 220,
@@ -158,6 +159,7 @@ class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage>
             cacheHeight: widget.cacheHeight,
             filterQuality: FilterQuality.low,
             gaplessPlayback: true,
+            frameBuilder: _fadeDecodedImage,
             errorBuilder: (_, __, ___) {
               _handleDecodeError(imageFile);
               return _networkFallback();
@@ -231,6 +233,18 @@ class _CachedGatewayImageState extends ConsumerState<CachedGatewayImage>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _fadeDecodedImage(
+      BuildContext context, Widget child, int? frame, bool synchronous) {
+    // Memory-cache hits appear immediately; only newly decoded images fade in.
+    if (synchronous || MediaQuery.disableAnimationsOf(context)) return child;
+    return AnimatedOpacity(
+      opacity: frame == null ? 0 : 1,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      child: child,
     );
   }
 

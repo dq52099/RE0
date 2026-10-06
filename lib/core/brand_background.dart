@@ -15,9 +15,11 @@ class BrandBackground extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final brand = ref.watch(brandProvider);
     final size = MediaQuery.sizeOf(context);
-    return Stack(
+    // OverflowBox keeps wallpaper framing stable, but its paint must be clipped
+    // explicitly: Stack only clips overflowing geometry of direct children.
+    return ClipRect(
+        child: Stack(
       fit: StackFit.expand,
-      clipBehavior: Clip.none,
       children: [
         Positioned.fill(
           child: IgnorePointer(
@@ -53,6 +55,6 @@ class BrandBackground extends ConsumerWidget {
         ),
         child,
       ],
-    );
+    ));
   }
 }

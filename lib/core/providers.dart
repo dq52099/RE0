@@ -13,7 +13,9 @@ final sharedPrefsProvider = Provider<SharedPreferences>((ref) {
 });
 
 final gatewayClientProvider = Provider<GatewayClient>((ref) {
-  return GatewayClient();
+  return GatewayClient(onImageRecoveryStatus: (message) {
+    ref.read(imageRecoveryStatusProvider.notifier).state = message;
+  });
 });
 
 final imageCacheProvider = Provider<ImageCacheService>((ref) {
@@ -72,7 +74,29 @@ enum ImageTaskKind {
   edit,
 }
 
+final imageRecoveryStatusProvider = StateProvider<String?>((ref) => null);
+
 final activeImageTaskProvider = StateProvider<ImageTaskKind?>((ref) => null);
+
+class ImageTaskProgress {
+  ImageTaskProgress(
+      {required this.kind,
+      required this.total,
+      this.completed = 0,
+      DateTime? startedAt})
+      : startedAt = startedAt ?? DateTime.now();
+
+  final ImageTaskKind kind;
+  final int total;
+  final int completed;
+  final DateTime startedAt;
+
+  ImageTaskProgress withCompleted(int value) => ImageTaskProgress(
+      kind: kind, total: total, completed: value, startedAt: startedAt);
+}
+
+final imageTaskProgressProvider =
+    StateProvider<ImageTaskProgress?>((ref) => null);
 
 final selectedImageModeProvider = StateProvider<String?>((ref) => null);
 final selectedImageModeBaseProvider = StateProvider<String?>((ref) => null);
@@ -110,11 +134,13 @@ class GenerateImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
   ) async {
     _ensureTaskAvailable(ref, ImageTaskKind.generate);
     ref.read(activeImageTaskProvider.notifier).state = ImageTaskKind.generate;
+    ref.read(imageTaskProgressProvider.notifier).state =
+        ImageTaskProgress(kind: ImageTaskKind.generate, total: count);
     final previous = state.valueOrNull ?? const <Map<String, dynamic>>[];
     state = const AsyncValue.data([]);
+    final collected = <Map<String, dynamic>>[];
     try {
       final client = ref.read(gatewayClientProvider);
-      final collected = <Map<String, dynamic>>[];
       final errors = <dynamic>[];
       for (var index = 0; index < count; index += 1) {
         final prompt = _promptForBatchIndex(runes, index);
@@ -129,9 +155,16 @@ class GenerateImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
           imageMode: imageMode,
         );
         _applyResponseSummaries(ref, res);
-        final items = _resultItems(res['data'] ?? res);
+        final items = _resultItems(res['data'] ?? res)
+            .map((item) => <String, dynamic>{...item, 'prompt': prompt})
+            .toList();
         if (items.isNotEmpty) {
           collected.addAll(items);
+          final progress = ref.read(imageTaskProgressProvider);
+          if (progress != null) {
+            ref.read(imageTaskProgressProvider.notifier).state =
+                progress.withCompleted(collected.length);
+          }
           state = AsyncValue.data(List<Map<String, dynamic>>.from(collected));
         }
         errors.addAll(res['errors'] as List? ?? const []);
@@ -146,13 +179,18 @@ class GenerateImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
         errors: errors,
       );
     } catch (e, st) {
-      state = previous.isEmpty
+      final kept = collected.isNotEmpty ? collected : previous;
+      state = kept.isEmpty
           ? AsyncValue.error(e, st)
-          : AsyncValue.data(previous);
-      return previous.isEmpty ? null : friendlyError(e, fallback: '图片生成失败。');
+          : AsyncValue.data(List<Map<String, dynamic>>.from(kept));
+      final error = friendlyError(e, fallback: '图片处理失败。');
+      return collected.isNotEmpty
+          ? '已完成 ${collected.length} 张，其余未完成：$error'
+          : (previous.isEmpty ? null : error);
     } finally {
       if (ref.read(activeImageTaskProvider) == ImageTaskKind.generate) {
         ref.read(activeImageTaskProvider.notifier).state = null;
+        ref.read(imageTaskProgressProvider.notifier).state = null;
       }
     }
   }
@@ -174,11 +212,13 @@ class GenerateImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
     }
     _ensureTaskAvailable(ref, ImageTaskKind.generate);
     ref.read(activeImageTaskProvider.notifier).state = ImageTaskKind.generate;
+    ref.read(imageTaskProgressProvider.notifier).state = ImageTaskProgress(
+        kind: ImageTaskKind.generate, total: cleanPrompts.length);
     final previous = state.valueOrNull ?? const <Map<String, dynamic>>[];
     state = const AsyncValue.data([]);
+    final collected = <Map<String, dynamic>>[];
     try {
       final client = ref.read(gatewayClientProvider);
-      final collected = <Map<String, dynamic>>[];
       final errors = <dynamic>[];
       for (var index = 0; index < cleanPrompts.length; index += 1) {
         final res = await client.materialize(
@@ -192,9 +232,17 @@ class GenerateImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
           imageMode: imageMode,
         );
         _applyResponseSummaries(ref, res);
-        final items = _resultItems(res['data'] ?? res);
+        final items = _resultItems(res['data'] ?? res)
+            .map((item) =>
+                <String, dynamic>{...item, 'prompt': cleanPrompts[index]})
+            .toList();
         if (items.isNotEmpty) {
           collected.addAll(items);
+          final progress = ref.read(imageTaskProgressProvider);
+          if (progress != null) {
+            ref.read(imageTaskProgressProvider.notifier).state =
+                progress.withCompleted(collected.length);
+          }
           state = AsyncValue.data(List<Map<String, dynamic>>.from(collected));
         }
         errors.addAll(res['errors'] as List? ?? const []);
@@ -209,15 +257,28 @@ class GenerateImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
         errors: errors,
       );
     } catch (e, st) {
-      state = previous.isEmpty
+      final kept = collected.isNotEmpty ? collected : previous;
+      state = kept.isEmpty
           ? AsyncValue.error(e, st)
-          : AsyncValue.data(previous);
-      return previous.isEmpty ? null : friendlyError(e, fallback: '推荐词生图失败。');
+          : AsyncValue.data(List<Map<String, dynamic>>.from(kept));
+      final error = friendlyError(e, fallback: '图片处理失败。');
+      return collected.isNotEmpty
+          ? '已完成 ${collected.length} 张，其余未完成：$error'
+          : (previous.isEmpty ? null : error);
     } finally {
       if (ref.read(activeImageTaskProvider) == ImageTaskKind.generate) {
         ref.read(activeImageTaskProvider.notifier).state = null;
+        ref.read(imageTaskProgressProvider.notifier).state = null;
       }
     }
+  }
+
+  void restore(List<Map<String, dynamic>> items) {
+    state = AsyncValue.data(items);
+  }
+
+  void restoreFailure(Object error, StackTrace stack) {
+    state = AsyncValue.error(error, stack);
   }
 
   void clear() {
@@ -253,11 +314,13 @@ class EditImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
   ) async {
     _ensureTaskAvailable(ref, ImageTaskKind.edit);
     ref.read(activeImageTaskProvider.notifier).state = ImageTaskKind.edit;
+    ref.read(imageTaskProgressProvider.notifier).state =
+        ImageTaskProgress(kind: ImageTaskKind.edit, total: count);
     final previous = state.valueOrNull ?? const <Map<String, dynamic>>[];
     state = const AsyncValue.data([]);
+    final collected = <Map<String, dynamic>>[];
     try {
       final client = ref.read(gatewayClientProvider);
-      final collected = <Map<String, dynamic>>[];
       final errors = <dynamic>[];
       for (var index = 0; index < count; index += 1) {
         final prompt = _promptForBatchIndex(runes, index);
@@ -273,9 +336,16 @@ class EditImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
           imageMode: imageMode,
         );
         _applyResponseSummaries(ref, res);
-        final items = _resultItems(res['data'] ?? res);
+        final items = _resultItems(res['data'] ?? res)
+            .map((item) => <String, dynamic>{...item, 'prompt': prompt})
+            .toList();
         if (items.isNotEmpty) {
           collected.addAll(items);
+          final progress = ref.read(imageTaskProgressProvider);
+          if (progress != null) {
+            ref.read(imageTaskProgressProvider.notifier).state =
+                progress.withCompleted(collected.length);
+          }
           state = AsyncValue.data(List<Map<String, dynamic>>.from(collected));
         }
         errors.addAll(res['errors'] as List? ?? const []);
@@ -290,13 +360,18 @@ class EditImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
         errors: errors,
       );
     } catch (e, st) {
-      state = previous.isEmpty
+      final kept = collected.isNotEmpty ? collected : previous;
+      state = kept.isEmpty
           ? AsyncValue.error(e, st)
-          : AsyncValue.data(previous);
-      return previous.isEmpty ? null : friendlyError(e, fallback: '图片修改失败。');
+          : AsyncValue.data(List<Map<String, dynamic>>.from(kept));
+      final error = friendlyError(e, fallback: '图片处理失败。');
+      return collected.isNotEmpty
+          ? '已完成 ${collected.length} 张，其余未完成：$error'
+          : (previous.isEmpty ? null : error);
     } finally {
       if (ref.read(activeImageTaskProvider) == ImageTaskKind.edit) {
         ref.read(activeImageTaskProvider.notifier).state = null;
+        ref.read(imageTaskProgressProvider.notifier).state = null;
       }
     }
   }
@@ -319,11 +394,13 @@ class EditImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
     }
     _ensureTaskAvailable(ref, ImageTaskKind.edit);
     ref.read(activeImageTaskProvider.notifier).state = ImageTaskKind.edit;
+    ref.read(imageTaskProgressProvider.notifier).state =
+        ImageTaskProgress(kind: ImageTaskKind.edit, total: cleanPrompts.length);
     final previous = state.valueOrNull ?? const <Map<String, dynamic>>[];
     state = const AsyncValue.data([]);
+    final collected = <Map<String, dynamic>>[];
     try {
       final client = ref.read(gatewayClientProvider);
-      final collected = <Map<String, dynamic>>[];
       final errors = <dynamic>[];
       for (var index = 0; index < cleanPrompts.length; index += 1) {
         final res = await client.recall(
@@ -338,9 +415,17 @@ class EditImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
           imageMode: imageMode,
         );
         _applyResponseSummaries(ref, res);
-        final items = _resultItems(res['data'] ?? res);
+        final items = _resultItems(res['data'] ?? res)
+            .map((item) =>
+                <String, dynamic>{...item, 'prompt': cleanPrompts[index]})
+            .toList();
         if (items.isNotEmpty) {
           collected.addAll(items);
+          final progress = ref.read(imageTaskProgressProvider);
+          if (progress != null) {
+            ref.read(imageTaskProgressProvider.notifier).state =
+                progress.withCompleted(collected.length);
+          }
           state = AsyncValue.data(List<Map<String, dynamic>>.from(collected));
         }
         errors.addAll(res['errors'] as List? ?? const []);
@@ -355,21 +440,93 @@ class EditImagesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
         errors: errors,
       );
     } catch (e, st) {
-      state = previous.isEmpty
+      final kept = collected.isNotEmpty ? collected : previous;
+      state = kept.isEmpty
           ? AsyncValue.error(e, st)
-          : AsyncValue.data(previous);
-      return previous.isEmpty ? null : friendlyError(e, fallback: '推荐词改图失败。');
+          : AsyncValue.data(List<Map<String, dynamic>>.from(kept));
+      final error = friendlyError(e, fallback: '图片处理失败。');
+      return collected.isNotEmpty
+          ? '已完成 ${collected.length} 张，其余未完成：$error'
+          : (previous.isEmpty ? null : error);
     } finally {
       if (ref.read(activeImageTaskProvider) == ImageTaskKind.edit) {
         ref.read(activeImageTaskProvider.notifier).state = null;
+        ref.read(imageTaskProgressProvider.notifier).state = null;
       }
     }
+  }
+
+  void restore(List<Map<String, dynamic>> items) {
+    state = AsyncValue.data(items);
+  }
+
+  void restoreFailure(Object error, StackTrace stack) {
+    state = AsyncValue.error(error, stack);
   }
 
   void clear() {
     state = const AsyncValue.data([]);
   }
 }
+
+final imageRequestResumeProvider = FutureProvider<void>((ref) async {
+  if (ref.read(activeImageTaskProvider) != null) return;
+  final client = ref.read(gatewayClientProvider);
+  final owner = ref.read(authStateProvider)?['id'];
+  Map<String, dynamic>? pending;
+  try {
+    pending = await client.pendingImageRequest();
+  } catch (_) {
+    return;
+  }
+  if (pending == null || ref.read(activeImageTaskProvider) != null) return;
+  final job = pending;
+  final kind =
+      job['action'] == 'edit' ? ImageTaskKind.edit : ImageTaskKind.generate;
+  if (kind == ImageTaskKind.generate) {
+    if (ref.read(generateImagesProvider).isLoading) {
+      await ref.read(generateImagesProvider.future);
+    }
+  } else {
+    if (ref.read(editImagesProvider).isLoading) {
+      await ref.read(editImagesProvider.future);
+    }
+  }
+  if (ref.read(activeImageTaskProvider) != null ||
+      ref.read(authStateProvider)?['id'] != owner) return;
+  ref.read(activeImageTaskProvider.notifier).state = kind;
+  final progress = ImageTaskProgress(
+    kind: kind,
+    total: (job['count'] as num?)?.toInt() ?? 1,
+    startedAt: DateTime.tryParse(job['created_at']?.toString() ?? ''),
+  );
+  ref.read(imageTaskProgressProvider.notifier).state = progress;
+  try {
+    final response = await client.recoverPendingImageRequest();
+    if (response == null || ref.read(authStateProvider)?['id'] != owner) return;
+    _applyResponseSummaries(ref, response);
+    final items = _resultItems(response['data'])
+        .map((item) => <String, dynamic>{...item, 'prompt': job['prompt']})
+        .toList();
+    if (kind == ImageTaskKind.generate) {
+      ref.read(generateImagesProvider.notifier).restore(items);
+    } else {
+      ref.read(editImagesProvider.notifier).restore(items);
+    }
+  } catch (error, stack) {
+    if (ref.read(authStateProvider)?['id'] != owner) return;
+    if (kind == ImageTaskKind.generate) {
+      ref.read(generateImagesProvider.notifier).restoreFailure(error, stack);
+    } else {
+      ref.read(editImagesProvider.notifier).restoreFailure(error, stack);
+    }
+  } finally {
+    if (identical(ref.read(imageTaskProgressProvider), progress)) {
+      ref.read(activeImageTaskProvider.notifier).state = null;
+      ref.read(imageTaskProgressProvider.notifier).state = null;
+    }
+  }
+});
 
 void _applyResponseSummaries(Ref ref, Map<String, dynamic> res) {
   ref.read(energyProvider.notifier).state = _quotaSummary(res['quota_summary']);
@@ -381,8 +538,11 @@ void _applyResponseSummaries(Ref ref, Map<String, dynamic> res) {
 
 void _ensureTaskAvailable(Ref ref, ImageTaskKind nextTask) {
   final activeTask = ref.read(activeImageTaskProvider);
-  if (activeTask == null || activeTask == nextTask) {
+  if (activeTask == null) {
     return;
+  }
+  if (activeTask == nextTask) {
+    throw GatewayException('图片任务进行中，请等待完成，避免重复提交。');
   }
   throw GatewayException(
     activeTask == ImageTaskKind.generate

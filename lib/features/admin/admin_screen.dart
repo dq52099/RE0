@@ -1,14 +1,22 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/api_error.dart';
+import '../../core/admin_theme.dart';
+import '../../core/app_motion.dart';
+import '../../core/admin_settings_sync.dart';
+import '../../core/admin_settings_presentation.dart';
+import 'admin_secret_field.dart';
 import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
 import '../../core/compact_dropdown_field.dart';
 import '../../core/compact_save_notice.dart';
 import '../../core/local_time_format.dart';
 import '../../core/providers.dart';
+import '../../core/stable_form_dialog.dart';
 import '../feedback/admin_feedback_panel.dart';
 
 Map<String, dynamic> buildAdminMailSettingsPayload({
@@ -64,16 +72,29 @@ Map<String, dynamic> buildAdminMailSettingsPayload({
   return payload;
 }
 
-class AdminScreen extends ConsumerStatefulWidget {
+class AdminScreen extends StatelessWidget {
   const AdminScreen({super.key, this.initialView});
 
   final String? initialView;
 
   @override
-  ConsumerState<AdminScreen> createState() => _AdminScreenState();
+  Widget build(BuildContext context) => Theme(
+        data: adminTheme(Theme.of(context)),
+        child: _AdminContent(initialView: initialView),
+      );
 }
 
-class _AdminScreenState extends ConsumerState<AdminScreen> {
+class _AdminContent extends ConsumerStatefulWidget {
+  const _AdminContent({this.initialView});
+
+  final String? initialView;
+
+  @override
+  ConsumerState<_AdminContent> createState() => _AdminContentState();
+}
+
+class _AdminContentState extends ConsumerState<_AdminContent>
+    with WidgetsBindingObserver {
   static const _defaultAiBaseUrl = 'https://2c2ch1u11-share-api-0.hf.space/v1';
   static const _feedbackAiModel = 'deepseek-v4-flash';
   static const _promptAiModel = 'gpt-5.4-mini';
@@ -99,6 +120,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   };
 
   int _revision = 0;
+  final _requests = <String, Future<dynamic>>{};
+  final _userSearch = TextEditingController();
+  final _settingsSearch = TextEditingController();
+  String _userStatus = 'all';
   int _usersPageIndex = 1;
   int _invitesPageIndex = 1;
   int _backupRecordsPageIndex = 1;
@@ -109,6 +134,28 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   bool _isGrantingWelfare = false;
   String _announcementTypeFilter = 'all';
   String _announcementStatusFilter = 'all';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.invalidate(imageCapabilitiesProvider);
+      _reload();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _userSearch.dispose();
+    _settingsSearch.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -134,7 +181,13 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         builder: (tabContext) {
           return Scaffold(
             appBar: AppBar(
-              title: const Text('系统管理'),
+              title: Text(brand.consoleTitle),
+              actions: [
+                IconButton(
+                    tooltip: '刷新当前页面',
+                    onPressed: _reload,
+                    icon: const Icon(Icons.refresh_rounded))
+              ],
               bottom: TabBar(
                 isScrollable: true,
                 tabAlignment: TabAlignment.start,
@@ -149,9 +202,13 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   children: sections
                       .map(
                         (item) => KeyedSubtree(
-                          key: ValueKey('${item.key}-$_revision'),
-                          child: _sectionBody(
-                              tabContext, brand, item, user, sections),
+                          key: ValueKey(item.key.startsWith('feedback')
+                              ? '${item.key}-$_revision'
+                              : item.key),
+                          child: Builder(
+                            builder: (_) => _sectionBody(
+                                tabContext, brand, item, user, sections),
+                          ),
                         ),
                       )
                       .toList(),
@@ -305,7 +362,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     List<_AdminSection> sections,
   ) {
     return _futureSection<Map<String, dynamic>>(
-      future: ref.read(gatewayClientProvider).adminOverview(),
+      future: _cached(
+          'overview', () => ref.read(gatewayClientProvider).adminOverview()),
       builder: (overview) {
         final items = [
           _OverviewItem('用户', overview['user_count'], Icons.people_outline,
@@ -333,15 +391,33 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           _OverviewItem('可用密钥', overview['active_api_key_count'],
               Icons.key_outlined, 'apiKeys', '对外调用密钥'),
         ];
-        return ListView(
-          physics: const ClampingScrollPhysics(),
-          clipBehavior: Clip.hardEdge,
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          padding: const EdgeInsets.all(16),
-          children: items
-              .map((item) => _overviewCard(tabContext, brand, sections, item))
-              .toList(),
-        );
+        return LayoutBuilder(builder: (context, constraints) {
+          final width =
+              constraints.maxWidth > 1000 ? 1000.0 : constraints.maxWidth;
+          final columns = width >= 840
+              ? 3
+              : width >= 390 && MediaQuery.textScalerOf(context).scale(1) <= 1.2
+                  ? 2
+                  : 1;
+          final cardWidth = (width - 32 - 12 * (columns - 1)) / columns;
+          return _adminList(children: [
+            Text('管理概览',
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.w500)),
+            const SizedBox(height: 8),
+            Text('账号、额度和服务配置集中管理。',
+                style: Theme.of(context).textTheme.bodyMedium),
+            const SizedBox(height: 20),
+            Wrap(spacing: 12, runSpacing: 12, children: [
+              for (final item in items)
+                SizedBox(
+                    width: cardWidth,
+                    child: _overviewCard(tabContext, brand, sections, item)),
+            ]),
+          ]);
+        });
       },
     );
   }
@@ -355,72 +431,106 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final targetIndex =
         sections.indexWhere((section) => section.key == item.key);
     final enabled = targetIndex >= 0;
+    final scheme = Theme.of(context).colorScheme;
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: enabled
-            ? () => DefaultTabController.of(tabContext).animateTo(targetIndex)
-            : null,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: brand.primaryColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(item.icon, color: brand.primaryColor),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        color: scheme.surface.withValues(alpha: 0.96),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: scheme.outlineVariant)),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: enabled
+              ? () => DefaultTabController.of(tabContext).animateTo(targetIndex)
+              : null,
+          child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(item.title,
-                        style: Theme.of(context).textTheme.titleMedium),
+                    Row(children: [
+                      Icon(item.icon, color: scheme.primary),
+                      const Spacer(),
+                      if (enabled)
+                        Icon(Icons.arrow_forward_rounded,
+                            size: 18, color: scheme.onSurfaceVariant)
+                    ]),
+                    const SizedBox(height: 14),
+                    Text('${item.value ?? 0}',
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineMedium
+                            ?.copyWith(fontWeight: FontWeight.w500)),
                     const SizedBox(height: 4),
+                    Text(item.title,
+                        style: Theme.of(context).textTheme.titleSmall),
+                    const SizedBox(height: 6),
                     Text(item.subtitle,
-                        style: Theme.of(context).textTheme.bodySmall),
-                  ],
-                ),
-              ),
-              Text(
-                '${item.value ?? 0}',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: brand.primaryColor,
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
-              const SizedBox(width: 4),
-              if (enabled) const Icon(Icons.chevron_right),
-            ],
-          ),
-        ),
-      ),
-    );
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(height: 1.4)),
+                  ])),
+        ));
   }
 
   Widget _usersPage(AppBrand brand, {required bool canManage}) {
     return _futureSection<_UsersData>(
-      future: _loadUsersData(),
+      future: _cached('users', _loadUsersData),
       builder: (data) {
         final currentUserId = ref.read(authStateProvider)?['id']?.toString();
-        final totalPages = _pageCount(data.users.length, _usersPageSize);
+        final query = _userSearch.text.trim().toLowerCase();
+        final filtered = data.users
+            .where((user) =>
+                (_userStatus == 'all' ||
+                    (user['is_active'] != false) ==
+                        (_userStatus == 'active')) &&
+                (query.isEmpty ||
+                    [
+                      'username',
+                      'display_name',
+                      'email',
+                      'role_name',
+                      'group_name'
+                    ]
+                        .map((key) => user[key] ?? '')
+                        .join(' ')
+                        .toLowerCase()
+                        .contains(query)))
+            .toList();
+        final totalPages = _pageCount(filtered.length, _usersPageSize);
         final page = _clampedPage(_usersPageIndex, totalPages);
-        final users = _pageItems(data.users, page, _usersPageSize);
+        final users = _pageItems(filtered, page, _usersPageSize);
         return _adminList(
-          action: canManage
-              ? FilledButton.icon(
-                  onPressed: () => _editUser(null, data),
-                  icon: const Icon(Icons.person_add),
-                  label: const Text('新增用户'),
-                )
-              : null,
+          action:
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            _searchField(_userSearch, '搜索用户名、昵称或邮箱',
+                () => setState(() => _usersPageIndex = 1)),
+            const SizedBox(height: 10),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              for (final entry in const {
+                'all': '全部账号',
+                'active': '已启用',
+                'inactive': '已停用'
+              }.entries)
+                _adminChoiceChip(
+                    label: entry.value,
+                    selected: _userStatus == entry.key,
+                    onSelected: () => setState(() {
+                          _userStatus = entry.key;
+                          _usersPageIndex = 1;
+                        })),
+              if (canManage)
+                FilledButton.icon(
+                    onPressed: () => _editUser(null, data),
+                    icon: const Icon(Icons.person_add_outlined),
+                    label: const Text('新增用户')),
+            ]),
+          ]),
           children: [
+            if (users.isEmpty)
+              _infoCard(title: '没有匹配的用户', subtitle: '调整关键词或账号状态筛选。'),
             ...users.map((user) {
               final quota = _map(user['quota_summary']);
               final historyCaps = _map(user['history_retention_summary']);
@@ -467,16 +577,16 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 lines: [
                   '图片模式: $mode（$overrideMode）',
                   '$generateQuota · $editQuota',
-                  '记忆保留额度: 生图 ${_historyQuotaBrief(historyQuota['generate'], historyCaps['generate'])} / 改图 ${_historyQuotaBrief(historyQuota['edit'], historyCaps['edit'])}',
+                  '历史图片上限: 生图 ${_historyQuotaBrief(historyQuota['generate'], historyCaps['generate'])} / 改图 ${_historyQuotaBrief(historyQuota['edit'], historyCaps['edit'])}',
                 ],
                 lineBreaks: false,
               );
             }),
-            if (data.users.isNotEmpty)
+            if (filtered.isNotEmpty)
               _listPager(
                 page: page,
                 totalPages: totalPages,
-                totalItems: data.users.length,
+                totalItems: filtered.length,
                 onPrevious: page <= 1
                     ? null
                     : () => setState(() => _usersPageIndex = page - 1),
@@ -492,8 +602,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 
   Widget _invitationCodesPage(AppBrand brand, {required bool canManage}) {
     return _futureSection<List<Map<String, dynamic>>>(
-      future:
-          _loadMapList(ref.read(gatewayClientProvider).adminInvitationCodes()),
+      future: _cached(
+          'invites',
+          () => _loadMapList(
+              ref.read(gatewayClientProvider).adminInvitationCodes())),
       builder: (codes) {
         final filteredCodes = _inviteStatusFilter.isEmpty
             ? codes
@@ -599,7 +711,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 
   Widget _groupsPage(AppBrand brand, {required bool canManage}) {
     return _futureSection<List<Map<String, dynamic>>>(
-      future: _loadMapList(ref.read(gatewayClientProvider).adminGroups()),
+      future: _cached('groups',
+          () => _loadMapList(ref.read(gatewayClientProvider).adminGroups())),
       builder: (groups) {
         return _adminList(
           action: canManage
@@ -637,7 +750,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 
   Widget _rolesPage(AppBrand brand, {required bool canManage}) {
     return _futureSection<_RolesData>(
-      future: _loadRolesData(),
+      future: _cached('roles', _loadRolesData),
       builder: (data) {
         return _adminList(
           action: canManage
@@ -672,7 +785,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 
   Widget _permissionsPage(AppBrand brand) {
     return _futureSection<List<Map<String, dynamic>>>(
-      future: _loadMapList(ref.read(gatewayClientProvider).adminPermissions()),
+      future: _cached(
+          'permissions',
+          () =>
+              _loadMapList(ref.read(gatewayClientProvider).adminPermissions())),
       builder: (permissions) {
         return _adminList(
           children: permissions.map((permission) {
@@ -690,7 +806,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 
   Widget _apiKeysPage(AppBrand brand, {required bool canManage}) {
     return _futureSection<List<Map<String, dynamic>>>(
-      future: _loadMapList(ref.read(gatewayClientProvider).adminApiKeys()),
+      future: _cached('apiKeys',
+          () => _loadMapList(ref.read(gatewayClientProvider).adminApiKeys())),
       builder: (apiKeys) {
         return _adminList(
           action: canManage
@@ -724,66 +841,76 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 
   Widget _settingsPage(AppBrand brand, {required bool canManage}) {
     return _futureSection<Map<String, dynamic>>(
-      future: ref.read(gatewayClientProvider).adminSystemSettings(),
+      future: _cached('settings',
+          () => ref.read(gatewayClientProvider).adminSystemSettings()),
       builder: (data) {
-        final settings = _settingsWithAiDefaults(_mapList(data['settings']));
+        final settings = _mapList(data['settings']);
         final runtime = _map(data['runtime_status']);
-        final groups = _settingGroups(settings);
-        groups.remove('邮件通道');
-        groups.remove('数据备份');
+        final visible = settings
+            .where((item) => adminSettingLabels.containsKey(item['key']))
+            .toList();
+        final groups = _settingGroups(visible);
+        final query = _settingsSearch.text.trim().toLowerCase();
+        final filtered = groups.entries.where((entry) =>
+            query.isEmpty ||
+            '${entry.key} ${adminCategoryDescriptions[entry.key]} ${entry.value.map((item) => '${_settingLabel(_text(item['key']))} ${item['value']}').join(' ')}'
+                .toLowerCase()
+                .contains(query));
         return _adminList(
-          action: canManage
-              ? Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: _probeCapabilities,
-                      icon: const Icon(Icons.radar),
-                      label: const Text('探测尺寸'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _isProviderHealthChecking
-                          ? null
-                          : _probeProviderHealth,
-                      icon: const Icon(Icons.monitor_heart_outlined),
-                      label:
-                          Text(_isProviderHealthChecking ? '检测中...' : '线路检测'),
-                    ),
-                  ],
-                )
-              : null,
-          children: [
-            ...groups.entries.map(
-              (entry) => _infoCard(
-                title: entry.key,
-                subtitle: '${entry.value.length} 项设置',
-                badge: '分类',
-                trailing: canManage
-                    ? IconButton(
-                        tooltip: '编辑${entry.key}',
-                        icon: const Icon(Icons.edit_outlined),
-                        onPressed: entry.key == '数据备份'
-                            ? () => _editBackupSettings(settings)
-                            : () => _editSettings(data, category: entry.key),
-                      )
-                    : null,
-                lines: entry.value
-                    .take(6)
-                    .map(
-                      (setting) =>
-                          '${_settingLabel(_text(setting['key']))}: ${_displaySettingValue(setting)}',
-                    )
-                    .toList(),
+          action:
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            _searchField(_settingsSearch, '搜索设置', () => setState(() {})),
+            if (canManage) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed:
+                    _isProviderHealthChecking ? null : _probeProviderHealth,
+                icon: const Icon(Icons.monitor_heart_outlined),
+                label: Text(_isProviderHealthChecking ? '检测中…' : '手动测试生图线路'),
               ),
-            ),
-            _infoCard(
-              title: '运行状态',
-              subtitle: '当前后端实际使用的配置',
-              lines: runtime.entries
-                  .map((item) => '${item.key}: ${_text(item.value)}')
-                  .toList(),
-            ),
+              const SizedBox(height: 6),
+              Text('手动测试会调用生图服务，可能消耗上游额度；不会开启定时检测。',
+                  style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ]),
+          children: [
+            if (query.isEmpty)
+              _infoCard(
+                title: '当前生图服务',
+                subtitle: '来自服务器的实际运行配置，修改设置后会重新读取。',
+                active: runtime['provider_configured'] == true,
+                lines: [
+                  for (final entry in adminRuntimeLabels.entries)
+                    if (runtime.containsKey(entry.key) &&
+                        const {
+                          'provider_active_slot',
+                          'provider_model',
+                          'provider_base_url',
+                          'provider_healthcheck_enabled'
+                        }.contains(entry.key))
+                      '${entry.value}: ${adminSettingValue(entry.key, runtime[entry.key])}'
+                ],
+              ),
+            ...filtered.map((entry) => _infoCard(
+                  title: entry.key,
+                  subtitle: adminCategoryDescriptions[entry.key],
+                  trailing: canManage
+                      ? IconButton(
+                          tooltip: '编辑${entry.key}',
+                          icon: const Icon(Icons.edit_outlined),
+                          onPressed: () =>
+                              _editSettings(data, category: entry.key),
+                        )
+                      : null,
+                  lines: [
+                    for (final setting in entry.value)
+                      if (setting['is_sensitive'] != true &&
+                          !setting['key'].toString().contains('api_key'))
+                        '${_settingLabel(_text(setting['key']))}: ${_displaySettingValue(setting)}'
+                  ],
+                )),
+            if (filtered.isEmpty)
+              _infoCard(title: '没有匹配的设置', subtitle: '换个关键词，或清空搜索查看全部分类。'),
           ],
         );
       },
@@ -792,7 +919,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 
   Widget _backupsPage(AppBrand brand, {required bool canManage}) {
     return _futureSection<_BackupsData>(
-      future: _loadBackupsData(),
+      future: _cached('backups', _loadBackupsData),
       builder: (data) {
         final byKey = {
           for (final item in _settingsWithAiDefaults(data.settings))
@@ -960,7 +1087,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 
   Widget _mailSettingsPage(AppBrand brand, {required bool canManage}) {
     return _futureSection<Map<String, dynamic>>(
-      future: ref.read(gatewayClientProvider).adminSystemSettings(),
+      future: _cached('settings',
+          () => ref.read(gatewayClientProvider).adminSystemSettings()),
       builder: (data) {
         final settings = _settingsWithAiDefaults(_mapList(data['settings']));
         final byKey = {
@@ -1051,7 +1179,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 
   Widget _announcementsPage(AppBrand brand, {required bool canManage}) {
     return _futureSection<Map<String, dynamic>>(
-      future: ref.read(gatewayClientProvider).adminAnnouncements(),
+      future: _cached('announcements',
+          () => ref.read(gatewayClientProvider).adminAnnouncements()),
       builder: (data) {
         final announcements = _filteredAnnouncements(
           _mapList(data['announcements']),
@@ -1277,16 +1406,17 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 
   Widget _auditPage(AppBrand brand) {
     return _futureSection<List<Map<String, dynamic>>>(
-      future: _loadMapList(ref.read(gatewayClientProvider).adminAuditLogs()),
+      future: _cached('audit',
+          () => _loadMapList(ref.read(gatewayClientProvider).adminAuditLogs())),
       builder: (logs) {
         return _adminList(
           children: logs.map((log) {
             return _infoCard(
-              title: _text(log['action']),
+              title: _auditActionLabel(_text(log['action'])),
               subtitle:
                   '${_text(log['actor_username'], fallback: '系统')}  ${formatLocalTime(log['created_at'])}',
               lines: [
-                '资源: ${_text(log['resource_type'])} ${_text(log['resource_id'])}',
+                '操作对象: ${_auditResourceLabel(_text(log['resource_type']))} ${_text(log['resource_id'])}',
                 if (log['detail'] != null) '详情: ${_text(log['detail'])}',
               ],
             );
@@ -1295,6 +1425,65 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       },
     );
   }
+
+  String _auditResourceLabel(String key) =>
+      const {
+        'user': '用户',
+        'role': '角色',
+        'group': '用户组',
+        'api_key': '调用密钥',
+        'system_settings': '系统设置',
+        'provider': '生图线路',
+        'local_backup': '备份',
+        'feedback': '用户反馈',
+        'announcement': '公告',
+        'image_history': '图片记录',
+        'gallery': '图库',
+        'invitation_codes': '邀请码',
+        'email_code': '邮件线路',
+      }[key] ??
+      '系统记录';
+
+  String _auditActionLabel(String action) =>
+      const {
+        'user.create': '创建用户',
+        'user.update': '修改用户',
+        'user.delete': '删除用户',
+        'role.create': '创建角色',
+        'role.update': '修改角色',
+        'group.create': '创建用户组',
+        'group.update': '修改用户组',
+        'system_settings.update': '修改系统设置',
+        'provider.active_slot_update': '切换生图线路',
+        'email_code.active_slot_update': '切换邮件线路',
+        'api_key.create': '创建调用密钥',
+        'api_key.rotate': '轮换调用密钥',
+        'api_key.update': '修改调用密钥',
+        'local_backup.run': '执行备份',
+        'local_backup.upload': '上传备份',
+        'local_backup.restore': '恢复备份',
+        'invitation_codes.create': '生成邀请码',
+        'announcement.publish': '发布公告',
+        'announcement.update': '修改公告',
+        'announcement.delete': '删除公告',
+        'welfare.grant_all': '发放全员福利',
+        'feedback.create': '提交反馈',
+        'feedback.status_update': '更新反馈状态',
+        'feedback.reply': '回复反馈',
+        'feedback.ai_summary': 'AI 整理反馈',
+        'profile.update': '修改个人资料',
+        'profile.email_bind': '绑定邮箱',
+        'profile.avatar_update': '修改头像',
+        'profile.change_password': '修改密码',
+        'auth.password_reset': '重置密码',
+        'auth.register': '注册账号',
+        'auth.register_denied': '注册被拒绝',
+        'image_history.delete': '删除图片记录',
+        'image_history.retry': '重试图片任务',
+        'gallery.publish': '发布图片',
+        'gallery.unpublish': '取消图片发布',
+      }[action] ??
+      '系统操作（$action）';
 
   Future<_BackupsData> _loadBackupsData() async {
     final client = ref.read(gatewayClientProvider);
@@ -1313,12 +1502,29 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 
   Future<_UsersData> _loadUsersData() async {
     final client = ref.read(gatewayClientProvider);
-    final values = await Future.wait([
-      _loadMapList(client.adminUsers()),
-      _loadMapList(client.adminGroups()),
-      _loadMapList(client.adminRoles()),
+    final user = ref.read(authStateProvider);
+    final users = await _loadMapList(client.adminUsers());
+    if (!_can(user, 'user.manage'))
+      return _UsersData(users, const [], const []);
+    List<Map<String, dynamic>> relatedOptions(String kind) {
+      final values = <String, Map<String, dynamic>>{};
+      for (final item in users) {
+        final id = _text(item['${kind}_id'], fallback: '');
+        if (id.isNotEmpty)
+          values[id] = {'id': id, 'name': _text(item['${kind}_name'])};
+      }
+      return values.values.toList();
+    }
+
+    final options = await Future.wait([
+      _can(user, 'group.view')
+          ? _loadMapList(client.adminGroups())
+          : Future.value(relatedOptions('group')),
+      _can(user, 'role.view')
+          ? _loadMapList(client.adminRoles())
+          : Future.value(relatedOptions('role')),
     ]);
-    return _UsersData(values[0], values[1], values[2]);
+    return _UsersData(users, options[0], options[1]);
   }
 
   Future<_RolesData> _loadRolesData() async {
@@ -1336,6 +1542,20 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     return _mapList(items);
   }
 
+  Future<T> _cached<T>(String key, Future<T> Function() load) {
+    return _requests.putIfAbsent(key, load) as Future<T>;
+  }
+
+  Future<void> _refreshPage() async {
+    _reload();
+    await WidgetsBinding.instance.endOfFrame;
+    try {
+      await Future.wait(_requests.values);
+    } catch (_) {
+      // Each page renders its own error and retry action.
+    }
+  }
+
   Widget _futureSection<T>({
     required Future<T> future,
     required Widget Function(T data) builder,
@@ -1349,31 +1569,58 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         if (snapshot.hasError) {
           return _errorState(snapshot.error);
         }
-        return builder(snapshot.data as T);
+        return AppEntrance(child: builder(snapshot.data as T));
       },
     );
   }
 
+  Widget _searchField(
+      TextEditingController controller, String hint, VoidCallback changed) {
+    return TextField(
+        controller: controller,
+        onChanged: (_) => changed(),
+        decoration: InputDecoration(
+          hintText: hint,
+          prefixIcon: const Icon(Icons.search_rounded),
+          filled: true,
+          fillColor: Theme.of(context).colorScheme.surface,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+          suffixIcon: controller.text.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: '清空搜索',
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () {
+                    controller.clear();
+                    changed();
+                  }),
+        ));
+  }
+
   Widget _adminList({required List<Widget> children, Widget? action}) {
-    return ListView(
-      physics: const ClampingScrollPhysics(),
-      clipBehavior: Clip.hardEdge,
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      padding: const EdgeInsets.all(16),
-      children: [
-        if (action != null) ...[
-          Align(alignment: Alignment.centerLeft, child: action),
-          const SizedBox(height: 12),
-        ],
-        if (children.isEmpty)
-          const Padding(
-            padding: EdgeInsets.only(top: 80),
-            child: Center(child: Text('暂无数据')),
-          )
-        else
-          ...children,
-      ],
-    );
+    return Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1000),
+          child: RefreshIndicator(
+              onRefresh: _refreshPage,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(
+                    parent: ClampingScrollPhysics()),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+                children: [
+                  if (action != null) ...[action, const SizedBox(height: 20)],
+                  if (children.isEmpty)
+                    const Padding(
+                        padding: EdgeInsets.only(top: 80),
+                        child: Center(child: Text('暂无数据')))
+                  else
+                    ...children,
+                ],
+              )),
+        ));
   }
 
   int _pageCount(int totalItems, int pageSize) {
@@ -1435,102 +1682,137 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     Widget? trailing,
     bool lineBreaks = true,
   }) {
+    final scheme = Theme.of(context).colorScheme;
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 0,
+      color: scheme.surface.withValues(alpha: 0.96),
+      margin: const EdgeInsets.only(bottom: 16),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side:
+              BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.6))),
       child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          height: 1.2,
-                        ),
-                  ),
-                ),
-                if (badge != null) _pill(badge),
-                if (active != null) _pill(active ? '启用' : '停用'),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      Text(title,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w500)),
+                      if (badge != null || active != null)
+                        Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Wrap(spacing: 8, runSpacing: 6, children: [
+                              if (badge != null) _pill(badge),
+                              if (active != null)
+                                _pill(active ? '已启用' : '已停用', positive: active),
+                            ])),
+                    ])),
+                if (trailing != null)
+                  ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 112),
+                      child: trailing),
+              ]),
+              if (subtitle != null && subtitle.isNotEmpty)
+                Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(subtitle,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant, height: 1.5))),
+              if (lines.isNotEmpty) ...[
+                const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 10),
+                    child: Divider(height: 1)),
+                for (final line
+                    in lines.where((item) => item.trim().isNotEmpty))
+                  _lineChip(line),
               ],
-            ),
-            if (trailing != null) ...[
-              const SizedBox(height: 10),
-              Align(alignment: Alignment.centerRight, child: trailing),
             ],
-            if (subtitle != null && subtitle.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
-            ],
-            if (lines.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              if (!lineBreaks)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: lines
-                      .where((item) => item.trim().isNotEmpty)
-                      .map(
-                        (item) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _lineChip(item),
-                        ),
-                      )
-                      .toList(),
-                )
-              else
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: lines
-                      .where((item) => item.trim().isNotEmpty)
-                      .map((item) => _lineChip(item))
-                      .toList(),
-                ),
-            ],
-          ],
-        ),
-      ),
+          )),
     );
   }
 
   Widget _lineChip(String text) {
-    return ConstrainedBox(
-      constraints: BoxConstraints(
-        maxWidth: MediaQuery.sizeOf(context).width - 64,
-      ),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.55),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          text,
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-          softWrap: true,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-      ),
-    );
+    final separator = text.indexOf(': ');
+    final label = separator < 0 ? null : text.substring(0, separator);
+    final value = separator < 0 ? text : text.substring(separator + 2);
+    return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: LayoutBuilder(builder: (context, constraints) {
+          final stacked = constraints.maxWidth < 340 ||
+              MediaQuery.textScalerOf(context).scale(1) > 1.2;
+          final labelWidget = Text(label ?? '',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant));
+          final valueWidget = SelectableText(value,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(height: 1.4));
+          if (label == null) return valueWidget;
+          if (stacked)
+            return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  labelWidget,
+                  const SizedBox(height: 3),
+                  valueWidget
+                ]);
+          return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SizedBox(width: 126, child: labelWidget),
+            const SizedBox(width: 12),
+            Expanded(child: valueWidget)
+          ]);
+        }));
   }
 
-  Widget _pill(String text) {
+  Widget _pill(String text, {bool? positive}) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = positive == false ? scheme.onSurfaceVariant : scheme.primary;
     return Container(
-      margin: const EdgeInsets.only(left: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: ref.read(brandProvider).primaryColor.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-      ),
-    );
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8)),
+        child: Text(text,
+            style: TextStyle(
+                fontSize: 12, color: color, fontWeight: FontWeight.w400)));
+  }
+
+  Widget _formSection(String title,
+      {String? description, required List<Widget> children}) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+            color: scheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(16)),
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          _settingsSectionTitle(title),
+          if (description != null)
+            Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(description,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(height: 1.5))),
+          const SizedBox(height: 12),
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0) const SizedBox(height: 12),
+            children[i]
+          ],
+        ]));
   }
 
   Widget _errorState(Object? error) {
@@ -1558,64 +1840,116 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     );
   }
 
+  Future<T?> _showManagedDialog<T>(
+      {required BuildContext context,
+      required WidgetBuilder builder,
+      List<TextEditingController> controllers = const []}) async {
+    final route = AppDialogRoute<T>(
+        context: context, builder: builder, barrierDismissible: false);
+    final value =
+        await Navigator.of(context, rootNavigator: true).push<T>(route);
+    await route.completed;
+    for (final controller in controllers) {
+      controller.dispose();
+    }
+    return value;
+  }
+
   Widget _adminDialog({
     required String title,
     required IconData icon,
     required Widget content,
     required List<Widget> actions,
+    String? errorText,
   }) {
     final brand = ref.read(brandProvider);
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
+    final base = Theme.of(context);
+    final fieldBorder = OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+            color: brand.primaryColor.withValues(alpha: 0.24), width: 0.8));
+    return Theme(
+        data: base.copyWith(
+            dividerTheme: base.dividerTheme.copyWith(
+                color: brand.primaryColor.withValues(alpha: 0.16),
+                thickness: 0.6),
+            inputDecorationTheme: base.inputDecorationTheme.copyWith(
+              filled: true,
+              fillColor: base.colorScheme.surface,
+              border: fieldBorder,
+              enabledBorder: fieldBorder,
+              disabledBorder: fieldBorder,
+              focusedBorder: fieldBorder.copyWith(
+                borderSide: BorderSide(
+                    color: brand.primaryColor.withValues(alpha: 0.6),
+                    width: 1.2),
+              ),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+              helperMaxLines: 4,
+              errorMaxLines: 3,
+            )),
+        child: KeyboardStableDialog(
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: brand.primaryColor.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(icon, color: brand.primaryColor),
+                  Row(
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: brand.primaryColor.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(icon, color: brand.primaryColor),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                  const SizedBox(height: 16),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: content,
                     ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(height: 1),
+                  const SizedBox(height: 12),
+                  if (errorText != null)
+                    Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(errorText,
+                            style: TextStyle(color: base.colorScheme.error))),
+                  Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: actions,
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              Flexible(
-                child: SingleChildScrollView(
-                  child: content,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                alignment: WrapAlignment.end,
-                spacing: 8,
-                runSpacing: 8,
-                children: actions,
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
-    );
+        ));
   }
 
   Future<void> _editUser(Map<String, dynamic>? user, _UsersData data) async {
@@ -1623,7 +1957,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         TextEditingController(text: _text(user?['username'], fallback: ''));
     final displayName =
         TextEditingController(text: _text(user?['display_name'], fallback: ''));
+    final email =
+        TextEditingController(text: _text(user?['email'], fallback: ''));
     final password = TextEditingController();
+    String? formError;
     final generateQuota = TextEditingController(
       text: user?['generate_quota_total_override']?.toString() ?? '',
     );
@@ -1651,12 +1988,23 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     var active = user?['is_active'] != false;
     var canEditUsername = user?['can_edit_username'] != false;
 
-    final payload = await showDialog<Map<String, dynamic>>(
+    final payload = await _showManagedDialog<Map<String, dynamic>>(
       context: context,
+      controllers: [
+        email,
+        username,
+        displayName,
+        password,
+        generateQuota,
+        editQuota,
+        generateHistoryRetention,
+        editHistoryRetention
+      ],
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return _adminDialog(
             title: user == null ? '新增用户' : '编辑用户',
+            errorText: formError,
             icon: user == null ? Icons.person_add : Icons.manage_accounts,
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1670,11 +2018,18 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     decoration: const InputDecoration(labelText: '显示名称')),
                 const SizedBox(height: 12),
                 TextField(
-                  controller: password,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                      labelText: user == null ? '初始密码' : '密码留空不修改'),
-                ),
+                    controller: email,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                        labelText: '绑定邮箱（可选）',
+                        helperText: '留空表示不绑定邮箱，用于邮箱登录和找回密码')),
+                const SizedBox(height: 12),
+                if (user == null)
+                  AdminSecretField(
+                    controller: password,
+                    decoration: const InputDecoration(
+                        labelText: '初始密码', helperText: '至少 8 位，需符合服务器密码规则'),
+                  ),
                 const SizedBox(height: 12),
                 _dropdown(
                   label: '角色',
@@ -1724,7 +2079,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   controller: generateHistoryRetention,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
-                    labelText: '个人生图保留额度',
+                    labelText: '个人生图历史上限',
                     helperText: '留空则跟随用户组和等级福利；达到上限后需先手动清理记忆回廊',
                   ),
                 ),
@@ -1733,7 +2088,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   controller: editHistoryRetention,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
-                    labelText: '个人改图保留额度',
+                    labelText: '个人改图历史上限',
                     helperText: '留空则跟随用户组和等级福利；达到上限后需先手动清理记忆回廊',
                   ),
                 ),
@@ -1758,9 +2113,35 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                   child: const Text('取消')),
               FilledButton(
                 onPressed: () {
+                  final numericFields = {
+                    '个人生图额度': generateQuota.text,
+                    '个人改图额度': editQuota.text,
+                    '个人生图历史上限': generateHistoryRetention.text,
+                    '个人改图历史上限': editHistoryRetention.text
+                  };
+                  for (final entry in numericFields.entries) {
+                    if (entry.value.trim().isNotEmpty &&
+                        (int.tryParse(entry.value.trim()) == null ||
+                            int.parse(entry.value.trim()) < 0)) {
+                      setDialogState(
+                          () => formError = '${entry.key}请填写非负整数，或留空跟随用户组。');
+                      return;
+                    }
+                  }
+                  if (username.text.trim().length < 2 ||
+                      displayName.text.trim().isEmpty) {
+                    setDialogState(() => formError = '用户名至少 2 个字符，显示名称不能为空。');
+                    return;
+                  }
+                  if (user == null && password.text.length < 8) {
+                    setDialogState(() => formError = '初始密码至少 8 位。');
+                    return;
+                  }
                   final body = {
                     'username': username.text.trim(),
                     'display_name': displayName.text.trim(),
+                    'email':
+                        email.text.trim().isEmpty ? null : email.text.trim(),
                     'role_id': roleId,
                     'group_id': groupId,
                     'image_mode_override':
@@ -1826,7 +2207,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       _showMessage('用户已删除，列表已刷新。');
       setState(() {
         _usersPageIndex = 1;
-        _revision += 1;
+        _requests.clear();
       });
     } catch (error) {
       if (!mounted) return;
@@ -1858,6 +2239,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       title: group == null ? '新增用户组' : '编辑用户组',
       name: name,
       description: description,
+      extraControllers: [
+        generateQuota,
+        editQuota,
+        generateHistoryRetention,
+        editHistoryRetention
+      ],
       extraFields: [
         TextField(
           controller: generateQuota,
@@ -1873,7 +2260,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           controller: generateHistoryRetention,
           keyboardType: TextInputType.number,
           decoration: const InputDecoration(
-            labelText: '默认生图保留额度',
+            labelText: '默认生图历史上限',
             helperText: '组内用户基础保留额度；等级福利会额外增加',
           ),
         ),
@@ -1881,7 +2268,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           controller: editHistoryRetention,
           keyboardType: TextInputType.number,
           decoration: const InputDecoration(
-            labelText: '默认改图保留额度',
+            labelText: '默认改图历史上限',
             helperText: '组内用户基础保留额度；等级福利会额外增加',
           ),
         ),
@@ -1929,8 +2316,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         .toSet();
     var active = role?['is_active'] != false;
 
-    final payload = await showDialog<Map<String, dynamic>>(
+    final payload = await _showManagedDialog<Map<String, dynamic>>(
       context: context,
+      controllers: [name, description],
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return _adminDialog(
@@ -2014,8 +2402,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       title: item == null ? '新增密钥' : '编辑密钥',
       name: name,
       description: description,
+      extraControllers: [rawKey],
       extraFields: [
-        TextField(
+        AdminSecretField(
           controller: rawKey,
           decoration:
               InputDecoration(labelText: item == null ? '密钥值' : '新密钥，留空不轮换'),
@@ -2069,6 +2458,17 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final providerBackupSecondaryKey = TextEditingController();
     final providerModel =
         TextEditingController(text: _settingValue(byKey, 'provider_model'));
+    final providerBackupModel = TextEditingController(
+      text: _settingValue(byKey, 'provider_backup_model'),
+    );
+    var providerPrimaryEnabled =
+        _settingBool(byKey, 'provider_primary_enabled', fallback: true);
+    var providerBackupEnabled = _settingBool(byKey, 'provider_backup_enabled');
+    var generalProviderEnabled =
+        _settingBool(byKey, 'general_provider_enabled');
+    var providerAsyncEnabled = _settingBool(byKey, 'provider_async_enabled');
+    var providerBackupAsyncEnabled =
+        _settingBool(byKey, 'provider_backup_async_enabled');
     final generalProviderBase = TextEditingController(
       text: _settingValue(
         byKey,
@@ -2092,7 +2492,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       ),
     );
     final providerTimeout = TextEditingController(
-        text: _settingValue(byKey, 'provider_timeout_seconds'));
+        text:
+            _settingValue(byKey, 'provider_timeout_seconds', fallback: '900'));
     final providerHealthcheckInterval = TextEditingController(
       text: _settingValue(
         byKey,
@@ -2193,8 +2594,6 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       text:
           _settingValue(byKey, 'daily_checkin_edit_multiplier', fallback: '1'),
     );
-    var profile =
-        _settingValue(byKey, 'provider_image_profile', fallback: 'gpt-image-2');
     final vipImageQuotaMultiplier = TextEditingController(
       text: _settingValue(byKey, 'vip_image_quota_multiplier', fallback: '0.5'),
     );
@@ -2226,7 +2625,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     var providerHealthcheckEnabled = _settingValue(
           byKey,
           'provider_healthcheck_enabled',
-          fallback: 'true',
+          fallback: 'false',
         ).toLowerCase() ==
         'true';
     final notificationRetentionDays = TextEditingController(
@@ -2242,6 +2641,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     var forceUpdateEnabled = _settingBool(byKey, 'force_app_update_enabled');
     var forceReloginEnabled = _settingBool(byKey, 'force_relogin_enabled');
     final dialogCategory = category ?? '全部设置';
+    String? formError;
+    var saving = false;
 
     Map<String, dynamic> cleanPayload(Map<String, dynamic> payload) {
       payload.removeWhere((_, value) => value == null);
@@ -2278,6 +2679,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         'ui_title': uiTitle.text.trim(),
         'external_access_base_url': externalBase.text.trim(),
         'provider_base_url': providerBase.text.trim(),
+        'provider_primary_enabled': providerPrimaryEnabled,
+        'provider_backup_enabled': providerBackupEnabled,
+        'general_provider_enabled': generalProviderEnabled,
+        'provider_async_enabled': providerAsyncEnabled,
+        'provider_backup_async_enabled': providerBackupAsyncEnabled,
+        'provider_backup_model': providerBackupModel.text.trim(),
         if (providerKey.text.trim().isNotEmpty)
           'provider_api_key': providerKey.text.trim(),
         if (providerSecondaryKey.text.trim().isNotEmpty)
@@ -2298,7 +2705,6 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           'general_provider_api_key': generalProviderKey.text.trim(),
         'general_provider_model': generalProviderModel.text.trim(),
         'general_provider_image_model': generalProviderImageModel.text.trim(),
-        'provider_image_profile': profile,
         'vip_image_quota_multiplier':
             double.tryParse(vipImageQuotaMultiplier.text),
         'provider_timeout_seconds': int.tryParse(providerTimeout.text),
@@ -2314,8 +2720,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         'feedback_ai_model': feedbackAiModel.text.trim().isEmpty
             ? _feedbackAiModel
             : feedbackAiModel.text.trim(),
-        'prompt_ai_base_url':
-            promptAiBase.text.trim().isEmpty ? null : promptAiBase.text.trim(),
+        'prompt_ai_base_url': promptAiBase.text.trim(),
         if (promptAiKey.text.trim().isNotEmpty)
           'prompt_ai_api_key': promptAiKey.text.trim(),
         'prompt_ai_model': promptAiModel.text.trim().isEmpty
@@ -2348,8 +2753,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       return cleanPayload(payload);
     }
 
-    final payload = await showDialog<Map<String, dynamic>>(
+    final initialPayload =
+        category == '邮件通道' ? mailPayload() : settingsPayload();
+    final dialogRoute = AppDialogRoute<Map<String, dynamic>>(
       context: context,
+      barrierDismissible: false,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           final showBasic = category == null || category == '基础设置';
@@ -2360,534 +2768,764 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           final showNotification = category == null || category == '通知设置';
           final showMail = category == null || category == '邮件通道';
           final showPolicy = category == null || category == '系统策略';
-          return _adminDialog(
-            title: dialogCategory,
-            icon: Icons.tune,
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (showBasic) ...[
-                  TextField(
-                      controller: uiTitle,
-                      decoration: const InputDecoration(labelText: '界面标题')),
-                  const SizedBox(height: 12),
-                  TextField(
-                      controller: externalBase,
-                      decoration: const InputDecoration(
-                        labelText: '公开访问地址',
-                        helperText: '用于邮件、分享和图片链接；留空时按当前访问地址自动判断',
-                      )),
-                  const SizedBox(height: 12),
-                  SwitchListTile(
-                    value: allowRegistration,
-                    onChanged: (value) =>
-                        setDialogState(() => allowRegistration = value),
-                    title: const Text('允许自助注册'),
-                    subtitle: const Text('关闭后登录页不再显示注册入口'),
+          return PopScope(
+              canPop: !saving,
+              child: _adminDialog(
+                title: dialogCategory,
+                errorText: formError,
+                icon: Icons.tune,
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (showBasic) ...[
+                      TextField(
+                          controller: uiTitle,
+                          decoration: const InputDecoration(labelText: '界面标题')),
+                      const SizedBox(height: 12),
+                      TextField(
+                          controller: externalBase,
+                          decoration: const InputDecoration(
+                            labelText: '公开访问地址',
+                            helperText: '用于邮件、分享和图片链接；留空时按当前访问地址自动判断',
+                          )),
+                      const SizedBox(height: 12),
+                      SwitchListTile(
+                        value: allowRegistration,
+                        onChanged: (value) =>
+                            setDialogState(() => allowRegistration = value),
+                        title: const Text('允许自助注册'),
+                        subtitle: const Text('关闭后登录页不再显示注册入口'),
+                      ),
+                      SwitchListTile(
+                        value: registrationEmailRequired,
+                        onChanged: (value) => setDialogState(
+                            () => registrationEmailRequired = value),
+                        title: const Text('注册需要邮箱验证'),
+                        subtitle: const Text('开启后必须填写邮箱并通过验证码；关闭后邮箱可选'),
+                      ),
+                      SwitchListTile(
+                        value: registrationInviteRequired,
+                        onChanged: (value) => setDialogState(
+                            () => registrationInviteRequired = value),
+                        title: const Text('注册需要邀请码'),
+                        subtitle: const Text('开启后必须填写可用邀请码；关闭后不显示邀请码输入'),
+                      ),
+                      const SizedBox(height: 12),
+                      ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: vipImageQuotaMultiplier,
+                        builder: (context, value, _) {
+                          final multiplier = double.tryParse(value.text);
+                          final valid = multiplier != null &&
+                              multiplier.isFinite &&
+                              multiplier >= 0.1 &&
+                              multiplier <= 10;
+                          final cost = valid ? (2 * multiplier).ceil() : null;
+                          return TextField(
+                            controller: vipImageQuotaMultiplier,
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            decoration: InputDecoration(
+                              labelText: 'VIP 图片额度倍率',
+                              helperMaxLines: 8,
+                              helperText: '基础价 2 额度/张，乘倍率后向上取整，最低 1 额度/张。'
+                                  '${cost == null ? '' : '当前 $cost 额度/张。'}',
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 18),
+                    ],
+                    if (showWelfare) ...[
+                      _settingsSectionTitle('福利设置'),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: generateCheckinMultiplier,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: const InputDecoration(
+                          labelText: '签到生图奖励倍数',
+                          helperText: '每日签到发放的生图额度倍率',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: editCheckinMultiplier,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: const InputDecoration(
+                          labelText: '签到改图奖励倍数',
+                          helperText: '每日签到发放的改图额度倍率',
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                    ],
+                    if (showDailyImage) ...[
+                      _settingsSectionTitle('每日一图'),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: dailyImageDrawHistoryLimit,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: '最近记录数量',
+                          helperText: '默认 7 条；超过后只保留最新记录，记录区可滑动查看',
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                    ],
+                    if (showProvider) ...[
+                      _formSection('VIP 主用服务',
+                          description: '配置常用的生图站点，与提示词和识图服务独立。',
+                          children: [
+                            SwitchListTile(
+                                value: providerPrimaryEnabled,
+                                onChanged: (value) => setDialogState(
+                                    () => providerPrimaryEnabled = value),
+                                title: const Text('启用主用生图服务')),
+                            TextField(
+                                controller: providerBase,
+                                keyboardType: TextInputType.url,
+                                decoration: const InputDecoration(
+                                    labelText: '主用服务地址',
+                                    hintText: 'https://example.com/v1')),
+                            AdminSecretField(
+                                controller: providerKey,
+                                decoration: const InputDecoration(
+                                    labelText: '主用服务密钥',
+                                    helperText: '留空保留服务器现有密钥')),
+                            TextField(
+                                controller: providerModel,
+                                decoration: const InputDecoration(
+                                    labelText: '主用生图模型',
+                                    helperText: '填写该站点支持的模型名，例如 gpt-image-2')),
+                          ]),
+                      _formSection('VIP 备用服务',
+                          description: '主用失败时尝试备用；也可以将备用选为优先使用线路。',
+                          children: [
+                            SwitchListTile(
+                                value: providerBackupEnabled,
+                                onChanged: (value) => setDialogState(
+                                    () => providerBackupEnabled = value),
+                                title: const Text('启用备用生图服务'),
+                                subtitle: const Text('关闭后不会调用备用站点')),
+                            TextField(
+                                controller: providerBackupBase,
+                                keyboardType: TextInputType.url,
+                                decoration: const InputDecoration(
+                                    labelText: '备用服务地址',
+                                    hintText: 'https://example.com/v1')),
+                            AdminSecretField(
+                                controller: providerBackupKey,
+                                decoration: const InputDecoration(
+                                    labelText: '备用服务密钥',
+                                    helperText: '留空保留服务器现有密钥')),
+                            TextField(
+                                controller: providerBackupModel,
+                                decoration: const InputDecoration(
+                                    labelText: '备用生图模型',
+                                    helperText: '例如 gpt-image-2.5；留空沿用主用模型')),
+                          ]),
+                      _formSection('一般模式服务',
+                          description: '供使用一般模式的用户生图和改图。',
+                          children: [
+                            SwitchListTile(
+                                value: generalProviderEnabled,
+                                onChanged: (value) => setDialogState(
+                                    () => generalProviderEnabled = value),
+                                title: const Text('启用一般模式生图服务')),
+                            TextField(
+                                controller: generalProviderBase,
+                                keyboardType: TextInputType.url,
+                                decoration: const InputDecoration(
+                                    labelText: '一般模式服务地址')),
+                            AdminSecretField(
+                                controller: generalProviderKey,
+                                decoration: const InputDecoration(
+                                    labelText: '一般模式服务密钥',
+                                    helperText: '留空保留现有密钥')),
+                            TextField(
+                                controller: generalProviderImageModel,
+                                decoration: const InputDecoration(
+                                    labelText: '一般模式生图模型')),
+                          ]),
+                      _formSection('线路与等待时间', children: [
+                        _stringDropdown(
+                            '优先使用线路',
+                            activeProviderSlot,
+                            const ['primary', 'backup'],
+                            (value) => setDialogState(
+                                () => activeProviderSlot = value),
+                            labels: _providerSlotLabels),
+                        const Text('先启用对应服务，再选择线路。关闭全部 VIP 服务后不会发起 VIP 生图。'),
+                        TextField(
+                            controller: providerTimeout,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                                labelText: '生成等待上限',
+                                suffixText: '秒',
+                                helperText: '5～3600 秒；过短可能在上游出图前超时')),
+                        SwitchListTile(
+                            value: providerHealthcheckEnabled,
+                            onChanged: (value) => setDialogState(
+                                () => providerHealthcheckEnabled = value),
+                            title: const Text('定时检测生图线路'),
+                            subtitle: const Text('开启后会调用上游测试，可能消耗额度；关闭后不定时检测')),
+                        if (providerHealthcheckEnabled)
+                          TextField(
+                              controller: providerHealthcheckInterval,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                  labelText: '检测间隔',
+                                  suffixText: '分钟',
+                                  helperText: '5～1440 分钟')),
+                      ]),
+                      ExpansionTile(
+                          title: const Text('高级调用设置'),
+                          subtitle: const Text('异步任务、备用密钥和默认图片参数'),
+                          childrenPadding:
+                              const EdgeInsets.fromLTRB(12, 8, 12, 16),
+                          children: [
+                            Column(children: [
+                              SwitchListTile(
+                                  value: providerAsyncEnabled,
+                                  onChanged: (value) => setDialogState(
+                                      () => providerAsyncEnabled = value),
+                                  title: const Text('主用站使用异步任务'),
+                                  subtitle:
+                                      const Text('仅支持返回任务 ID 和查询结果的站点可开启')),
+                              SwitchListTile(
+                                  value: providerBackupAsyncEnabled,
+                                  onChanged: (value) => setDialogState(
+                                      () => providerBackupAsyncEnabled = value),
+                                  title: const Text('备用站使用异步任务'),
+                                  subtitle:
+                                      const Text('mlgb7 支持此方式；关闭则等待同步响应')),
+                              AdminSecretField(
+                                  controller: providerSecondaryKey,
+                                  decoration: const InputDecoration(
+                                      labelText: '主用站第二密钥',
+                                      helperText: '第一密钥失败时尝试；留空保留现有值')),
+                              const SizedBox(height: 12),
+                              AdminSecretField(
+                                  controller: providerBackupSecondaryKey,
+                                  decoration: const InputDecoration(
+                                      labelText: '备用站第二密钥',
+                                      helperText: '留空保留现有值')),
+                              const SizedBox(height: 12),
+                              TextField(
+                                  controller: generalProviderModel,
+                                  decoration: const InputDecoration(
+                                      labelText: '一般模式文本检测模型',
+                                      helperText: '仅用于旧通道文本检测；生图使用上方生图模型')),
+                              const SizedBox(height: 12),
+                              _stringDropdown(
+                                  '外部 API 默认返回方式',
+                                  responseFormat,
+                                  const ['url', 'b64_json'],
+                                  (value) => setDialogState(
+                                      () => responseFormat = value),
+                                  labels: const {
+                                    'url': '图片链接',
+                                    'b64_json': 'Base64 图片数据'
+                                  }),
+                              const SizedBox(height: 12),
+                              _stringDropdown(
+                                  '默认图片质量',
+                                  quality,
+                                  const ['auto', 'low', 'medium', 'high'],
+                                  (value) =>
+                                      setDialogState(() => quality = value),
+                                  labels: const {
+                                    'auto': '自动',
+                                    'low': '低',
+                                    'medium': '中',
+                                    'high': '高'
+                                  }),
+                              const SizedBox(height: 12),
+                              _stringDropdown(
+                                  '默认背景',
+                                  background,
+                                  const ['auto', 'opaque', 'transparent'],
+                                  (value) =>
+                                      setDialogState(() => background = value),
+                                  labels: const {
+                                    'auto': '自动',
+                                    'opaque': '不透明',
+                                    'transparent': '透明'
+                                  }),
+                              const SizedBox(height: 12),
+                              _stringDropdown(
+                                  '默认图片文件格式',
+                                  outputFormat,
+                                  const ['png', 'jpeg', 'webp'],
+                                  (value) => setDialogState(
+                                      () => outputFormat = value)),
+                              const SizedBox(height: 12),
+                              TextField(
+                                  controller: instructions,
+                                  maxLines: 3,
+                                  decoration: const InputDecoration(
+                                      labelText: '旧通道生图指令',
+                                      helperText:
+                                          '仅文本模型调用生图工具时使用；当前直接生图接口不使用')),
+                            ])
+                          ]),
+                      const SizedBox(height: 12),
+                    ],
+                    if (showAi) ...[
+                      const Divider(),
+                      const SizedBox(height: 8),
+                      Text(
+                        '反馈 AI 整理',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: feedbackAiBase,
+                        decoration:
+                            const InputDecoration(labelText: '反馈整理服务地址'),
+                      ),
+                      const SizedBox(height: 12),
+                      AdminSecretField(
+                        controller: feedbackAiKey,
+                        decoration: const InputDecoration(
+                          labelText: '反馈整理密钥，留空不修改',
+                          helperText: '展示时会打码；请求应由后端代理执行',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: feedbackAiModel,
+                        decoration: const InputDecoration(labelText: '反馈整理模型'),
+                      ),
+                      const SizedBox(height: 16),
+                      const Divider(),
+                      const SizedBox(height: 8),
+                      Text(
+                        '提示词 AI / 图片识别 AI',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: promptAiBase,
+                        decoration:
+                            const InputDecoration(labelText: '提示词与识图服务地址'),
+                      ),
+                      const SizedBox(height: 12),
+                      AdminSecretField(
+                        controller: promptAiKey,
+                        decoration: const InputDecoration(
+                          labelText: '提示词服务密钥，留空不修改',
+                          helperText: '与反馈 AI 分开保存，避免混淆',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: promptAiModel,
+                        decoration: const InputDecoration(
+                            labelText: '提示词与识图模型',
+                            helperText: '图片识别需要模型支持图片输入；文本模型只能推演提示词'),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    if (showNotification) ...[
+                      const Divider(),
+                      const SizedBox(height: 8),
+                      Text(
+                        '通知中心',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: notificationRetentionDays,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: '已读通知保留天数',
+                          helperText: '只清理已读通知，未读通知不会按天数自动移除',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: notificationCategoryLimit,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: '每类通知显示上限',
+                          helperText: '通知中心每个分类最多展示的条数',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    if (showMail) ...[
+                      const Divider(),
+                      const SizedBox(height: 8),
+                      Text(
+                        '邮件服务',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '邮箱验证码和系统通知共用这套邮件服务。当前线路优先发送，另一条线路只在失败后临时兜底；选择“不发送”即可停用对应线路。',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 12),
+                      SwitchListTile(
+                        value: emailServiceEnabled,
+                        onChanged: (value) =>
+                            setDialogState(() => emailServiceEnabled = value),
+                        title: const Text('启用邮件服务'),
+                        subtitle: const Text('关闭后验证码和系统通知都不发邮件'),
+                      ),
+                      const SizedBox(height: 12),
+                      _settingsSectionTitle('发送线路'),
+                      const SizedBox(height: 8),
+                      _stringDropdown(
+                        '主通道',
+                        emailPrimaryProvider,
+                        const ['claw163', 'resend', 'smtp', 'none'],
+                        (value) =>
+                            setDialogState(() => emailPrimaryProvider = value),
+                        labels: _mailProviderLabels,
+                      ),
+                      const SizedBox(height: 12),
+                      _stringDropdown(
+                        '备用通道',
+                        emailBackupProvider,
+                        const ['resend', 'claw163', 'smtp', 'none'],
+                        (value) =>
+                            setDialogState(() => emailBackupProvider = value),
+                        labels: _mailProviderLabels,
+                      ),
+                      const SizedBox(height: 12),
+                      _stringDropdown(
+                        '当前线路',
+                        emailActiveSlot,
+                        const ['primary', 'backup'],
+                        (value) =>
+                            setDialogState(() => emailActiveSlot = value),
+                        labels: _mailSlotLabels,
+                      ),
+                      const SizedBox(height: 12),
+                      SwitchListTile(
+                        value: emailAutoSwitchEnabled,
+                        onChanged: (value) => setDialogState(
+                            () => emailAutoSwitchEnabled = value),
+                        title: const Text('发送失败后自动切换'),
+                        subtitle: const Text('关闭时单次可临时走备用但不保存；开启后会持久切换到成功线路'),
+                      ),
+                      const SizedBox(height: 18),
+                      _settingsSectionTitle('Claw163 通道'),
+                      const SizedBox(height: 8),
+                      SwitchListTile(
+                        value: openclawMailEnabled,
+                        onChanged: (value) =>
+                            setDialogState(() => openclawMailEnabled = value),
+                        title: const Text('启用 Claw163 通道'),
+                        subtitle: const Text('只有主通道或备用通道选择 Claw163 时才会使用'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: openclawMailUser,
+                        decoration: const InputDecoration(
+                          labelText: 'Claw163 发件邮箱',
+                          helperText: '例如：bot.image@claw.163.com',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      AdminSecretField(
+                        controller: openclawMailApiKey,
+                        decoration: const InputDecoration(
+                          labelText: 'Claw163 服务密钥，留空不修改',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: emailSenderName,
+                        decoration: const InputDecoration(
+                          labelText: '发件人显示名',
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      _settingsSectionTitle('Resend 通道'),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: resendBase,
+                        decoration: const InputDecoration(
+                          labelText: 'Resend 地址',
+                          helperText: '默认 https://api.resend.com',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: resendFrom,
+                        decoration: const InputDecoration(
+                          labelText: 'Resend 发件人',
+                          helperText: '例如：从零开始生图 <noreply@mail.6688667.xyz>',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      AdminSecretField(
+                        controller: resendKey,
+                        decoration: const InputDecoration(
+                          labelText: 'Resend 密钥，留空不修改',
+                          helperText: '可在上方发送策略中设为主通道或备用通道',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _settingsSectionTitle('SMTP'),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: smtpHost,
+                        decoration:
+                            const InputDecoration(labelText: 'SMTP 服务器'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: smtpPort,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'SMTP 端口'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: smtpUsername,
+                        decoration:
+                            const InputDecoration(labelText: 'SMTP 用户名/邮箱'),
+                      ),
+                      const SizedBox(height: 12),
+                      AdminSecretField(
+                        controller: smtpPassword,
+                        decoration: const InputDecoration(
+                            labelText: 'SMTP 密码/授权码，留空不修改'),
+                      ),
+                      SwitchListTile(
+                        value: smtpUseSsl,
+                        onChanged: (value) =>
+                            setDialogState(() => smtpUseSsl = value),
+                        title: const Text('SMTP 使用 SSL'),
+                      ),
+                      const SizedBox(height: 18),
+                      _settingsSectionTitle('系统通知收件人'),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: systemNoticeEmailTo,
+                        decoration: const InputDecoration(
+                          labelText: '系统通知收件人',
+                          helperText: '多个邮箱用英文逗号分隔',
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      ExpansionTile(
+                          title: const Text('旧邮件接口兼容'),
+                          subtitle: const Text('仅旧部署需要，常规发送无需填写'),
+                          childrenPadding: const EdgeInsets.all(12),
+                          children: [
+                            TextField(
+                              controller: hermesBase,
+                              decoration: const InputDecoration(
+                                labelText: '兼容接口地址',
+                                helperText: '一般留空。仅旧部署需要，主/备用通道优先',
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            AdminSecretField(
+                              controller: hermesKey,
+                              decoration: const InputDecoration(
+                                labelText: '兼容接口密钥，留空不修改',
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ]),
+                    ],
+                    if (showPolicy) ...[
+                      SwitchListTile(
+                        value: protectFileAccess,
+                        onChanged: (value) =>
+                            setDialogState(() => protectFileAccess = value),
+                        title: const Text('图片访问需要登录'),
+                        subtitle: const Text('关闭时头像、历史图和分享链接可直接查看；开启后未登录会跳转登录'),
+                      ),
+                      SwitchListTile(
+                        value: forceUpdateEnabled,
+                        onChanged: (value) =>
+                            setDialogState(() => forceUpdateEnabled = value),
+                        title: const Text('要求安装最新 APK'),
+                        subtitle: const Text('开启后旧版本必须升级，最新版本可正常使用'),
+                      ),
+                      SwitchListTile(
+                        value: forceReloginEnabled,
+                        onChanged: (value) =>
+                            setDialogState(() => forceReloginEnabled = value),
+                        title: const Text('要求用户重新登录'),
+                        subtitle: const Text('开启或重新触发后，现有登录会话失效'),
+                      ),
+                    ],
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                      onPressed: saving ? null : () => Navigator.pop(context),
+                      child: const Text('取消')),
+                  FilledButton(
+                    onPressed: saving
+                        ? null
+                        : () async {
+                            if (showProvider &&
+                                (providerPrimaryEnabled ||
+                                    providerBackupEnabled) &&
+                                !(activeProviderSlot == 'backup'
+                                    ? providerBackupEnabled
+                                    : providerPrimaryEnabled)) {
+                              setDialogState(() =>
+                                  formError = '所选生图服务已关闭，请先启用该服务或选择另一条线路。');
+                              return;
+                            }
+                            final raw = <String, String>{
+                              if (showBasic) ...{
+                                'vip_image_quota_multiplier':
+                                    vipImageQuotaMultiplier.text,
+                                'external_access_base_url': externalBase.text
+                              },
+                              if (showWelfare) ...{
+                                'daily_checkin_generate_multiplier':
+                                    generateCheckinMultiplier.text,
+                                'daily_checkin_edit_multiplier':
+                                    editCheckinMultiplier.text
+                              },
+                              if (showDailyImage)
+                                'daily_image_draw_history_limit':
+                                    dailyImageDrawHistoryLimit.text,
+                              if (showProvider) ...{
+                                'provider_timeout_seconds':
+                                    providerTimeout.text,
+                                if (providerHealthcheckEnabled)
+                                  'provider_healthcheck_interval_minutes':
+                                      providerHealthcheckInterval.text,
+                                'provider_base_url': providerBase.text,
+                                'provider_backup_base_url':
+                                    providerBackupBase.text,
+                                'general_provider_base_url':
+                                    generalProviderBase.text,
+                              },
+                              if (showAi) ...{
+                                'prompt_ai_base_url': promptAiBase.text,
+                                'feedback_ai_base_url': feedbackAiBase.text
+                              },
+                              if (showNotification) ...{
+                                'notification_retention_days':
+                                    notificationRetentionDays.text,
+                                'notification_category_limit':
+                                    notificationCategoryLimit.text
+                              },
+                              if (showMail) ...{
+                                'email_smtp_port': smtpPort.text,
+                                'resend_base_url': resendBase.text,
+                                'hermes_base_url': hermesBase.text
+                              },
+                            };
+                            final validation = validateAdminSettingInput(raw);
+                            if (validation != null) {
+                              setDialogState(() => formError = validation);
+                              return;
+                            }
+                            if (showProvider &&
+                                providerPrimaryEnabled &&
+                                providerModel.text.trim().isEmpty) {
+                              setDialogState(
+                                  () => formError = '启用主用服务时需要填写主用生图模型。');
+                              return;
+                            }
+                            final changes = buildAdminSettingsPatch(
+                              initialValues: initialPayload,
+                              values: category == '邮件通道'
+                                  ? mailPayload()
+                                  : settingsPayload(),
+                            );
+                            if (changes.isEmpty) {
+                              Navigator.pop(context, changes);
+                              return;
+                            }
+                            setDialogState(() {
+                              saving = true;
+                              formError = null;
+                            });
+                            try {
+                              await ref
+                                  .read(gatewayClientProvider)
+                                  .saveAdminSystemSettings(changes);
+                              if (!context.mounted) return;
+                              setDialogState(() => saving = false);
+                              Navigator.pop(context, changes);
+                            } catch (error) {
+                              if (context.mounted)
+                                setDialogState(() {
+                                  saving = false;
+                                  formError = friendlyError(error);
+                                });
+                            }
+                          },
+                    child: Text(saving ? '保存中…' : '保存'),
                   ),
-                  SwitchListTile(
-                    value: registrationEmailRequired,
-                    onChanged: (value) =>
-                        setDialogState(() => registrationEmailRequired = value),
-                    title: const Text('注册需要邮箱验证'),
-                    subtitle: const Text('开启后必须填写邮箱并通过验证码；关闭后邮箱可选'),
-                  ),
-                  SwitchListTile(
-                    value: registrationInviteRequired,
-                    onChanged: (value) => setDialogState(
-                        () => registrationInviteRequired = value),
-                    title: const Text('注册需要邀请码'),
-                    subtitle: const Text('开启后必须填写可用邀请码；关闭后不显示邀请码输入'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: vipImageQuotaMultiplier,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: 'VIP 额度倍率',
-                      helperText: '按基础价 2 额度/张计算；0.5 即 5 折，实际 1 额度/张',
-                    ),
-                  ),
-                  const SizedBox(height: 18),
                 ],
-                if (showWelfare) ...[
-                  _settingsSectionTitle('福利设置'),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: generateCheckinMultiplier,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: '签到生图奖励倍数',
-                      helperText: '每日签到发放的生图额度倍率',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: editCheckinMultiplier,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: '签到改图奖励倍数',
-                      helperText: '每日签到发放的改图额度倍率',
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                ],
-                if (showDailyImage) ...[
-                  _settingsSectionTitle('每日一图'),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: dailyImageDrawHistoryLimit,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: '最近记录数量',
-                      helperText: '默认 7 条；超过后只保留最新记录，记录区可滑动查看',
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                ],
-                if (showProvider) ...[
-                  _settingsSectionTitle('VIP 模式线路'),
-                  const SizedBox(height: 8),
-                  TextField(
-                      controller: providerBase,
-                      decoration: const InputDecoration(labelText: '主用线路地址')),
-                  const SizedBox(height: 12),
-                  TextField(
-                      controller: providerKey,
-                      obscureText: true,
-                      decoration:
-                          const InputDecoration(labelText: '主用线路密钥 1，留空不修改')),
-                  const SizedBox(height: 12),
-                  TextField(
-                      controller: providerSecondaryKey,
-                      obscureText: true,
-                      decoration:
-                          const InputDecoration(labelText: '主用线路密钥 2，留空不修改')),
-                  const SizedBox(height: 12),
-                  TextField(
-                      controller: providerBackupBase,
-                      decoration: const InputDecoration(labelText: '备用线路地址')),
-                  const SizedBox(height: 12),
-                  TextField(
-                      controller: providerBackupKey,
-                      obscureText: true,
-                      decoration:
-                          const InputDecoration(labelText: '备用线路密钥 1，留空不修改')),
-                  const SizedBox(height: 12),
-                  TextField(
-                      controller: providerBackupSecondaryKey,
-                      obscureText: true,
-                      decoration:
-                          const InputDecoration(labelText: '备用线路密钥 2，留空不修改')),
-                  const SizedBox(height: 12),
-                  TextField(
-                      controller: providerModel,
-                      decoration: const InputDecoration(
-                        labelText: 'VIP 模型',
-                        helperText: '用于 VIP 模式的 Responses 文本调度和图片工具调用',
-                      )),
-                  const SizedBox(height: 12),
-                  _stringDropdown(
-                      'VIP 图片档位',
-                      profile,
-                      const ['gpt-image-2', 'codex-gpt-image-2', 'gpt-image-1'],
-                      (value) => setDialogState(() => profile = value)),
-                  const SizedBox(height: 12),
-                  TextField(
-                      controller: providerTimeout,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: '超时时间秒')),
-                  const SizedBox(height: 18),
-                  _settingsSectionTitle('一般模式线路'),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: generalProviderBase,
-                    decoration: const InputDecoration(labelText: '一般模式线路地址'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: generalProviderKey,
-                    obscureText: true,
-                    decoration:
-                        const InputDecoration(labelText: '一般模式密钥，留空不修改'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: generalProviderModel,
-                    decoration: const InputDecoration(
-                      labelText: '一般模式文本模型',
-                      helperText: '用于一般模式文本检测；图片生成使用下面的图片模型',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: generalProviderImageModel,
-                    decoration: const InputDecoration(
-                      labelText: '一般模式图片模型',
-                      helperText: '用于一般模式 /v1/images 生图和改图',
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  _settingsSectionTitle('通用生成设置'),
-                  const SizedBox(height: 8),
-                  _stringDropdown(
-                      '当前线路',
-                      activeProviderSlot,
-                      const ['primary', 'backup'],
-                      (value) =>
-                          setDialogState(() => activeProviderSlot = value)),
-                  const SizedBox(height: 12),
-                  SwitchListTile(
-                    value: providerHealthcheckEnabled,
-                    onChanged: (value) => setDialogState(
-                        () => providerHealthcheckEnabled = value),
-                    title: const Text('定时检测线路并自动切换'),
-                    subtitle: const Text('开启后按下方间隔检测主用和备用线路'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                      controller: providerHealthcheckInterval,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: '线路检测间隔分钟')),
-                  const SizedBox(height: 12),
-                  _stringDropdown(
-                      '响应格式',
-                      responseFormat,
-                      const ['url', 'b64_json'],
-                      (value) => setDialogState(() => responseFormat = value)),
-                  const SizedBox(height: 12),
-                  _stringDropdown(
-                      '默认质量',
-                      quality,
-                      const ['auto', 'low', 'medium', 'high'],
-                      (value) => setDialogState(() => quality = value)),
-                  const SizedBox(height: 12),
-                  _stringDropdown(
-                      '默认背景',
-                      background,
-                      const ['auto', 'opaque', 'transparent'],
-                      (value) => setDialogState(() => background = value)),
-                  const SizedBox(height: 12),
-                  _stringDropdown(
-                      '输出格式',
-                      outputFormat,
-                      const ['png', 'jpeg', 'webp'],
-                      (value) => setDialogState(() => outputFormat = value)),
-                  const SizedBox(height: 12),
-                  TextField(
-                      controller: instructions,
-                      maxLines: 3,
-                      decoration: const InputDecoration(
-                        labelText: '模型调用指令',
-                        helperText: '随请求转发给模型的系统级说明',
-                      )),
-                  const SizedBox(height: 16),
-                ],
-                if (showAi) ...[
-                  const Divider(),
-                  const SizedBox(height: 8),
-                  Text(
-                    '反馈 AI 整理',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: feedbackAiBase,
-                    decoration: const InputDecoration(labelText: '反馈整理服务地址'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: feedbackAiKey,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: '反馈整理密钥，留空不修改',
-                      helperText: '展示时会打码；请求应由后端代理执行',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: feedbackAiModel,
-                    decoration: const InputDecoration(labelText: '反馈整理模型'),
-                  ),
-                  const SizedBox(height: 16),
-                  const Divider(),
-                  const SizedBox(height: 8),
-                  Text(
-                    '提示词 AI / 图片识别 AI',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: promptAiBase,
-                    decoration: const InputDecoration(labelText: '提示词服务地址'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: promptAiKey,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: '提示词服务密钥，留空不修改',
-                      helperText: '与反馈 AI 分开保存，避免混淆',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: promptAiModel,
-                    decoration: const InputDecoration(labelText: '提示词服务模型'),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                if (showNotification) ...[
-                  const Divider(),
-                  const SizedBox(height: 8),
-                  Text(
-                    '通知中心',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: notificationRetentionDays,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: '已读通知保留天数',
-                      helperText: '只清理已读通知，未读通知不会按天数自动移除',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: notificationCategoryLimit,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: '每类通知显示上限',
-                      helperText: '通知中心每个分类最多展示的条数',
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                if (showMail) ...[
-                  const Divider(),
-                  const SizedBox(height: 8),
-                  Text(
-                    '邮件服务',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '邮箱验证码和系统通知共用这套邮件服务。当前线路优先发送，另一条线路只在失败后临时兜底；选择“不发送”即可停用对应线路。',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 12),
-                  SwitchListTile(
-                    value: emailServiceEnabled,
-                    onChanged: (value) =>
-                        setDialogState(() => emailServiceEnabled = value),
-                    title: const Text('启用邮件服务'),
-                    subtitle: const Text('关闭后验证码和系统通知都不发邮件'),
-                  ),
-                  const SizedBox(height: 12),
-                  _settingsSectionTitle('发送线路'),
-                  const SizedBox(height: 8),
-                  _stringDropdown(
-                    '主通道',
-                    emailPrimaryProvider,
-                    const ['claw163', 'resend', 'smtp', 'none'],
-                    (value) =>
-                        setDialogState(() => emailPrimaryProvider = value),
-                    labels: _mailProviderLabels,
-                  ),
-                  const SizedBox(height: 12),
-                  _stringDropdown(
-                    '备用通道',
-                    emailBackupProvider,
-                    const ['resend', 'claw163', 'smtp', 'none'],
-                    (value) =>
-                        setDialogState(() => emailBackupProvider = value),
-                    labels: _mailProviderLabels,
-                  ),
-                  const SizedBox(height: 12),
-                  _stringDropdown(
-                    '当前线路',
-                    emailActiveSlot,
-                    const ['primary', 'backup'],
-                    (value) => setDialogState(() => emailActiveSlot = value),
-                    labels: _mailSlotLabels,
-                  ),
-                  const SizedBox(height: 12),
-                  SwitchListTile(
-                    value: emailAutoSwitchEnabled,
-                    onChanged: (value) =>
-                        setDialogState(() => emailAutoSwitchEnabled = value),
-                    title: const Text('发送失败后自动切换'),
-                    subtitle: const Text('关闭时单次可临时走备用但不保存；开启后会持久切换到成功线路'),
-                  ),
-                  const SizedBox(height: 18),
-                  _settingsSectionTitle('Claw163 通道'),
-                  const SizedBox(height: 8),
-                  SwitchListTile(
-                    value: openclawMailEnabled,
-                    onChanged: (value) =>
-                        setDialogState(() => openclawMailEnabled = value),
-                    title: const Text('启用 Claw163 通道'),
-                    subtitle: const Text('只有主通道或备用通道选择 Claw163 时才会使用'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: openclawMailUser,
-                    decoration: const InputDecoration(
-                      labelText: 'Claw163 发件邮箱',
-                      helperText: '例如：bot.image@claw.163.com',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: openclawMailApiKey,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Claw163 服务密钥，留空不修改',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: emailSenderName,
-                    decoration: const InputDecoration(
-                      labelText: '发件人显示名',
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  _settingsSectionTitle('Resend 通道'),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: resendBase,
-                    decoration: const InputDecoration(
-                      labelText: 'Resend 地址',
-                      helperText: '默认 https://api.resend.com',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: resendFrom,
-                    decoration: const InputDecoration(
-                      labelText: 'Resend 发件人',
-                      helperText: '例如：从零开始生图 <noreply@mail.6688667.xyz>',
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: resendKey,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Resend 密钥，留空不修改',
-                      helperText: '可在上方发送策略中设为主通道或备用通道',
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _settingsSectionTitle('SMTP'),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: smtpHost,
-                    decoration: const InputDecoration(labelText: 'SMTP 服务器'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: smtpPort,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'SMTP 端口'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: smtpUsername,
-                    decoration: const InputDecoration(labelText: 'SMTP 用户名/邮箱'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: smtpPassword,
-                    obscureText: true,
-                    decoration:
-                        const InputDecoration(labelText: 'SMTP 密码/授权码，留空不修改'),
-                  ),
-                  SwitchListTile(
-                    value: smtpUseSsl,
-                    onChanged: (value) =>
-                        setDialogState(() => smtpUseSsl = value),
-                    title: const Text('SMTP 使用 SSL'),
-                  ),
-                  const SizedBox(height: 18),
-                  _settingsSectionTitle('系统通知收件人'),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: systemNoticeEmailTo,
-                    decoration: const InputDecoration(
-                      labelText: '系统通知收件人',
-                      helperText: '多个邮箱用英文逗号分隔',
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  _settingsSectionTitle('旧接口兼容'),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: hermesBase,
-                    decoration: const InputDecoration(
-                      labelText: '兼容接口地址',
-                      helperText: '一般留空。仅旧部署需要，主/备用通道优先',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: hermesKey,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: '兼容接口密钥，留空不修改',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                if (showPolicy) ...[
-                  SwitchListTile(
-                    value: protectFileAccess,
-                    onChanged: (value) =>
-                        setDialogState(() => protectFileAccess = value),
-                    title: const Text('图片访问需要登录'),
-                    subtitle: const Text('关闭时头像、历史图和分享链接可直接查看；开启后未登录会跳转登录'),
-                  ),
-                  SwitchListTile(
-                    value: forceUpdateEnabled,
-                    onChanged: (value) =>
-                        setDialogState(() => forceUpdateEnabled = value),
-                    title: const Text('强制更新'),
-                  ),
-                  SwitchListTile(
-                    value: forceReloginEnabled,
-                    onChanged: (value) =>
-                        setDialogState(() => forceReloginEnabled = value),
-                    title: const Text('强制重新登录'),
-                  ),
-                ],
-              ],
-            ),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('取消')),
-              FilledButton(
-                onPressed: () => Navigator.pop(context,
-                    category == '邮件通道' ? mailPayload() : settingsPayload()),
-                child: const Text('保存'),
-              ),
-            ],
-          );
+              ));
         },
       ),
     );
-    notificationRetentionDays.dispose();
-    notificationCategoryLimit.dispose();
-    dailyImageDrawHistoryLimit.dispose();
-    if (payload == null) return;
-    await _save(
-        () => ref.read(gatewayClientProvider).saveAdminSystemSettings(payload),
-        '系统设置已保存。');
+    final payload = await Navigator.of(context, rootNavigator: true)
+        .push<Map<String, dynamic>>(dialogRoute);
+    await dialogRoute.completed;
+    for (final controller in [
+      uiTitle,
+      externalBase,
+      providerBase,
+      providerKey,
+      providerSecondaryKey,
+      providerBackupBase,
+      providerBackupKey,
+      providerBackupSecondaryKey,
+      providerModel,
+      providerBackupModel,
+      generalProviderBase,
+      generalProviderKey,
+      generalProviderModel,
+      generalProviderImageModel,
+      providerTimeout,
+      providerHealthcheckInterval,
+      instructions,
+      feedbackAiBase,
+      feedbackAiKey,
+      feedbackAiModel,
+      promptAiBase,
+      promptAiKey,
+      promptAiModel,
+      openclawMailUser,
+      openclawMailApiKey,
+      emailSenderName,
+      resendBase,
+      resendKey,
+      resendFrom,
+      systemNoticeEmailTo,
+      hermesBase,
+      hermesKey,
+      smtpHost,
+      smtpPort,
+      smtpUsername,
+      smtpPassword,
+      generateCheckinMultiplier,
+      editCheckinMultiplier,
+      vipImageQuotaMultiplier,
+      notificationRetentionDays,
+      notificationCategoryLimit,
+      dailyImageDrawHistoryLimit,
+    ]) {
+      controller.dispose();
+    }
+    if (payload == null || !mounted) return;
+    if (payload.isEmpty) {
+      _showMessage('未修改设置。');
+      _reload();
+      return;
+    }
+    ref.invalidate(imageCapabilitiesProvider);
+    _showMessage('服务器设置已保存。');
+    _reload();
   }
 
   Future<void> _editBackupSettings(List<Map<String, dynamic>> settings) async {
@@ -2903,7 +3541,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           fallback: '1440'),
     );
     final localRetention = TextEditingController(
-      text: _settingValue(byKey, 'local_backup_retention_days', fallback: '14'),
+      text: _settingValue(byKey, 'local_backup_retention_days', fallback: '3'),
     );
     var googleEnabled = _settingBool(byKey, 'google_drive_backup_enabled');
     final googleFolder = TextEditingController(
@@ -2949,208 +3587,346 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       ),
     );
 
-    final payload = await showDialog<Map<String, dynamic>>(
+    var syncCleanup =
+        _settingBool(byKey, 'openlist_backup_sync_cleanup_enabled');
+    final syncRetention = TextEditingController(
+        text: _settingValue(byKey, 'openlist_backup_sync_retention_days',
+            fallback: '3'));
+    final uploadTimeout = TextEditingController(
+        text: _settingValue(byKey, 'openlist_backup_upload_timeout_minutes',
+            fallback: '60'));
+    String? formError;
+    var saving = false;
+    Map<String, dynamic> backupValues() => {
+          'local_backup_enabled': localEnabled,
+          'local_backup_interval_minutes':
+              int.tryParse(localInterval.text.trim()),
+          'local_backup_retention_days':
+              int.tryParse(localRetention.text.trim()),
+          'backup_notification_enabled': backupNotificationEnabled,
+          'google_drive_backup_enabled': googleEnabled,
+          'google_drive_backup_folder_id': googleFolder.text.trim(),
+          if (googleServiceAccount.text.trim().isNotEmpty)
+            'google_drive_service_account_json':
+                googleServiceAccount.text.trim(),
+          'openlist_backup_primary_enabled': openlistPrimaryEnabled,
+          'openlist_backup_primary_webdav_url':
+              openlistPrimaryWebdav.text.trim(),
+          'openlist_backup_primary_public_url':
+              openlistPrimaryPublic.text.trim(),
+          'openlist_backup_primary_username':
+              openlistPrimaryUsername.text.trim(),
+          if (openlistPrimaryPassword.text.trim().isNotEmpty)
+            'openlist_backup_primary_password':
+                openlistPrimaryPassword.text.trim(),
+          'openlist_backup_primary_path':
+              openlistPrimaryPath.text.trim().isEmpty
+                  ? '/gateway-backups'
+                  : openlistPrimaryPath.text.trim(),
+          'openlist_backup_secondary_enabled': openlistSecondaryEnabled,
+          'openlist_backup_secondary_webdav_url':
+              openlistSecondaryWebdav.text.trim(),
+          'openlist_backup_secondary_public_url':
+              openlistSecondaryPublic.text.trim(),
+          'openlist_backup_secondary_username':
+              openlistSecondaryUsername.text.trim(),
+          if (openlistSecondaryPassword.text.trim().isNotEmpty)
+            'openlist_backup_secondary_password':
+                openlistSecondaryPassword.text.trim(),
+          'openlist_backup_secondary_path':
+              openlistSecondaryPath.text.trim().isEmpty
+                  ? '/gateway-backups-secondary'
+                  : openlistSecondaryPath.text.trim(),
+          'openlist_backup_sync_cleanup_enabled': syncCleanup,
+          'openlist_backup_sync_retention_days':
+              int.tryParse(syncRetention.text.trim()),
+          'openlist_backup_upload_timeout_minutes':
+              int.tryParse(uploadTimeout.text.trim()),
+        };
+    final initial = backupValues();
+    final payload = await _showManagedDialog<Map<String, dynamic>>(
       context: context,
+      controllers: [
+        localInterval,
+        localRetention,
+        googleFolder,
+        googleServiceAccount,
+        openlistPrimaryWebdav,
+        openlistPrimaryPublic,
+        openlistPrimaryUsername,
+        openlistPrimaryPassword,
+        openlistPrimaryPath,
+        openlistSecondaryWebdav,
+        openlistSecondaryPublic,
+        openlistSecondaryUsername,
+        openlistSecondaryPassword,
+        openlistSecondaryPath,
+        syncRetention,
+        uploadTimeout
+      ],
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return _adminDialog(
-            title: '数据备份设置',
-            icon: Icons.backup_outlined,
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _settingsSectionTitle('自动备份任务'),
-                const SizedBox(height: 6),
-                Text(
-                  '定时任务控制整套备份：先生成本地包，再按云端同步开关上传。',
-                  style: Theme.of(context).textTheme.bodySmall,
+          builder: (context, setDialogState) => PopScope(
+                canPop: !saving,
+                child: _adminDialog(
+                  title: '数据备份设置',
+                  icon: Icons.backup_outlined,
+                  errorText: formError,
+                  content: Column(mainAxisSize: MainAxisSize.min, children: [
+                    _formSection('自动备份',
+                        description: '定时生成本地备份，再按云端同步开关上传。关闭定时任务后仍可手动备份。',
+                        children: [
+                          SwitchListTile(
+                              value: localEnabled,
+                              onChanged: (value) =>
+                                  setDialogState(() => localEnabled = value),
+                              title: const Text('启用自动备份')),
+                          TextField(
+                              controller: localInterval,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                  labelText: '自动备份间隔',
+                                  suffixText: '分钟',
+                                  helperText: '5～10080 分钟，例如 3600 分钟为 60 小时')),
+                          TextField(
+                              controller: localRetention,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                  labelText: '本地备份保留天数',
+                                  suffixText: '天',
+                                  helperText: '1～365 天；仅清理过期的本地备份')),
+                          SwitchListTile(
+                              value: backupNotificationEnabled,
+                              onChanged: (value) => setDialogState(
+                                  () => backupNotificationEnabled = value),
+                              title: const Text('发送备份结果通知'),
+                              subtitle: const Text('手动备份和自动备份完成后通知系统收件人')),
+                        ]),
+                    ExpansionTile(
+                        title: const Text('Google Drive 同步'),
+                        subtitle: Text(googleEnabled ? '已启用' : '未启用'),
+                        maintainState: true,
+                        childrenPadding: const EdgeInsets.all(12),
+                        children: [
+                          _formSection('Google Drive', children: [
+                            SwitchListTile(
+                                value: googleEnabled,
+                                onChanged: (value) =>
+                                    setDialogState(() => googleEnabled = value),
+                                title: const Text('启用 Google Drive 同步')),
+                            TextField(
+                                controller: googleFolder,
+                                decoration: const InputDecoration(
+                                    labelText: 'Google Drive 文件夹 ID')),
+                            AdminSecretField(
+                                controller: googleServiceAccount,
+                                maxLines: 3,
+                                decoration: const InputDecoration(
+                                    labelText: 'Google 服务账号 JSON',
+                                    helperText:
+                                        '填写 Google Cloud 下载的完整 JSON；留空保留现有值')),
+                          ]),
+                        ]),
+                    ExpansionTile(
+                        title: const Text('OpenList A 同步'),
+                        subtitle: Text(openlistPrimaryEnabled ? '已启用' : '未启用'),
+                        maintainState: true,
+                        childrenPadding: const EdgeInsets.all(12),
+                        children: [
+                          _formSection('OpenList A',
+                              description: '生成本地备份后，将文件上传到 WebDAV 目录。',
+                              children: [
+                                SwitchListTile(
+                                    value: openlistPrimaryEnabled,
+                                    onChanged: (value) => setDialogState(
+                                        () => openlistPrimaryEnabled = value),
+                                    title: const Text('启用 OpenList A 同步')),
+                                TextField(
+                                    controller: openlistPrimaryWebdav,
+                                    keyboardType: TextInputType.url,
+                                    decoration: const InputDecoration(
+                                        labelText: 'WebDAV 上传地址',
+                                        hintText: 'https://example.com/dav')),
+                                TextField(
+                                    controller: openlistPrimaryUsername,
+                                    decoration: const InputDecoration(
+                                        labelText: 'WebDAV 用户名')),
+                                AdminSecretField(
+                                    controller: openlistPrimaryPassword,
+                                    decoration: const InputDecoration(
+                                        labelText: 'WebDAV 密码',
+                                        helperText: '留空保留现有密码；需有上传目录的写入权限')),
+                                TextField(
+                                    controller: openlistPrimaryPath,
+                                    decoration: const InputDecoration(
+                                        labelText: '备份存放目录',
+                                        helperText: '以 / 开头的远端路径')),
+                                TextField(
+                                    controller: openlistPrimaryPublic,
+                                    keyboardType: TextInputType.url,
+                                    decoration: const InputDecoration(
+                                        labelText: '备份访问地址（可选）',
+                                        helperText: '用于生成可打开的远端链接，留空不影响上传')),
+                              ]),
+                        ]),
+                    ExpansionTile(
+                        title: const Text('OpenList B 同步'),
+                        subtitle:
+                            Text(openlistSecondaryEnabled ? '已启用' : '未启用'),
+                        maintainState: true,
+                        childrenPadding: const EdgeInsets.all(12),
+                        children: [
+                          _formSection('OpenList B',
+                              description: '生成本地备份后，将文件上传到 WebDAV 目录。',
+                              children: [
+                                SwitchListTile(
+                                    value: openlistSecondaryEnabled,
+                                    onChanged: (value) => setDialogState(
+                                        () => openlistSecondaryEnabled = value),
+                                    title: const Text('启用 OpenList B 同步')),
+                                TextField(
+                                    controller: openlistSecondaryWebdav,
+                                    keyboardType: TextInputType.url,
+                                    decoration: const InputDecoration(
+                                        labelText: 'WebDAV 上传地址',
+                                        hintText: 'https://example.com/dav')),
+                                TextField(
+                                    controller: openlistSecondaryUsername,
+                                    decoration: const InputDecoration(
+                                        labelText: 'WebDAV 用户名')),
+                                AdminSecretField(
+                                    controller: openlistSecondaryPassword,
+                                    decoration: const InputDecoration(
+                                        labelText: 'WebDAV 密码',
+                                        helperText: '留空保留现有密码；需有上传目录的写入权限')),
+                                TextField(
+                                    controller: openlistSecondaryPath,
+                                    decoration: const InputDecoration(
+                                        labelText: '备份存放目录',
+                                        helperText: '以 / 开头的远端路径')),
+                                TextField(
+                                    controller: openlistSecondaryPublic,
+                                    keyboardType: TextInputType.url,
+                                    decoration: const InputDecoration(
+                                        labelText: '备份访问地址（可选）',
+                                        helperText: '用于生成可打开的远端链接，留空不影响上传')),
+                              ]),
+                        ]),
+                    ExpansionTile(
+                        title: const Text('OpenList 保留与超时'),
+                        subtitle: const Text('云端清理独立于本地保留时间'),
+                        childrenPadding: const EdgeInsets.all(12),
+                        children: [
+                          SwitchListTile(
+                              value: syncCleanup,
+                              onChanged: (value) =>
+                                  setDialogState(() => syncCleanup = value),
+                              title: const Text('清理过期 OpenList 云端备份'),
+                              subtitle: const Text('关闭时保留所有云端副本；开启后按下方天数清理')),
+                          if (syncCleanup)
+                            TextField(
+                                controller: syncRetention,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                    labelText: 'OpenList 云端保留天数',
+                                    suffixText: '天')),
+                          const SizedBox(height: 12),
+                          TextField(
+                              controller: uploadTimeout,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                  labelText: 'OpenList 上传等待上限',
+                                  suffixText: '分钟',
+                                  helperText: '10～720 分钟，网络较慢时可增加')),
+                        ]),
+                  ]),
+                  actions: [
+                    TextButton(
+                        onPressed: saving ? null : () => Navigator.pop(context),
+                        child: const Text('取消')),
+                    FilledButton(
+                        onPressed: saving
+                            ? null
+                            : () async {
+                                final error = validateAdminSettingInput({
+                                  'local_backup_interval_minutes':
+                                      localInterval.text,
+                                  'local_backup_retention_days':
+                                      localRetention.text,
+                                  if (syncCleanup)
+                                    'openlist_backup_sync_retention_days':
+                                        syncRetention.text,
+                                  'openlist_backup_upload_timeout_minutes':
+                                      uploadTimeout.text,
+                                  'openlist_backup_primary_webdav_url':
+                                      openlistPrimaryWebdav.text,
+                                  'openlist_backup_secondary_webdav_url':
+                                      openlistSecondaryWebdav.text,
+                                  'openlist_backup_primary_public_url':
+                                      openlistPrimaryPublic.text,
+                                  'openlist_backup_secondary_public_url':
+                                      openlistSecondaryPublic.text,
+                                });
+                                if (error != null) {
+                                  setDialogState(() => formError = error);
+                                  return;
+                                }
+                                if (googleServiceAccount.text
+                                    .trim()
+                                    .isNotEmpty) {
+                                  try {
+                                    final account =
+                                        jsonDecode(googleServiceAccount.text);
+                                    if (account is! Map ||
+                                        account['client_email'] is! String ||
+                                        account['private_key'] is! String ||
+                                        account['client_email']
+                                            .toString()
+                                            .isEmpty ||
+                                        account['private_key']
+                                            .toString()
+                                            .isEmpty) {
+                                      throw const FormatException();
+                                    }
+                                  } catch (_) {
+                                    setDialogState(() => formError =
+                                        'Google 服务账号需要完整的 JSON 对象，包含 client_email 和 private_key。');
+                                    return;
+                                  }
+                                }
+                                final changes = buildAdminSettingsPatch(
+                                    initialValues: initial,
+                                    values: backupValues());
+                                if (changes.isEmpty) {
+                                  Navigator.pop(context, changes);
+                                  return;
+                                }
+                                setDialogState(() {
+                                  saving = true;
+                                  formError = null;
+                                });
+                                try {
+                                  await ref
+                                      .read(gatewayClientProvider)
+                                      .saveAdminSystemSettings(changes);
+                                  if (!context.mounted) return;
+                                  setDialogState(() => saving = false);
+                                  Navigator.pop(context, changes);
+                                } catch (error) {
+                                  if (context.mounted)
+                                    setDialogState(() {
+                                      saving = false;
+                                      formError = friendlyError(error);
+                                    });
+                                }
+                              },
+                        child: Text(saving ? '保存中…' : '保存')),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                SwitchListTile(
-                  value: localEnabled,
-                  onChanged: (value) =>
-                      setDialogState(() => localEnabled = value),
-                  title: const Text('开启自动备份任务'),
-                ),
-                TextField(
-                  controller: localInterval,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: '自动备份间隔分钟'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: localRetention,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: '本地备份保留天数'),
-                ),
-                SwitchListTile(
-                  value: backupNotificationEnabled,
-                  onChanged: (value) =>
-                      setDialogState(() => backupNotificationEnabled = value),
-                  title: const Text('备份结果通知'),
-                  subtitle: const Text('自动备份和立即备份完成后发送系统通知'),
-                ),
-                const SizedBox(height: 18),
-                _settingsSectionTitle('云端同步 - Google Drive'),
-                SwitchListTile(
-                  value: googleEnabled,
-                  onChanged: (value) =>
-                      setDialogState(() => googleEnabled = value),
-                  title: const Text('启用 Google Drive 同步'),
-                  subtitle: const Text('开启后，自动备份和立即备份都会上传一份到 Google Drive'),
-                ),
-                TextField(
-                  controller: googleFolder,
-                  decoration:
-                      const InputDecoration(labelText: 'Google Drive 文件夹 ID'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: googleServiceAccount,
-                  obscureText: true,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Google 服务账号 JSON，留空不修改',
-                    helperText: '从 Google Cloud 服务账号下载的 JSON',
-                  ),
-                ),
-                const SizedBox(height: 18),
-                _settingsSectionTitle('云端同步 - OpenList A'),
-                SwitchListTile(
-                  value: openlistPrimaryEnabled,
-                  onChanged: (value) =>
-                      setDialogState(() => openlistPrimaryEnabled = value),
-                  title: const Text('启用 OpenList A 同步'),
-                  subtitle: const Text('开启后，备份包会上传到这组 WebDAV 目录'),
-                ),
-                TextField(
-                  controller: openlistPrimaryWebdav,
-                  decoration: const InputDecoration(labelText: 'WebDAV 地址'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: openlistPrimaryPublic,
-                  decoration: const InputDecoration(labelText: '外网打开地址'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: openlistPrimaryUsername,
-                  decoration: const InputDecoration(labelText: '用户名'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: openlistPrimaryPassword,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'WebDAV 密码，留空不修改',
-                    helperText: '用于备份上传；OpenList 后台登录密码需在 OpenList 内单独设置',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: openlistPrimaryPath,
-                  decoration: const InputDecoration(labelText: '远端目录'),
-                ),
-                const SizedBox(height: 18),
-                _settingsSectionTitle('云端同步 - OpenList B'),
-                SwitchListTile(
-                  value: openlistSecondaryEnabled,
-                  onChanged: (value) =>
-                      setDialogState(() => openlistSecondaryEnabled = value),
-                  title: const Text('启用 OpenList B 同步'),
-                  subtitle: const Text('可作为第二份云端备份副本'),
-                ),
-                TextField(
-                  controller: openlistSecondaryWebdav,
-                  decoration: const InputDecoration(labelText: 'WebDAV 地址'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: openlistSecondaryPublic,
-                  decoration: const InputDecoration(labelText: '外网打开地址'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: openlistSecondaryUsername,
-                  decoration: const InputDecoration(labelText: '用户名'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: openlistSecondaryPassword,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'WebDAV 密码，留空不修改',
-                    helperText: '用于备份上传；OpenList 后台登录密码需在 OpenList 内单独设置',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: openlistSecondaryPath,
-                  decoration: const InputDecoration(labelText: '远端目录'),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, {
-                  'local_backup_enabled': localEnabled,
-                  'local_backup_interval_minutes':
-                      int.tryParse(localInterval.text.trim()),
-                  'local_backup_interval_hours':
-                      _minutesToHours(localInterval.text.trim()),
-                  'local_backup_retention_days':
-                      int.tryParse(localRetention.text.trim()),
-                  'backup_notification_enabled': backupNotificationEnabled,
-                  'google_drive_backup_enabled': googleEnabled,
-                  'google_drive_backup_folder_id': googleFolder.text.trim(),
-                  if (googleServiceAccount.text.trim().isNotEmpty)
-                    'google_drive_service_account_json':
-                        googleServiceAccount.text.trim(),
-                  'openlist_backup_primary_enabled': openlistPrimaryEnabled,
-                  'openlist_backup_primary_webdav_url':
-                      openlistPrimaryWebdav.text.trim(),
-                  'openlist_backup_primary_public_url':
-                      openlistPrimaryPublic.text.trim(),
-                  'openlist_backup_primary_username':
-                      openlistPrimaryUsername.text.trim(),
-                  if (openlistPrimaryPassword.text.trim().isNotEmpty)
-                    'openlist_backup_primary_password':
-                        openlistPrimaryPassword.text.trim(),
-                  'openlist_backup_primary_path':
-                      openlistPrimaryPath.text.trim().isEmpty
-                          ? '/gateway-backups'
-                          : openlistPrimaryPath.text.trim(),
-                  'openlist_backup_secondary_enabled': openlistSecondaryEnabled,
-                  'openlist_backup_secondary_webdav_url':
-                      openlistSecondaryWebdav.text.trim(),
-                  'openlist_backup_secondary_public_url':
-                      openlistSecondaryPublic.text.trim(),
-                  'openlist_backup_secondary_username':
-                      openlistSecondaryUsername.text.trim(),
-                  if (openlistSecondaryPassword.text.trim().isNotEmpty)
-                    'openlist_backup_secondary_password':
-                        openlistSecondaryPassword.text.trim(),
-                  'openlist_backup_secondary_path':
-                      openlistSecondaryPath.text.trim().isEmpty
-                          ? '/gateway-backups-secondary'
-                          : openlistSecondaryPath.text.trim(),
-                }),
-                child: const Text('保存'),
-              ),
-            ],
-          );
-        },
-      ),
+              )),
     );
-    if (payload == null) return;
-    await _save(
-      () => ref.read(gatewayClientProvider).saveAdminSystemSettings(payload),
-      '备份设置已保存。',
-    );
+    if (payload == null || !mounted) return;
+    _showMessage(payload.isEmpty ? '未修改备份设置。' : '备份设置已保存。');
+    _reload();
   }
 
   Future<void> _runLocalBackup() async {
@@ -3213,8 +3989,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 
   Future<void> _createInvitationCodes() async {
     final countController = TextEditingController(text: '5');
-    final count = await showDialog<int>(
+    final count = await _showManagedDialog<int>(
       context: context,
+      controllers: [countController],
       builder: (context) => _adminDialog(
         title: '生成邀请码',
         icon: Icons.add_card,
@@ -3246,7 +4023,6 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         ],
       ),
     );
-    countController.dispose();
     if (count == null) return;
     if (count < 1 || count > 100) {
       _showMessage('生成数量需为 1 到 100。', isError: true);
@@ -3309,8 +4085,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final title = TextEditingController();
     final body = TextEditingController();
     var notify = true;
-    final payload = await showDialog<Map<String, dynamic>>(
+    final payload = await _showManagedDialog<Map<String, dynamic>>(
       context: context,
+      controllers: [title, body],
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return _adminDialog(
@@ -3357,8 +4134,6 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         },
       ),
     );
-    title.dispose();
-    body.dispose();
     if (payload == null) return;
     if (_text(payload['title'], fallback: '').length < 2 ||
         _text(payload['body'], fallback: '').length < 2) {
@@ -3390,8 +4165,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         TextEditingController(text: _text(item['title'], fallback: ''));
     final body = TextEditingController(text: _text(item['body'], fallback: ''));
     var isPublished = item['is_published'] != false;
-    final payload = await showDialog<Map<String, dynamic>>(
+    final payload = await _showManagedDialog<Map<String, dynamic>>(
       context: context,
+      controllers: [title, body],
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return _adminDialog(
@@ -3439,8 +4215,6 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         },
       ),
     );
-    title.dispose();
-    body.dispose();
     if (payload == null) return;
     if (_text(payload['title'], fallback: '').length < 2 ||
         _text(payload['body'], fallback: '').length < 2) {
@@ -3506,8 +4280,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final generate = TextEditingController(text: '0');
     final edit = TextEditingController(text: '0');
     var notify = true;
-    final payload = await showDialog<Map<String, dynamic>>(
+    final payload = await _showManagedDialog<Map<String, dynamic>>(
       context: context,
+      controllers: [title, body, generate, edit],
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return _adminDialog(
@@ -3576,10 +4351,6 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         },
       ),
     );
-    title.dispose();
-    body.dispose();
-    generate.dispose();
-    edit.dispose();
     if (payload == null) return;
     final generateBonus = payload['generate'] as int? ?? 0;
     final editBonus = payload['edit'] as int? ?? 0;
@@ -3613,13 +4384,15 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     required TextEditingController name,
     required TextEditingController description,
     required List<Widget> extraFields,
+    List<TextEditingController> extraControllers = const [],
     required bool active,
     required void Function(bool active) onActiveChanged,
     required Map<String, dynamic> Function() payloadBuilder,
   }) {
     var isActive = active;
-    return showDialog<Map<String, dynamic>>(
+    return _showManagedDialog<Map<String, dynamic>>(
       context: context,
+      controllers: [name, description, ...extraControllers],
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return _adminDialog(
@@ -3669,7 +4442,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     required void Function(String value) onChanged,
   }) {
     return DropdownButtonFormField<String>(
-      initialValue: value.isEmpty ? null : value,
+      isExpanded: true,
+      initialValue:
+          items.any((item) => item['id'].toString() == value) ? value : null,
       decoration: InputDecoration(labelText: label),
       items: items
           .map(
@@ -3692,24 +4467,18 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     void Function(String value) onChanged, {
     Map<String, String> labels = const {},
   }) {
-    final safeValue = items.contains(value) ? value : items.first;
+    final choices = <String>{...items, if (value.isNotEmpty) value}.toList();
     return DropdownButtonFormField<String>(
-      initialValue: safeValue,
+      isExpanded: true,
+      initialValue: value.isEmpty && !choices.contains('') ? null : value,
       decoration: InputDecoration(labelText: label),
-      items: items
+      items: choices
           .map((item) => DropdownMenuItem<String>(
               value: item, child: Text(labels[item] ?? item)))
           .toList(),
       onChanged: (value) {
         if (value != null) onChanged(value);
       },
-    );
-  }
-
-  Future<void> _probeCapabilities() async {
-    await _save(
-      () => ref.read(gatewayClientProvider).probeImageCapabilities(),
-      '图片尺寸探测已完成。',
     );
   }
 
@@ -3738,7 +4507,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       child: Text(
         title,
         style: TextStyle(
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w500,
           color: scheme.primary,
         ),
       ),
@@ -3787,13 +4556,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     if (apply != true) return;
     try {
       _showMessage('正在切换推荐线路...');
-      final switched = await ref
+      await ref
           .read(gatewayClientProvider)
-          .providerHealthcheck(applySwitch: true);
+          .saveAdminSystemSettings({'provider_active_slot': recommended});
       if (!mounted) return;
-      final newSlot =
-          _text(switched['recommended_slot'], fallback: recommended);
-      _showMessage('已切换到 $newSlot。');
+      final newSlot = recommended;
+      _showMessage('已切换到${_providerSlotLabel(newSlot)}。');
       _reload();
     } catch (error) {
       if (!mounted) return;
@@ -3828,7 +4596,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       children: [
         Text(
           '$label线路',
-          style: const TextStyle(fontWeight: FontWeight.w700),
+          style: const TextStyle(fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 4),
         ...lines.map((line) => Text('- $line')),
@@ -3911,15 +4679,6 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       return '${minutes ~/ 60} 小时';
     }
     return '$minutes 分钟';
-  }
-
-  int? _minutesToHours(String value) {
-    final minutes = int.tryParse(value.trim());
-    if (minutes == null) return null;
-    final hours = (minutes / 60).round();
-    if (hours < 1) return 1;
-    if (hours > 168) return 168;
-    return hours;
   }
 
   DateTime _backupCreatedAt(Map<String, dynamic> item) {
@@ -4053,47 +4812,23 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         key.startsWith('force_relogin')) {
       return '系统策略';
     }
-    if (key.contains('backup') ||
-        key.startsWith('google_drive_') ||
-        key.startsWith('openlist_')) {
-      return '数据备份';
-    }
     if (key.startsWith('provider_') ||
         key.startsWith('general_provider_') ||
         key.startsWith('default_')) {
       return '生成线路';
     }
+    if (key.contains('backup') ||
+        key.startsWith('google_drive_') ||
+        key.startsWith('openlist_')) {
+      return '数据备份';
+    }
     return '基础设置';
   }
 
-  String _settingLabel(String key) {
-    const labels = {
-      'ui_title': '标题',
-      'external_access_base_url': '公开地址',
-      'allow_public_registration': '自助注册',
-      'registration_email_required': '注册邮箱验证',
-      'registration_invite_required': '注册邀请码',
-      'provider_active_slot': '线路',
-      'provider_model': 'VIP 模型',
-      'general_provider_image_model': '普通图片模型',
-      'vip_image_quota_multiplier': 'VIP 额度倍率',
-      'daily_checkin_generate_multiplier': '签到生图奖励',
-      'daily_checkin_edit_multiplier': '签到改图奖励',
-      'daily_image_draw_history_limit': '每日一图记录',
-      'notification_retention_days': '已读通知清理',
-      'notification_category_limit': '每类显示上限',
-      'email_service_enabled': '邮件总开关',
-      'openclaw_mail_enabled': 'Claw163 通道',
-      'openclaw_mail_user': 'Claw163 发件邮箱',
-      'email_code_primary_provider': '主通道',
-      'email_code_backup_provider': '备用通道',
-      'email_code_active_slot': '当前使用线路',
-      'email_auto_switch_enabled': '自动切换',
-      'force_app_update_enabled': '强制更新',
-      'force_relogin_enabled': '强制重登',
-      'protect_file_access': '图片登录访问',
-    };
-    return labels[key] ?? key;
+  String _settingLabel(String key, {bool runtime = false}) {
+    return (runtime ? adminRuntimeLabels[key] : null) ??
+        adminSettingLabels[key] ??
+        '高级设置';
   }
 
   Future<void> _copyText(String text, String success) async {
@@ -4118,6 +4853,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 
   void _reload() {
     if (!mounted) return;
+    _requests.clear();
     setState(() => _revision += 1);
   }
 
@@ -4201,7 +4937,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       },
       {
         'key': 'provider_secondary_api_key',
-        'value': 'xxx',
+        'value': '',
+        'is_sensitive': true,
         'description': '主用线路备用密钥',
       },
       {
@@ -4211,12 +4948,14 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       },
       {
         'key': 'provider_backup_api_key',
-        'value': 'xxx',
+        'value': '',
+        'is_sensitive': true,
         'description': '备用线路密钥',
       },
       {
         'key': 'provider_backup_secondary_api_key',
-        'value': 'xxx',
+        'value': '',
+        'is_sensitive': true,
         'description': '备用线路第二密钥',
       },
       {
@@ -4226,7 +4965,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       },
       {
         'key': 'provider_healthcheck_enabled',
-        'value': 'true',
+        'value': 'false',
         'description': '是否定时检测并自动切换主备线路',
       },
       {
@@ -4266,7 +5005,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       },
       {
         'key': 'general_provider_api_key',
-        'value': 'xxx',
+        'value': '',
+        'is_sensitive': true,
         'description': '一般模式密钥',
       },
       {
@@ -4281,7 +5021,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       },
       {
         'key': 'feedback_ai_api_key',
-        'value': 'xxx',
+        'value': '',
+        'is_sensitive': true,
         'description': '反馈 AI 整理密钥',
       },
       {
@@ -4311,7 +5052,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       },
       {
         'key': 'prompt_ai_api_key',
-        'value': 'xxx',
+        'value': '',
+        'is_sensitive': true,
         'description': '提示词生成与图片识别 AI 密钥',
       },
       {
@@ -4361,7 +5103,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       },
       {
         'key': 'openclaw_mail_api_key',
-        'value': 'xxx',
+        'value': '',
+        'is_sensitive': true,
         'description': 'Claw163 服务密钥',
       },
       {
@@ -4371,7 +5114,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       },
       {
         'key': 'resend_api_key',
-        'value': 'xxx',
+        'value': '',
+        'is_sensitive': true,
         'description': 'Resend 密钥',
       },
       {
@@ -4401,7 +5145,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       },
       {
         'key': 'hermes_api_key',
-        'value': 'xxx',
+        'value': '',
+        'is_sensitive': true,
         'description': '旧接口兼容密钥',
       },
       {
@@ -4421,7 +5166,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       },
       {
         'key': 'email_smtp_password',
-        'value': 'xxx',
+        'value': '',
+        'is_sensitive': true,
         'description': 'SMTP 登录密码或授权码',
       },
       {
@@ -4456,7 +5202,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       },
       {
         'key': 'google_drive_service_account_json',
-        'value': 'xxx',
+        'value': '',
+        'is_sensitive': true,
         'description': 'Google Drive 服务账号 JSON',
       },
       {
@@ -4481,7 +5228,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       },
       {
         'key': 'openlist_backup_primary_password',
-        'value': 'xxx',
+        'value': '',
+        'is_sensitive': true,
         'description': 'OpenList A WebDAV 密码',
       },
       {
@@ -4511,7 +5259,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       },
       {
         'key': 'openlist_backup_secondary_password',
-        'value': 'xxx',
+        'value': '',
+        'is_sensitive': true,
         'description': 'OpenList B WebDAV 密码',
       },
       {
@@ -4526,24 +5275,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     ];
   }
 
-  String _displaySettingValue(Map<String, dynamic> setting) {
-    final key = _text(setting['key'], fallback: '');
-    final value = _text(setting['value'], fallback: '未设置');
-    if (key.contains('api_key') ||
-        key.endsWith('_key') ||
-        key.endsWith('_password') ||
-        key.contains('service_account')) {
-      return _maskSecret(value);
-    }
-    return value;
-  }
-
-  String _maskSecret(String value) {
-    final text = value.trim();
-    if (text.isEmpty || text == '未设置') return '未设置';
-    if (text.length <= 6) return '***';
-    return '${text.substring(0, 2)}***${text.substring(text.length - 2)}';
-  }
+  String _displaySettingValue(Map<String, dynamic> setting) =>
+      adminSettingValue(_text(setting['key']), setting['value'],
+          sensitive: setting['is_sensitive'] == true);
 
   String _settingValue(
     Map<String, Map<String, dynamic>> settings,

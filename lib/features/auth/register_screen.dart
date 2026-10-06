@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_error.dart';
 import '../../core/brand_background.dart';
+import '../../core/frontend_widgets.dart';
 import '../../core/compact_save_notice.dart';
 import '../../core/providers.dart';
 import '../home/home_screen.dart';
@@ -279,6 +280,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.all(24),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 560),
@@ -299,6 +301,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         ),
                         const SizedBox(height: 24),
                         TextField(
+                          onTapOutside: (_) =>
+                              FocusManager.instance.primaryFocus?.unfocus(),
                           controller: _usernameController,
                           onChanged: (_) {
                             if (_usernameError != null) {
@@ -308,11 +312,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           decoration: InputDecoration(
                             labelText: '账号',
                             helperText: '4-24 位，小写字母开头，可用数字、下划线和短横线',
+                            helperMaxLines: 5,
                             errorText: _usernameError,
+                            errorMaxLines: 5,
                           ),
                         ),
                         const SizedBox(height: 12),
                         TextField(
+                          onTapOutside: (_) =>
+                              FocusManager.instance.primaryFocus?.unfocus(),
                           controller: _displayNameController,
                           onChanged: (_) {
                             if (_displayNameError != null) {
@@ -322,11 +330,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           decoration: InputDecoration(
                             labelText: '显示名称',
                             helperText: '2-32 个字符',
+                            helperMaxLines: 5,
                             errorText: _displayNameError,
+                            errorMaxLines: 5,
                           ),
                         ),
                         const SizedBox(height: 12),
                         TextField(
+                          onTapOutside: (_) =>
+                              FocusManager.instance.primaryFocus?.unfocus(),
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
                           onChanged: (_) {
@@ -341,54 +353,52 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           decoration: InputDecoration(
                             labelText: _emailRequired ? '邮箱' : '邮箱（可选）',
                             helperText: '绑定后可用邮箱密码登录和找回密码',
+                            helperMaxLines: 5,
                             errorText: _emailError,
+                            errorMaxLines: 5,
                           ),
                         ),
                         const SizedBox(height: 12),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _emailCodeController,
-                                keyboardType: TextInputType.number,
-                                onChanged: (_) {
-                                  if (_emailCodeError != null) {
-                                    setState(() => _emailCodeError = null);
-                                  }
-                                },
-                                decoration: InputDecoration(
-                                  labelText: '邮箱验证码',
-                                  errorText: _emailCodeError,
-                                ),
-                              ),
+                        FrontendFieldWithAction(
+                          field: TextField(
+                            onTapOutside: (_) =>
+                                FocusManager.instance.primaryFocus?.unfocus(),
+                            controller: _emailCodeController,
+                            keyboardType: TextInputType.number,
+                            onChanged: (_) {
+                              if (_emailCodeError != null) {
+                                setState(() => _emailCodeError = null);
+                              }
+                            },
+                            decoration: InputDecoration(
+                              labelText: '邮箱验证码',
+                              errorText: _emailCodeError,
+                              errorMaxLines: 5,
                             ),
-                            const SizedBox(width: 12),
-                            SizedBox(
-                              height: 56,
-                              child: OutlinedButton(
-                                onPressed: _isSendingEmailCode ||
-                                        _emailCooldownSeconds > 0
+                          ),
+                          action: OutlinedButton(
+                            onPressed:
+                                _isSendingEmailCode || _emailCooldownSeconds > 0
                                     ? null
                                     : _sendEmailCode,
-                                child: _isSendingEmailCode
-                                    ? const SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : Text(_emailCooldownSeconds > 0
-                                        ? '${_emailCooldownSeconds}s'
-                                        : '发送邮件'),
-                              ),
-                            ),
-                          ],
+                            child: _isSendingEmailCode
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Text(_emailCooldownSeconds > 0
+                                    ? '${_emailCooldownSeconds}s'
+                                    : '发送邮件'),
+                          ),
                         ),
                         const SizedBox(height: 12),
                         if (_inviteRequired) ...[
                           TextField(
+                            onTapOutside: (_) =>
+                                FocusManager.instance.primaryFocus?.unfocus(),
                             controller: _invitationCodeController,
                             textCapitalization: TextCapitalization.characters,
                             onChanged: (_) {
@@ -399,12 +409,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             decoration: InputDecoration(
                               labelText: '邀请码',
                               helperText: '向管理员获取，每个邀请码只能使用一次',
+                              helperMaxLines: 5,
                               errorText: _invitationCodeError,
+                              errorMaxLines: 5,
                             ),
                           ),
                           const SizedBox(height: 12),
                         ],
                         TextField(
+                          onTapOutside: (_) =>
+                              FocusManager.instance.primaryFocus?.unfocus(),
                           controller: _passwordController,
                           obscureText: true,
                           onChanged: (_) {
@@ -419,11 +433,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           decoration: InputDecoration(
                             labelText: '密码',
                             helperText: '至少 10 位，需包含大小写字母、数字和特殊字符',
+                            helperMaxLines: 5,
                             errorText: _passwordError,
+                            errorMaxLines: 5,
                           ),
                         ),
                         const SizedBox(height: 12),
                         TextField(
+                          onTapOutside: (_) =>
+                              FocusManager.instance.primaryFocus?.unfocus(),
                           controller: _confirmPasswordController,
                           obscureText: true,
                           onChanged: (_) {
@@ -434,6 +452,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           decoration: InputDecoration(
                             labelText: '确认密码',
                             errorText: _confirmPasswordError,
+                            errorMaxLines: 5,
                           ),
                         ),
                         const SizedBox(height: 24),

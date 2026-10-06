@@ -8,16 +8,7 @@ String utcMidnightLocalResetHint() {
   final local = nextUtcMidnight.toLocal();
   final hour = local.hour.toString().padLeft(2, '0');
   final minute = local.minute.toString().padLeft(2, '0');
-  return '按 UTC 00:00 重置，本地约 $hour:$minute';
-}
-
-String timezoneRequestHint() {
-  final offset = DateTime.now().timeZoneOffset;
-  final sign = offset.isNegative ? '-' : '+';
-  final absMinutes = offset.inMinutes.abs();
-  final hours = (absMinutes ~/ 60).toString().padLeft(2, '0');
-  final minutes = (absMinutes % 60).toString().padLeft(2, '0');
-  return '已向接口传入本地时区 UTC$sign$hours:$minutes';
+  return '每日重置：本地时间 $hour:$minute';
 }
 
 String resetHintFromResponse(Map<String, dynamic> data) {
@@ -38,7 +29,7 @@ String resetHintFromResponse(Map<String, dynamic> data) {
   }
   final mode = data['timezone_mode']?.toString().toLowerCase() ?? '';
   if (mode == 'local') {
-    return '按本地日历日统计，${timezoneRequestHint()}';
+    return '每日重置：本地时间 00:00';
   }
-  return '${utcMidnightLocalResetHint()}，${timezoneRequestHint()}';
+  return utcMidnightLocalResetHint();
 }

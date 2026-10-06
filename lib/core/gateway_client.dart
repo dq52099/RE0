@@ -2,8 +2,12 @@ import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'image_request_recovery.dart';
 
 import 'api_error.dart';
+import 'admin_settings_sync.dart';
 import 'prompt_assist.dart';
 
 class GatewayClient {
@@ -13,15 +17,22 @@ class GatewayClient {
   String baseUrl = '';
   PersistCookieJar? cookieJar;
 
-  GatewayClient() {
-    _dio = Dio(BaseOptions(
-      connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(minutes: 5),
-      contentType: 'application/json',
-    ));
+  final void Function(String?)? onImageRecoveryStatus;
+  String? _userId;
+  bool? _imageRecoveryEnabled;
+  ImageRequestRecovery? _imageRecovery;
+
+  GatewayClient({Dio? dio, this.onImageRecoveryStatus}) {
+    _dio = dio ??
+        Dio(BaseOptions(
+          connectTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(minutes: 5),
+          contentType: 'application/json',
+        ));
   }
 
   Future<void> init(String url) async {
+    if (baseUrl != url) _setSessionUser(null);
     baseUrl = url;
     _dio.options.baseUrl = url;
     final dir = await getApplicationDocumentsDirectory();
@@ -32,6 +43,7 @@ class GatewayClient {
   }
 
   Future<void> updateBaseUrl(String url) async {
+    if (baseUrl != url) _setSessionUser(null);
     baseUrl = url;
     _dio.options.baseUrl = url;
   }
@@ -53,7 +65,9 @@ class GatewayClient {
         'username': username,
         'password': password,
       });
-      return Map<String, dynamic>.from(res.data as Map);
+      final result = Map<String, dynamic>.from(res.data as Map);
+      _setSessionUser(result['user'] is Map ? result['user'] as Map : result);
+      return result;
     }, fallback: '登录失败，请检查账号和密码。');
   }
 
@@ -83,7 +97,9 @@ class GatewayClient {
         'email': email,
         'code': code,
       });
-      return Map<String, dynamic>.from(res.data as Map);
+      final result = Map<String, dynamic>.from(res.data as Map);
+      _setSessionUser(result['user'] is Map ? result['user'] as Map : result);
+      return result;
     }, fallback: '邮箱验证码登录失败。');
   }
 
@@ -138,18 +154,23 @@ class GatewayClient {
   Future<Map<String, dynamic>> checkAuth() async {
     return _guard(() async {
       final res = await _dio.get('/api/auth/me');
-      return Map<String, dynamic>.from(res.data as Map);
+      final result = Map<String, dynamic>.from(res.data as Map);
+      _setSessionUser(result['user'] is Map ? result['user'] as Map : result);
+      return result;
     }, fallback: '登录状态已失效。');
   }
 
   Future<void> logout() async {
     await _guard(() async {
       await _dio.post('/api/auth/logout');
+      _setSessionUser(null);
+      await Future<void>.delayed(Duration.zero);
       await cookieJar?.deleteAll();
     }, fallback: '退出登录失败。');
   }
 
   Future<void> clearLocalSession() async {
+    _setSessionUser(null);
     await cookieJar?.deleteAll();
   }
 
@@ -192,10 +213,62 @@ class GatewayClient {
     }, fallback: '下载失败。');
   }
 
+  void _setSessionUser(Map? user) {
+    final id = user?['id']?.toString();
+    if (id == _userId) return;
+    _imageRecovery?.stop();
+    _imageRecovery = null;
+    _imageRecoveryEnabled = null;
+    _userId = id;
+  }
+
+  String get _imageRequestStorageKey =>
+      'pending_image_request_${Uri.encodeComponent(baseUrl)}_$_userId';
+
+  Future<ImageRequestRecovery?> _recovery({bool checkSupport = true}) async {
+    if (_userId == null) return null;
+    final owner = _userId;
+    final server = baseUrl;
+    if (checkSupport && _imageRecoveryEnabled == null)
+      await imageCapabilities();
+    if (_userId != owner || baseUrl != server) {
+      throw const GatewayException('账号或服务器已切换，请重新操作。');
+    }
+    if (checkSupport && _imageRecoveryEnabled != true) return null;
+    if (_imageRecovery != null) return _imageRecovery;
+    final prefs = await SharedPreferences.getInstance();
+    if (_userId != owner || baseUrl != server) {
+      throw const GatewayException('账号或服务器已切换，请重新操作。');
+    }
+    return _imageRecovery ??= ImageRequestRecovery(
+      dio: _dio,
+      prefs: prefs,
+      storageKey: _imageRequestStorageKey,
+      onStatus: onImageRecoveryStatus,
+    );
+  }
+
+  Future<Map<String, dynamic>?> pendingImageRequest() async {
+    if (_userId == null || _imageRecovery?.busy == true) return null;
+    final prefs = await SharedPreferences.getInstance();
+    if (!prefs.containsKey(_imageRequestStorageKey)) return null;
+    return (await _recovery(checkSupport: false))?.pending;
+  }
+
+  Future<Map<String, dynamic>?> recoverPendingImageRequest() async =>
+      (await _recovery(checkSupport: false))?.resume();
+
   Future<Map<String, dynamic>> imageCapabilities() async {
     return _guard(() async {
+      final owner = _userId;
+      final server = baseUrl;
       final res = await _dio.get('/api/meta/image-capabilities');
-      return Map<String, dynamic>.from(res.data as Map);
+      final result = Map<String, dynamic>.from(res.data as Map);
+      if (_userId == owner && baseUrl == server) {
+        _imageRecoveryEnabled =
+            (result['request_recovery'] as Map?)?['enabled'] == true;
+      }
+      return result;
     }, fallback: '读取图片参数失败。');
   }
 
@@ -210,25 +283,33 @@ class GatewayClient {
     String? imageMode,
   }) async {
     try {
-      final res = await _dio.post(
-        '/api/images/generate',
-        data: {
-          'prompt': runes,
-          'n': count,
-          'size': size,
-          'quality': quality,
-          'background': background,
-          'output_format': outputFormat,
-          'response_format': 'url',
-          if (clientBatchIndex != null) 'client_batch_index': clientBatchIndex,
-          if (imageMode != null && imageMode.isNotEmpty)
-            'image_mode': imageMode,
-        },
-        options: Options(
-          receiveTimeout: _imageRequestTimeout,
-          sendTimeout: _imageRequestTimeout,
-        ),
-      );
+      Future<Response<dynamic>> submit(String? requestId) => _dio.post(
+            '/api/images/generate',
+            data: {
+              'prompt': runes,
+              'n': count,
+              'size': size,
+              'quality': quality,
+              'background': background,
+              'output_format': outputFormat,
+              'response_format': 'url',
+              if (clientBatchIndex != null)
+                'client_batch_index': clientBatchIndex,
+              if (imageMode != null && imageMode.isNotEmpty)
+                'image_mode': imageMode,
+            },
+            options: Options(
+              headers: {if (requestId != null) 'X-Image-Request-Id': requestId},
+              receiveTimeout: _imageRequestTimeout,
+              sendTimeout: _imageRequestTimeout,
+            ),
+          );
+      final recovery = await _recovery();
+      if (recovery != null) {
+        return await recovery.run(
+            action: 'generate', prompt: runes, count: count, submit: submit);
+      }
+      final res = await submit(null);
       return Map<String, dynamic>.from(res.data as Map);
     } on DioException catch (error) {
       final partial = _partialImageResponse(error.response?.data);
@@ -251,26 +332,37 @@ class GatewayClient {
     String? imageMode,
   }) async {
     try {
-      final formData = FormData.fromMap({
-        'prompt': runes,
-        'n': count,
-        'size': size,
-        'quality': quality,
-        'background': background,
-        'output_format': outputFormat,
-        'response_format': 'url',
-        if (clientBatchIndex != null) 'client_batch_index': clientBatchIndex,
-        if (imageMode != null && imageMode.isNotEmpty) 'image_mode': imageMode,
-        'image': await MultipartFile.fromFile(imagePath),
-      });
-      final res = await _dio.post(
-        '/api/images/edit',
-        data: formData,
-        options: Options(
-          receiveTimeout: _imageRequestTimeout,
-          sendTimeout: _imageRequestTimeout,
-        ),
-      );
+      Future<Response<dynamic>> submit(String? requestId) async {
+        final formData = FormData.fromMap({
+          'prompt': runes,
+          'n': count,
+          'size': size,
+          'quality': quality,
+          'background': background,
+          'output_format': outputFormat,
+          'response_format': 'url',
+          if (clientBatchIndex != null) 'client_batch_index': clientBatchIndex,
+          if (imageMode != null && imageMode.isNotEmpty)
+            'image_mode': imageMode,
+          'image': await MultipartFile.fromFile(imagePath),
+        });
+        return _dio.post(
+          '/api/images/edit',
+          data: formData,
+          options: Options(
+            headers: {if (requestId != null) 'X-Image-Request-Id': requestId},
+            receiveTimeout: _imageRequestTimeout,
+            sendTimeout: _imageRequestTimeout,
+          ),
+        );
+      }
+
+      final recovery = await _recovery();
+      if (recovery != null) {
+        return await recovery.run(
+            action: 'edit', prompt: runes, count: count, submit: submit);
+      }
+      final res = await submit(null);
       return Map<String, dynamic>.from(res.data as Map);
     } on DioException catch (error) {
       final partial = _partialImageResponse(error.response?.data);
@@ -978,8 +1070,12 @@ class GatewayClient {
     Map<String, dynamic> payload,
   ) async {
     return _guard(() async {
-      final res = await _dio.post('/api/admin/system-settings', data: payload);
-      return Map<String, dynamic>.from(res.data as Map);
+      final normalized = normalizeAdminSettingsValues(payload);
+      final res =
+          await _dio.post('/api/admin/system-settings', data: normalized);
+      final saved = Map<String, dynamic>.from(res.data as Map);
+      verifyAdminSettingsSaved(normalized, saved);
+      return saved;
     }, fallback: '保存系统设置失败。');
   }
 

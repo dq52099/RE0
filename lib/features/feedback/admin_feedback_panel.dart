@@ -5,6 +5,7 @@ import '../../core/api_error.dart';
 import '../../core/compact_dropdown_field.dart';
 import '../../core/compact_save_notice.dart';
 import '../../core/providers.dart';
+import '../../core/frontend_widgets.dart';
 import 'feedback_utils.dart';
 
 enum AdminFeedbackPanelMode { list, automation, insights }
@@ -210,7 +211,7 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
               Text(
                 feedbackText(item['title']),
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w500,
                     ),
               ),
               const SizedBox(height: 6),
@@ -275,7 +276,7 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+          Text(title, style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
           SelectableText(text),
         ],
@@ -317,7 +318,7 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('AI 整理', style: TextStyle(fontWeight: FontWeight.w700)),
+          Text('AI 整理', style: Theme.of(context).textTheme.titleSmall),
           if (summary.isNotEmpty) ...[
             const SizedBox(height: 8),
             SelectableText(summary),
@@ -377,49 +378,31 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
         fallback: aiField(item, ['reply_draft', 'ai_reply_draft']),
       ),
     );
-    final reply = await showDialog<String>(
+    final saved = await showFrontendDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('管理员回复'),
-        content: TextField(
-          controller: controller,
-          minLines: 4,
-          maxLines: 8,
-          decoration: const InputDecoration(hintText: '写给用户的处理说明'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('保存回复'),
+      barrierDismissible: false,
+      controllers: [controller],
+      builder: (_) => FrontendSaveDialog(
+        title: '管理员回复',
+        fields: [
+          TextField(
+            controller: controller,
+            minLines: 4,
+            maxLines: 8,
+            decoration: const InputDecoration(hintText: '写给用户的处理说明'),
           ),
         ],
+        onSave: () async {
+          final reply = controller.text.trim();
+          if (reply.isEmpty) throw StateError('回复内容不能为空。');
+          await ref.read(gatewayClientProvider).replyAdminFeedback(id, reply);
+        },
       ),
     );
-    controller.dispose();
-    if (reply == null) return;
-    if (reply.isEmpty) {
-      _showError('回复内容不能为空。', '回复内容不能为空。');
-      return;
-    }
-    setState(() => _busyIds.add(id));
-    try {
-      await ref.read(gatewayClientProvider).replyAdminFeedback(id, reply);
-      if (!mounted) return;
-      Navigator.of(context).maybePop();
-      showCenterNotice(context, '回复已保存');
-      setState(_reload);
-    } catch (error) {
-      if (!mounted) return;
-      _showError(error, '回复反馈失败。');
-    } finally {
-      if (mounted) {
-        setState(() => _busyIds.remove(id));
-      }
-    }
+    if (!mounted || saved != true) return;
+    Navigator.of(context).maybePop();
+    showCenterNotice(context, '回复已保存');
+    setState(_reload);
   }
 
   Future<void> _summarize(Map<String, dynamic> item) async {
@@ -904,7 +887,7 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
             '#${item['rank'] ?? '-'} ${feedbackText(item['title'])}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w700),
+            style: const TextStyle(fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 4),
           Text(
@@ -1091,7 +1074,7 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                         fontSize: 16,
                       ),
                     ),
@@ -1146,7 +1129,7 @@ class _AdminFeedbackPanelState extends ConsumerState<AdminFeedbackPanel> {
       child: Text(
         feedbackStatusLabel(status),
         style:
-            TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700),
+            TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w400),
       ),
     );
   }

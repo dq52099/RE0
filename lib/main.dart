@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/api_error.dart';
+import 'core/app_motion.dart';
 import 'core/app_update_service.dart';
 import 'core/brand_background.dart';
 import 'core/providers.dart';
+import 'core/startup_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/home/home_screen.dart';
 
@@ -28,7 +30,7 @@ class Re0App extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final brand = ref.watch(brandProvider);
     return MaterialApp(
-      title: '从零开始生图',
+      title: brand.appTitle,
       debugShowCheckedModeBanner: false,
       theme: brand.theme,
       home: const _StartupGate(),
@@ -55,53 +57,11 @@ class _StartupGateState extends ConsumerState<_StartupGate> {
     _future = _checkSavedAuth();
   }
 
-  AppUpdateInfo _buildForcedUpdateInfo(Map<String, dynamic> data) {
-    final service = ref.read(appUpdateProvider);
-    final latestVersionNameRaw = data['latest_version_name']?.toString().trim();
-    final appNameRaw = data['app_name']?.toString().trim();
-    final packageNameRaw = data['package_name']?.toString().trim();
-    final available = data['available'] == true;
-    final downloadUrl = data['download_url']?.toString().trim() ?? '';
-    if (available && downloadUrl.isEmpty) {
-      throw StateError('更新包下载地址缺失。');
-    }
-    final releaseNotes = data['release_notes']?.toString().trim();
-    return AppUpdateInfo(
-      appName: appNameRaw == null || appNameRaw.isEmpty
-          ? service.appName
-          : appNameRaw,
-      packageName: packageNameRaw == null || packageNameRaw.isEmpty
-          ? service.packageName
-          : packageNameRaw,
-      latestVersionName:
-          latestVersionNameRaw == null || latestVersionNameRaw.isEmpty
-              ? service.currentVersionName
-              : latestVersionNameRaw,
-      latestVersionCode:
-          _asInt(data['latest_version_code'], service.currentVersionCode),
-      currentVersionCode:
-          _asInt(data['current_version_code'], service.currentVersionCode),
-      available: available,
-      downloadUrl: downloadUrl,
-      fileSize: _asInt(data['file_size']),
-      sha256: data['sha256']?.toString() ?? '',
-      releaseNotes: (releaseNotes == null || releaseNotes.isEmpty)
-          ? '包含最新修复与体验优化。'
-          : releaseNotes,
-      releaseUrl: data['release_url']?.toString() ??
-          data['download_url']?.toString() ??
-          '',
-      forceUpdate: data['force_update'] == true,
-    );
-  }
-
   Future<AppUpdateInfo?> _checkForcedUpdate() async {
     final client = ref.read(gatewayClientProvider);
     final service = ref.read(appUpdateProvider);
     try {
-      final info = _buildForcedUpdateInfo(
-        await client.checkAppUpdate(service.appId, service.currentVersionCode),
-      );
+      final info = await service.checkGatewayUpdate(client);
       if (info.available) return info;
     } catch (error) {
       debugPrint('Backend force update check failed: $error');
@@ -135,9 +95,11 @@ class _StartupGateState extends ConsumerState<_StartupGate> {
         fallback: ref.read(historyRetentionProvider),
       );
       return const _StartupResult.home();
-    } catch (_) {
+    } catch (error) {
       final client = ref.read(gatewayClientProvider);
-      await client.clearLocalSession();
+      if (error is GatewayException && error.statusCode == 401) {
+        await client.clearLocalSession();
+      }
       ref.read(authStateProvider.notifier).state = null;
       return const _StartupResult.login();
     }
@@ -179,9 +141,7 @@ class _StartupGateState extends ConsumerState<_StartupGate> {
       future: _future,
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
+          return const StartupScreen();
         }
         final result = snapshot.data!;
         final forceUpdateInfo = result.forceUpdateInfo;
@@ -195,7 +155,10 @@ class _StartupGateState extends ConsumerState<_StartupGate> {
                 : () => _downloadForcedUpdate(forceUpdateInfo),
           );
         }
-        return result.showHome ? const HomeScreen() : const LoginScreen();
+        return AppEntrance(
+          identity: result.showHome,
+          child: result.showHome ? const HomeScreen() : const LoginScreen(),
+        );
       },
     );
   }
@@ -498,10 +461,4 @@ class _UpdatePill extends StatelessWidget {
       ),
     );
   }
-}
-
-int _asInt(dynamic value, [int fallback = 0]) {
-  if (value is int) return value;
-  if (value is num) return value.toInt();
-  return int.tryParse(value?.toString() ?? '') ?? fallback;
 }

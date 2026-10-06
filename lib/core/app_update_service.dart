@@ -4,6 +4,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'gateway_client.dart';
+
 class AppUpdateInfo {
   const AppUpdateInfo({
     required this.appName,
@@ -80,6 +82,38 @@ class AppUpdateService {
   final String currentVersionName;
   final int currentVersionCode;
   final String currentReleaseTag;
+
+  Future<AppUpdateInfo> checkGatewayUpdate(GatewayClient client) async =>
+      fromGatewayData(await client.checkAppUpdate(appId, currentVersionCode));
+
+  AppUpdateInfo fromGatewayData(Map<String, dynamic> data) {
+    String value(String key, String fallback) {
+      final text = data[key]?.toString().trim() ?? '';
+      return text.isEmpty ? fallback : text;
+    }
+
+    final available = data['available'] == true;
+    final downloadUrl = value('download_url', '');
+    final versionCode = _asInt(data['latest_version_code']);
+    if (available &&
+        (downloadUrl.isEmpty || versionCode <= currentVersionCode)) {
+      throw StateError('服务器更新信息不完整，请稍后重试。');
+    }
+    return AppUpdateInfo(
+      appName: value('app_name', appName),
+      packageName: value('package_name', packageName),
+      latestVersionName: value('latest_version_name', currentVersionName),
+      latestVersionCode: versionCode > 0 ? versionCode : currentVersionCode,
+      currentVersionCode: currentVersionCode,
+      available: available,
+      downloadUrl: downloadUrl,
+      fileSize: _asInt(data['file_size']),
+      sha256: value('sha256', ''),
+      releaseNotes: value('release_notes', '包含最新修复与体验优化。'),
+      releaseUrl: value('release_url', downloadUrl),
+      forceUpdate: data['force_update'] == true,
+    );
+  }
 
   Future<AppUpdateInfo> checkForUpdate() async {
     final response = await _dio.get(

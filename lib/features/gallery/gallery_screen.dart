@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_error.dart';
 import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
+import '../../core/frontend_widgets.dart';
 import '../../core/cached_gateway_image.dart';
 import '../../core/compact_dropdown_field.dart';
 import '../../core/compact_save_notice.dart';
@@ -31,7 +34,7 @@ class GalleryScreen extends ConsumerWidget {
       ),
       body: BrandBackground(
         child: GalleryFeedView(
-          key: ValueKey('gallery-$refreshToken'),
+          refreshToken: refreshToken,
           view: 'all',
           emptyText: '画廊还没有公开作品',
         ),
@@ -45,10 +48,12 @@ class GalleryFeedView extends ConsumerStatefulWidget {
     super.key,
     required this.view,
     required this.emptyText,
+    this.refreshToken = 0,
   });
 
   final String view;
   final String emptyText;
+  final int refreshToken;
 
   @override
   ConsumerState<GalleryFeedView> createState() => _GalleryFeedViewState();
@@ -58,7 +63,12 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
     with AutomaticKeepAliveClientMixin {
   final TextEditingController _searchController = TextEditingController();
   final List<Map<String, dynamic>> _items = [];
+  final ScrollController _scrollController = ScrollController();
+  final Set<String> _busyActions = {};
+  Timer? _searchDebounce;
+  bool _pendingReset = false;
   int _page = 1;
+  int _loadedPage = 1;
   int _totalPages = 1;
   int _pageSize = 12;
   bool _isLoading = false;
@@ -77,19 +87,38 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(covariant GalleryFeedView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshToken != widget.refreshToken) _load();
+  }
+
+  void _onSearchChanged(String value) {
+    setState(() {});
+    _searchDebounce?.cancel();
+    _searchDebounce =
+        Timer(const Duration(milliseconds: 350), () => _load(reset: true));
+  }
+
   Future<void> _load({bool reset = false}) async {
-    if (_isLoading) return;
+    if (_isLoading) {
+      if (reset) _pendingReset = true;
+      return;
+    }
     setState(() {
       _isLoading = true;
       if (reset) {
         _page = 1;
-        _error = null;
       }
+      _error = null;
     });
+    final requestedPage = _page;
     try {
       final response = await ref.read(gatewayClientProvider).getGalleryPosts(
             view: widget.view,
@@ -105,48 +134,59 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
           .toList();
       final totalPages =
           int.tryParse(response['total_pages']?.toString() ?? '') ?? _page;
-      if (!mounted) return;
+      if (!mounted || _pendingReset) return;
       setState(() {
+        _loadedPage = requestedPage;
         _items
           ..clear()
           ..addAll(nextItems);
-        _totalPages = totalPages;
+        _totalPages = totalPages < 1 ? 1 : totalPages;
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = friendlyError(error, fallback: '读取画廊失败。'));
+      setState(() {
+        _page = _loadedPage;
+        _error = friendlyError(error, fallback: '读取画廊失败。');
+      });
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
+        if (_pendingReset) {
+          _pendingReset = false;
+          await _load(reset: true);
+        }
       }
     }
   }
 
   Future<void> _refresh() => _load(reset: true);
 
-  Future<void> _toggleLike(Map<String, dynamic> item) async {
-    final updated = await ref
-        .read(gatewayClientProvider)
-        .toggleGalleryLike(item['id'].toString());
-    _replaceItem(updated);
-    if (widget.view == 'liked' && !boolish(updated['liked']) && mounted) {
-      setState(() {
-        _items.removeWhere((entry) => entry['id'] == updated['id']);
-      });
-    }
-  }
-
-  Future<void> _toggleFavorite(Map<String, dynamic> item) async {
-    final updated = await ref
-        .read(gatewayClientProvider)
-        .toggleGalleryFavorite(item['id'].toString());
-    _replaceItem(updated);
-    if (widget.view == 'favorites' &&
-        !boolish(updated['favorited']) &&
-        mounted) {
-      setState(() {
-        _items.removeWhere((entry) => entry['id'] == updated['id']);
-      });
+  Future<void> _toggleReaction(Map<String, dynamic> item,
+      {required bool favorite}) async {
+    final id = item['id'].toString();
+    final key = '${favorite ? 'favorite' : 'like'}-$id';
+    if (_busyActions.contains(key)) return;
+    setState(() => _busyActions.add(key));
+    try {
+      final client = ref.read(gatewayClientProvider);
+      final updated = favorite
+          ? await client.toggleGalleryFavorite(id)
+          : await client.toggleGalleryLike(id);
+      if (!mounted) return;
+      _replaceItem(updated);
+      if ((favorite &&
+              widget.view == 'favorites' &&
+              !boolish(updated['favorited'])) ||
+          (!favorite && widget.view == 'liked' && !boolish(updated['liked']))) {
+        setState(
+            () => _items.removeWhere((entry) => entry['id']?.toString() == id));
+      }
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(friendlyError(error, fallback: '操作失败，请重试。'))));
+    } finally {
+      if (mounted) setState(() => _busyActions.remove(key));
     }
   }
 
@@ -292,37 +332,83 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
   Widget build(BuildContext context) {
     super.build(context);
     final brand = ref.watch(brandProvider);
-    if (_error != null && _items.isEmpty) {
-      return Center(child: Text(_error!));
-    }
-
-    return RefreshIndicator(
-      onRefresh: _refresh,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _toolbar(brand),
-          const SizedBox(height: 16),
-          if (_items.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 120),
-              child: Center(child: Text(widget.emptyText)),
-            )
-          else
-            Column(
-              children: [
-                for (var index = 0; index < _items.length; index++)
-                  Padding(
-                    padding: EdgeInsets.only(
-                      bottom: index == _items.length - 1 ? 0 : 12,
+    return FrontendPageFrame(
+      maxWidth: 1120,
+      child: RefreshIndicator(
+        onRefresh: _refresh,
+        child: LayoutBuilder(builder: (context, constraints) {
+          final columns = constraints.maxWidth >= 720 ? 2 : 1;
+          final rows = (_items.length / columns).ceil();
+          return ListView.builder(
+            controller: _scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.all(16),
+            itemCount: rows + 2,
+            itemBuilder: (context, index) {
+              if (index == 0)
+                return Column(children: [
+                  FrontendSection(
+                      title: '发现灵感',
+                      subtitle: '浏览作品、收藏喜欢的图片，也可以在图片记录里发布自己的作品。',
+                      icon: Icons.explore_outlined,
+                      child: _toolbar(brand)),
+                  const SizedBox(height: 16),
+                  if (_isLoading) const LinearProgressIndicator(),
+                  if (_isLoading) const SizedBox(height: 16),
+                  if (_error != null) ...[
+                    FrontendStateCard(
+                      title: '读取画廊失败',
+                      message: _error!,
+                      icon: Icons.cloud_off_outlined,
+                      isError: true,
+                      onAction: _isLoading ? null : () => _load(),
                     ),
-                    child: _galleryCard(brand, _items[index]),
-                  ),
-              ],
-            ),
-          const SizedBox(height: 16),
-          _paginationBar(),
-        ],
+                    const SizedBox(height: 16),
+                  ],
+                  if (_items.isEmpty && !_isLoading && _error == null)
+                    FrontendStateCard(
+                      title: _searchController.text.trim().isNotEmpty ||
+                              _actionFilter != null
+                          ? '没有匹配的作品'
+                          : widget.emptyText,
+                      message: _searchController.text.trim().isNotEmpty ||
+                              _actionFilter != null
+                          ? '试试其他关键词，或清除筛选。'
+                          : '新的作品会显示在这里，下拉即可刷新。',
+                      actionLabel: '清除筛选',
+                      onAction: _searchController.text.trim().isNotEmpty ||
+                              _actionFilter != null
+                          ? () {
+                              _searchController.clear();
+                              setState(() => _actionFilter = null);
+                              _load(reset: true);
+                            }
+                          : null,
+                    ),
+                ]);
+              if (index == rows + 1)
+                return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: _paginationBar());
+              final first = (index - 1) * columns;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (var column = 0; column < columns; column++) ...[
+                        if (column > 0) const SizedBox(width: 12),
+                        Expanded(
+                            child: first + column < _items.length
+                                ? _galleryCard(brand, _items[first + column])
+                                : const SizedBox.shrink()),
+                      ],
+                    ]),
+              );
+            },
+          );
+        }),
       ),
     );
   }
@@ -335,8 +421,25 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
           controller: _searchController,
           textInputAction: TextInputAction.search,
           onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-          onSubmitted: (_) => _load(reset: true),
-          decoration: const InputDecoration(
+          onSubmitted: (_) {
+            _searchDebounce?.cancel();
+            FocusManager.instance.primaryFocus?.unfocus();
+            _load(reset: true);
+          },
+          onChanged: _onSearchChanged,
+          decoration: InputDecoration(
+            suffixIcon: _searchController.text.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: '清空搜索',
+                    icon: const Icon(Icons.close),
+                    onPressed: () {
+                      _searchController.clear();
+                      _searchDebounce?.cancel();
+                      setState(() {});
+                      _load(reset: true);
+                    },
+                  ),
             labelText: '搜索画廊',
             hintText: '按提示词或作者搜索',
             prefixIcon: Icon(Icons.search),
@@ -367,44 +470,44 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
         const SizedBox(height: 14),
         LayoutBuilder(
           builder: (context, constraints) {
-            final fieldWidth = (constraints.maxWidth - 8) / 2;
-            return Row(
+            final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+            final columns = constraints.maxWidth >= 320 * scale ? 2 : 1;
+            final fieldWidth =
+                (constraints.maxWidth - (columns - 1) * 12) / columns;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 18,
               children: [
-                Expanded(
-                  child: _smallDropdown(
-                    label: '排序',
-                    value: _sort,
-                    width: fieldWidth,
-                    menuWidth: fieldWidth,
-                    items: const {
-                      'time': '最近时间',
-                      'popular': '最受欢迎',
-                      'comments': '评论最多',
-                      'downloads': '下载最多',
-                    },
-                    onChanged: (value) {
-                      setState(() => _sort = value!);
-                      _load(reset: true);
-                    },
-                  ),
+                _smallDropdown(
+                  label: '排序',
+                  value: _sort,
+                  width: fieldWidth,
+                  menuWidth: fieldWidth,
+                  items: const {
+                    'time': '最近时间',
+                    'popular': '最受欢迎',
+                    'comments': '评论最多',
+                    'downloads': '下载最多',
+                  },
+                  onChanged: (value) {
+                    setState(() => _sort = value!);
+                    _load(reset: true);
+                  },
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _smallDropdown(
-                    label: '每页',
-                    value: _pageSize,
-                    width: fieldWidth,
-                    menuWidth: fieldWidth,
-                    items: const {
-                      12: '12张',
-                      24: '24张',
-                      36: '36张',
-                    },
-                    onChanged: (value) {
-                      setState(() => _pageSize = value!);
-                      _load(reset: true);
-                    },
-                  ),
+                _smallDropdown(
+                  label: '每页',
+                  value: _pageSize,
+                  width: fieldWidth,
+                  menuWidth: fieldWidth,
+                  items: const {
+                    12: '12张',
+                    24: '24张',
+                    36: '36张',
+                  },
+                  onChanged: (value) {
+                    setState(() => _pageSize = value!);
+                    _load(reset: true);
+                  },
                 ),
               ],
             );
@@ -457,32 +560,36 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
     );
   }
 
-  Widget _paginationBar() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        IconButton(
-          onPressed: _page <= 1 || _isLoading
-              ? null
-              : () {
-                  setState(() => _page -= 1);
-                  _load();
-                },
-          icon: const Icon(Icons.chevron_left),
-        ),
-        Text('第 $_page / $_totalPages 页'),
-        IconButton(
-          onPressed: _page >= _totalPages || _isLoading
-              ? null
-              : () {
-                  setState(() => _page += 1);
-                  _load();
-                },
-          icon: const Icon(Icons.chevron_right),
-        ),
-      ],
-    );
+  Future<void> _goToPage(int page) async {
+    if (_isLoading || page == _page) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _page = page.clamp(1, _totalPages));
+    await _load();
+    if (mounted && _scrollController.hasClients)
+      _scrollController.animateTo(0,
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic);
   }
+
+  Widget _paginationBar() => Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 8,
+        children: [
+          IconButton(
+              tooltip: '上一页',
+              onPressed:
+                  _page <= 1 || _isLoading ? null : () => _goToPage(_page - 1),
+              icon: const Icon(Icons.chevron_left)),
+          Text('第 $_page / $_totalPages 页'),
+          IconButton(
+              tooltip: '下一页',
+              onPressed: _page >= _totalPages || _isLoading
+                  ? null
+                  : () => _goToPage(_page + 1),
+              icon: const Icon(Icons.chevron_right)),
+        ],
+      );
 
   Widget _galleryCard(AppBrand brand, Map<String, dynamic> item) {
     const imageHeight = 288.0;
@@ -615,7 +722,9 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                       icon: liked ? Icons.favorite : Icons.favorite_border,
                       label: '${item['like_count'] ?? 0}',
                       color: liked ? brand.warningColor : null,
-                      onTap: () => _toggleLike(item),
+                      onTap: _busyActions.contains('like-${item['id']}')
+                          ? null
+                          : () => _toggleReaction(item, favorite: false),
                       iconSize: actionIconSize,
                       fontSize: actionFontSize,
                       padding: buttonPadding,
@@ -624,7 +733,9 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
                       icon: favorited ? Icons.bookmark : Icons.bookmark_border,
                       label: '${item['favorite_count'] ?? 0}',
                       color: favorited ? brand.primaryColor : null,
-                      onTap: () => _toggleFavorite(item),
+                      onTap: _busyActions.contains('favorite-${item['id']}')
+                          ? null
+                          : () => _toggleReaction(item, favorite: true),
                       iconSize: actionIconSize,
                       fontSize: actionFontSize,
                       padding: buttonPadding,
@@ -686,7 +797,7 @@ class _GalleryFeedViewState extends ConsumerState<GalleryFeedView>
     required IconData icon,
     required String label,
     Color? color,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
     required double iconSize,
     required double fontSize,
     required EdgeInsets padding,

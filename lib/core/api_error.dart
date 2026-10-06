@@ -10,9 +10,10 @@ final RegExp _maxLengthPattern = RegExp(
 );
 
 class GatewayException implements Exception {
-  const GatewayException(this.message);
+  const GatewayException(this.message, {this.statusCode});
 
   final String message;
+  final int? statusCode;
 
   @override
   String toString() => message;
@@ -41,7 +42,9 @@ GatewayException gatewayException(
   Object error, {
   String fallback = '操作失败，请稍后重试。',
 }) {
-  return GatewayException(friendlyError(error, fallback: fallback));
+  if (error is GatewayException) return error;
+  return GatewayException(friendlyError(error, fallback: fallback),
+      statusCode: error is DioException ? error.response?.statusCode : null);
 }
 
 String _messageFromDio(DioException error, {required String fallback}) {

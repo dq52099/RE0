@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_error.dart';
 import '../../core/brand_background.dart';
+import '../../core/frontend_widgets.dart';
 import '../../core/compact_save_notice.dart';
 import '../../core/providers.dart';
 
@@ -176,6 +177,7 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.all(24),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 560),
@@ -196,6 +198,8 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
                         ),
                         const SizedBox(height: 24),
                         TextField(
+                          onTapOutside: (_) =>
+                              FocusManager.instance.primaryFocus?.unfocus(),
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
                           onChanged: (_) {
@@ -206,53 +210,51 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
                           decoration: InputDecoration(
                             labelText: '绑定邮箱',
                             helperText: '填写账号已绑定的邮箱，用于接收找回密码验证码',
+                            helperMaxLines: 5,
                             errorText: _emailError,
+                            errorMaxLines: 5,
                           ),
                         ),
                         const SizedBox(height: 12),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _codeController,
-                                keyboardType: TextInputType.number,
-                                onChanged: (_) {
-                                  if (_codeError != null) {
-                                    setState(() => _codeError = null);
-                                  }
-                                },
-                                decoration: InputDecoration(
-                                  labelText: '邮箱验证码',
-                                  errorText: _codeError,
-                                ),
-                              ),
+                        FrontendFieldWithAction(
+                          field: TextField(
+                            onTapOutside: (_) =>
+                                FocusManager.instance.primaryFocus?.unfocus(),
+                            controller: _codeController,
+                            keyboardType: TextInputType.number,
+                            onChanged: (_) {
+                              if (_codeError != null) {
+                                setState(() => _codeError = null);
+                              }
+                            },
+                            decoration: InputDecoration(
+                              labelText: '邮箱验证码',
+                              errorText: _codeError,
+                              errorMaxLines: 5,
                             ),
-                            const SizedBox(width: 12),
-                            SizedBox(
-                              height: 56,
-                              child: OutlinedButton(
-                                onPressed:
-                                    _isSendingCode || _emailCooldownSeconds > 0
-                                        ? null
-                                        : _sendResetCode,
-                                child: _isSendingCode
-                                    ? const SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : Text(_emailCooldownSeconds > 0
-                                        ? '${_emailCooldownSeconds}s'
-                                        : '发送邮件'),
-                              ),
-                            ),
-                          ],
+                          ),
+                          action: OutlinedButton(
+                            onPressed:
+                                _isSendingCode || _emailCooldownSeconds > 0
+                                    ? null
+                                    : _sendResetCode,
+                            child: _isSendingCode
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Text(_emailCooldownSeconds > 0
+                                    ? '${_emailCooldownSeconds}s'
+                                    : '发送邮件'),
+                          ),
                         ),
                         const SizedBox(height: 12),
                         TextField(
+                          onTapOutside: (_) =>
+                              FocusManager.instance.primaryFocus?.unfocus(),
                           controller: _passwordController,
                           obscureText: true,
                           onChanged: (_) {
@@ -263,7 +265,9 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
                           decoration: InputDecoration(
                             labelText: '新密码',
                             helperText: '至少 10 位，需包含大小写字母、数字和特殊字符',
+                            helperMaxLines: 5,
                             errorText: _passwordError,
+                            errorMaxLines: 5,
                           ),
                         ),
                         const SizedBox(height: 24),
