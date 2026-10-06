@@ -40,7 +40,7 @@
   "lib/features/auth/password_reset_screen.dart": "7a4085023d9511c4a29e5cdeb365a62df16be741973cfc15bd8920394e11641c",
   "lib/features/auth/register_screen.dart": "e625c3d2c37506006034eaf04e6cb84ffd026c64e11121287e2040f70e7eba86",
   "lib/features/chronogear/chronogear_screen.dart": "db2c88d8cd24592abe3e17ceb0ea29c7f0d91add14df64c10337c29a909040a1",
-  "lib/features/compendium/compendium_screen.dart": "825cefcbf6181c2324c499e932718bc9153e733808b8df192b5a281630dec3a6",
+  "lib/features/compendium/compendium_screen.dart": "60caf5f77ea3630e50d8220ee114656d8989da4db170535ea6e62e6889d211e7",
   "lib/features/compendium/image_preview_screen.dart": "b3f347e76114b63698a8da7a39cfcec1f17f3bd139873bd0d40acfcadc0d288a",
   "lib/features/feedback/admin_feedback_panel.dart": "912c473051cdabf697802ad953fc46a5eff5824df8a1ec4b7a2ea71e6ae1dee9",
   "lib/features/feedback/feedback_screen.dart": "84d5862e8695250059cb48e3f66c8fad8acdedd362fdff8dee96019e9a2f451f",
@@ -132,6 +132,6 @@
   "pubspec.yaml": "529cd758cc4cbd886a7fd43a5485bf69bdd2b34a76da715f45efe8e78898e5dc",
   "pubspec.lock": "d94d6062cd19e3b7ee0468580b8ecd118de9a05b0faba83a1c7aa9c93f51e62f",
   "README.md": "e016edb92e807a048cae3f12f68f76d4e6bce70713532f5ee1612c90d675664f",
-  "RELEASE_NOTES.md": "31ce88eade57616e29d2dbfa6b28126f97f70b60f03d2ede6b2ad5fa4a375237",
+  "RELEASE_NOTES.md": "02b443083fe833ffacea6ecf1279106b60c1372e042c84a663532013d1592157",
   "WINDOWS.md": "ea1a42207a57d342cdd6a6eef475899129bac5cb17006126ed479d0ca3c6c4ed"
 }

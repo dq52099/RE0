@@ -1405,7 +1405,6 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
         color: filled
             ? color
             : Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(999),
         shape: StadiumBorder(
           side: BorderSide(color: color.withValues(alpha: 0.62)),
         ),
