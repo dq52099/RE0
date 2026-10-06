@@ -17,6 +17,8 @@ class GalleryCollectionsScreen extends ConsumerWidget {
         appBar: AppBar(
           title: const Text('我的画廊'),
           bottom: TabBar(
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
             tabs: [
               Tab(text: brand.favoriteTabLabel),
               const Tab(text: '点赞'),

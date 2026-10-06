@@ -1,5 +1,20 @@
 import 'app_brand.dart';
 
+const plainPromptAssistCopy = PromptAssistCopy(
+  generateNoun: '提示词',
+  generateVerb: '生图',
+  generateSlot: '图片保留位置',
+  generateOverflowVerb: '生图',
+  editNoun: '改图提示词',
+  editVerb: '改图',
+  editSlot: '图片保留位置',
+  editOverflowVerb: '改图',
+  ideaChip: '思路推演',
+  ideaAction: '生成提示词',
+  imageChip: '图片识别',
+  imageInferVerb: '识别',
+);
+
 class PromptAssistCopy {
   const PromptAssistCopy({
     required this.generateNoun,
@@ -41,7 +56,8 @@ class PromptAssistCopy {
   String get generateFullTitle => '完整$generateNoun';
   String get fillGenerate => '填入$generateNoun';
   String get writeGenerate => '请先编写$generateNoun';
-  String get imageEmptyText => '上传参考图后，可点按看详情，再用$imageInferVerb 3 条$generateNoun';
+  String get imageEmptyText =>
+      '上传参考图后，可点按看详情，再用$imageInferVerb 3 条$generateNoun';
   String get imageSelectedText => '已选择参考图，点按可看详情，可重新$imageInferVerb或更换参考图';
 
   String generateBusy(AppBrand brand) =>
@@ -54,7 +70,7 @@ class PromptAssistCopy {
       '将按 $count 条$generateNoun逐条$generateVerb，结果会陆续显示。';
   String generateUseThisLabel() => '使用当前$generateNoun';
   String generateCountLabel(int count) => '共 $count 条$generateNoun';
-  String generateBatchLabel(int count) => '使用当前$count条$generateNoun';
+  String generateBatchLabel(int count) => '全部$generateVerb（$count 条）';
   String generateSwitcherLabel(int index, int total) =>
       '$generateNoun ${index + 1}/$total';
   String previousGenerateTooltip() => '上一条$generateNoun';
@@ -75,8 +91,7 @@ class PromptAssistCopy {
   String get editFailure => '$editNoun生成失败。';
   String get editDivergeAction => '发散';
   String get editDivergeReady => '已发散出$editNoun，可查看全部或切换使用。';
-  String get editDivergeNoResult =>
-      '发散后没有得到可用$editNoun，请换个$editVerb意图或参考图再试。';
+  String get editDivergeNoResult => '发散后没有得到可用$editNoun，请换个$editVerb意图或参考图再试。';
   String get editDivergeFailure => '$editNoun发散失败。';
   String get editNoCurrent => '当前没有可用$editNoun';
   String get editEmptyCurrent => '当前$editNoun为空';
@@ -93,7 +108,7 @@ class PromptAssistCopy {
       '将按 $count 条$editNoun逐条$editVerb，结果会陆续显示。';
   String editUseThisLabel() => '使用当前$editNoun';
   String editCountLabel(int count) => '共 $count 条$editNoun';
-  String editBatchLabel(int count) => '使用当前$count条$editNoun';
+  String editBatchLabel(int count) => '全部$editVerb（$count 条）';
   String editIntroNoImage() => '先输入$editVerb意图，再生成 3 条$editNoun';
   String editIntroWithImage() => '结合当前原图和$editVerb意图，生成 3 条$editNoun';
   String editSwitcherLabel(int index, int total) =>

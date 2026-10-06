@@ -6,9 +6,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/api_error.dart';
 import '../../core/app_brand.dart';
+import '../../core/app_motion.dart';
 import '../../core/brand_background.dart';
 import '../../core/cached_gateway_image.dart';
-import '../../core/compact_dropdown_field.dart';
+import '../../core/frontend_widgets.dart';
+import '../../core/creation_workbench.dart';
+import '../../core/creation_draft.dart';
+import '../../core/stable_form_dialog.dart';
+import '../../core/prompt_candidate_toolbar.dart';
+import '../../core/image_settings_panel.dart';
 import '../../core/compact_save_notice.dart';
 import '../../core/image_capabilities.dart';
 import '../../core/image_quota_price_line.dart';
@@ -60,9 +66,21 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
   String? _imageAssistError;
   String? _lastAppliedCandidate;
   File? _assistImageFile;
+  late final CreationDraft _draft;
+
+  @override
+  void initState() {
+    super.initState();
+    _draft = CreationDraft(
+        ref.read(sharedPrefsProvider),
+        ref.read(authStateProvider)?['id']?.toString(),
+        'generate',
+        {'prompt': _spellController, 'idea': _ideaController});
+  }
 
   @override
   void dispose() {
+    _draft.dispose();
     _spellController.dispose();
     _ideaController.dispose();
     super.dispose();
@@ -79,7 +97,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
 
   Future<void> _generatePromptFromIdea() async {
     final brand = ref.read(brandProvider);
-    final copy = promptAssistCopyFor(brand);
+    final copy = promptAssistCopyFor(ref.read(brandProvider));
     final idea = _ideaController.text.trim();
     if (idea.isEmpty) {
       showCenterNotice(context, '请先写下${brand.generateActionLabel}思路');
@@ -125,7 +143,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
       imageQuality: 92,
       maxWidth: 1600,
     );
-    if (picked == null) return;
+    if (picked == null || !mounted) return;
     setState(() {
       _assistMode = _PromptAssistMode.image;
       _assistImageFile = File(picked.path);
@@ -228,7 +246,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
 
   Future<void> _generateWithCandidate(String candidate) async {
     final brand = ref.read(brandProvider);
-    final copy = promptAssistCopyFor(brand);
+    final copy = promptAssistCopyFor(ref.read(brandProvider));
     final prompt = candidate.trim();
     if (prompt.isEmpty) {
       showCenterNotice(context, copy.generateEmptyCurrent);
@@ -294,7 +312,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
 
   Future<void> _generateWithAllCandidates() async {
     final brand = ref.read(brandProvider);
-    final copy = promptAssistCopyFor(brand);
+    final copy = promptAssistCopyFor(ref.read(brandProvider));
     final prompts = _activeCandidates
         .map((item) => item.trim())
         .where((item) => item.isNotEmpty)
@@ -363,7 +381,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
   }
 
   Future<void> _openAllCandidatesDialog(AppBrand brand) async {
-    final copy = promptAssistCopyFor(brand);
+    final copy = promptAssistCopyFor(ref.read(brandProvider));
     final candidates = _activeCandidates;
     if (candidates.isEmpty) return;
     _dismissPromptAssistFocus();
@@ -489,20 +507,22 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                           onPressed: () => Navigator.pop(context),
                           child: const Text('关闭'),
                         ),
-                        const SizedBox(width: 8),
-                        FilledButton.icon(
-                          onPressed: () {
-                            Navigator.pop(context);
-                            unawaited(_generateWithAllCandidates());
-                          },
-                          icon: const Icon(
-                            Icons.auto_awesome_motion_outlined,
-                            size: 18,
-                          ),
-                          label:
-                              Text(copy.generateBatchLabel(candidates.length)),
-                        ),
                       ],
+                    ),
+                    const SizedBox(height: 4),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          unawaited(_generateWithAllCandidates());
+                        },
+                        icon: const Icon(
+                          Icons.auto_awesome_motion_outlined,
+                          size: 18,
+                        ),
+                        label: Text(copy.generateBatchLabel(candidates.length)),
+                      ),
                     ),
                   ],
                 ),
@@ -517,12 +537,12 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
 
   Future<void> _openCandidatePrompt(String candidate) async {
     _dismissPromptAssistFocus();
-    final brand = ref.read(brandProvider);
-    final copy = promptAssistCopyFor(brand);
+    final copy = promptAssistCopyFor(ref.read(brandProvider));
     final controller = TextEditingController(text: candidate);
-    final next = await showDialog<String>(
+    final next = await showFrontendDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
+      controllers: [controller],
+      builder: (context) => StableFormDialog(
         title: Text(copy.generateFullTitle),
         content: SizedBox(
           width: double.maxFinite,
@@ -532,7 +552,8 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
             minLines: 8,
             maxLines: 14,
             textInputAction: TextInputAction.newline,
-            decoration: InputDecoration(hintText: brand.generatePromptHint),
+            decoration: InputDecoration(
+                hintText: ref.read(brandProvider).generatePromptHint),
           ),
         ),
         actions: [
@@ -550,7 +571,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
         ],
       ),
     );
-    controller.dispose();
+    if (!mounted) return;
     if (next == null) {
       _dismissPromptAssistFocus();
       return;
@@ -573,10 +594,11 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
   @override
   Widget build(BuildContext context) {
     final brand = ref.watch(brandProvider);
-    final copy = promptAssistCopyFor(brand);
+    final copy = promptAssistCopyFor(ref.read(brandProvider));
     final capabilities = ref.watch(imageCapabilitiesProvider).valueOrNull ??
         ImageCapabilities.fallback();
     final options = capabilities.generate;
+    final count = _count.clamp(1, options.maxImages).toInt();
     final size = resolveSizeForResolutionAndAspect(
       options.sizes,
       _resolutionTier,
@@ -605,214 +627,139 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     final materializerState = ref.watch(generateImagesProvider);
     final activeTask = ref.watch(activeImageTaskProvider);
 
+    final VoidCallback? submit = activeTask != null
+        ? null
+        : () async {
+            final prompt = _spellController.text.trim();
+            if (prompt.isEmpty) {
+              showCenterNotice(context, copy.writeGenerate);
+              return;
+            }
+            final currentTask = ref.read(activeImageTaskProvider);
+            if (currentTask == ImageTaskKind.edit) {
+              showCenterNotice(context, copy.editBusy(brand));
+              return;
+            }
+            final retentionMessage = _retentionLimitMessage(
+              generateRetention,
+              count,
+            );
+            if (retentionMessage != null) {
+              showCenterNotice(context, retentionMessage);
+              return;
+            }
+            FocusScope.of(context).unfocus();
+            setState(() => _lastSubmittedPrompt = prompt);
+            try {
+              final notice =
+                  await ref.read(generateImagesProvider.notifier).materialize(
+                        prompt,
+                        count,
+                        size,
+                        quality,
+                        background,
+                        outputFormat,
+                        selectedMode,
+                      );
+              if (!mounted || notice == null) return;
+              showCenterNotice(context, notice);
+            } catch (error) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(friendlyError(error))),
+              );
+            }
+          };
+
     return Scaffold(
-      resizeToAvoidBottomInset: false,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: Text(brand.generateTitle),
       ),
       body: BrandBackground(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildManaStatus(brand, remain, retentionText, capabilities),
-              const SizedBox(height: 24),
-              Text(
-                brand.promptLabel,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 12),
-              _buildPromptAssist(brand),
-              const SizedBox(height: 12),
-              _buildPromptField(brand),
-              if (activeTask == ImageTaskKind.edit) ...[
-                const SizedBox(height: 12),
-                _buildTaskNotice(copy.editBlocksGenerate(brand)),
-              ],
-              const SizedBox(height: 16),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final fieldWidth = (constraints.maxWidth - 12) / 2;
-                  final menuWidth = fieldWidth;
-                  return Row(
-                    children: [
-                      Expanded(
-                        child: _dropdownField<int>(
-                          label: '数量',
-                          value: _count,
-                          width: fieldWidth,
-                          menuWidth: menuWidth,
-                          items: List<int>.generate(
-                                  options.maxImages, (index) => index + 1)
-                              .map((e) =>
-                                  CompactDropdownField.centeredItem<int>(
-                                      e, '$e张', context))
-                              .toList(),
-                          selectedLabels: List<int>.generate(
-                                  options.maxImages, (index) => index + 1)
-                              .map((e) => '$e张')
-                              .toList(),
-                          onChanged: (value) => setState(() => _count = value!),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _dropdownField<String>(
-                          label: '清晰度',
-                          value: _resolutionTier,
-                          width: fieldWidth,
-                          menuWidth: menuWidth,
-                          items: _resolutionItems(),
-                          selectedLabels: imageResolutionTiers
-                              .map((item) => item.label)
-                              .toList(),
-                          onChanged: (value) =>
-                              setState(() => _resolutionTier = value!),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final fieldWidth = (constraints.maxWidth - 12) / 2;
-                  final menuWidth = fieldWidth;
-                  return Row(
-                    children: [
-                      Expanded(
-                        child: _dropdownField<String>(
-                          label: '尺寸',
-                          value: _aspectRatio,
-                          width: fieldWidth,
-                          menuWidth: menuWidth,
-                          items: _aspectItems(),
-                          selectedLabels: imageAspectRatioOptions
-                              .map((item) => item.label)
-                              .toList(),
-                          onChanged: (value) =>
-                              setState(() => _aspectRatio = value!),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _dropdownField<String>(
-                          label: '质量',
-                          value: quality,
-                          width: fieldWidth,
-                          menuWidth: menuWidth,
-                          items: _items(options.qualities),
-                          selectedLabels: options.qualities
-                              .map((item) => item.label)
-                              .toList(),
-                          onChanged: (value) =>
-                              setState(() => _quality = value!),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final fieldWidth = (constraints.maxWidth - 12) / 2;
-                  final menuWidth = fieldWidth;
-                  return Row(
-                    children: [
-                      Expanded(
-                        child: _dropdownField<String>(
-                          label: '背景',
-                          value: background,
-                          width: fieldWidth,
-                          menuWidth: menuWidth,
-                          items: _items(options.backgrounds),
-                          selectedLabels: options.backgrounds
-                              .map((item) => item.label)
-                              .toList(),
-                          onChanged: (value) =>
-                              setState(() => _background = value!),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _dropdownField<String>(
-                          label: '输出格式',
-                          value: outputFormat,
-                          width: fieldWidth,
-                          menuWidth: menuWidth,
-                          items: _items(capabilities.outputFormats),
-                          selectedLabels: capabilities.outputFormats
-                              .map((item) => item.label)
-                              .toList(),
-                          onChanged: (value) =>
-                              setState(() => _outputFormat = value!),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: activeTask == ImageTaskKind.generate
-                      ? null
-                      : () async {
-                          final prompt = _spellController.text.trim();
-                          if (prompt.isEmpty) {
-                            showCenterNotice(context, copy.writeGenerate);
-                            return;
-                          }
-                          final currentTask = ref.read(activeImageTaskProvider);
-                          if (currentTask == ImageTaskKind.edit) {
-                            showCenterNotice(context, copy.editBusy(brand));
-                            return;
-                          }
-                          final retentionMessage = _retentionLimitMessage(
-                            generateRetention,
-                            _count,
-                          );
-                          if (retentionMessage != null) {
-                            showCenterNotice(context, retentionMessage);
-                            return;
-                          }
-                          FocusScope.of(context).unfocus();
-                          setState(() => _lastSubmittedPrompt = prompt);
-                          try {
-                            final notice = await ref
-                                .read(generateImagesProvider.notifier)
-                                .materialize(
-                                  prompt,
-                                  _count,
-                                  size,
-                                  quality,
-                                  background,
-                                  outputFormat,
-                                  selectedMode,
-                                );
-                            if (!mounted || notice == null) return;
-                            showCenterNotice(context, notice);
-                          } catch (error) {
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(friendlyError(error))),
-                            );
-                          }
-                        },
-                  child: activeTask == ImageTaskKind.generate
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : Text(brand.generateButtonLabel,
-                          style: const TextStyle(fontSize: 18)),
+        child: CreationWorkbench(
+          onSubmit: submit,
+          inputs: [
+            _buildManaStatus(brand, remain, retentionText, capabilities),
+            const SizedBox(height: 24),
+            FrontendSection(
+              title: brand.promptLabel,
+              icon: Icons.edit_note_rounded,
+              subtitle: '描述你想看到的主体、场景和风格。',
+              child: Column(children: [
+                _buildPromptField(brand),
+                const SizedBox(height: 8),
+                ExpansionTile(
+                  shape: const Border(),
+                  collapsedShape: const Border(),
+                  title: const Text('AI 提示词助手'),
+                  subtitle: const Text('思路推演 · 参考图识别'),
+                  tilePadding: EdgeInsets.zero,
+                  maintainState: true,
+                  children: [_buildPromptAssist(brand)],
                 ),
+              ]),
+            ),
+            if (activeTask == ImageTaskKind.edit) ...[
+              const SizedBox(height: 12),
+              _buildTaskNotice(copy.editBlocksGenerate(brand)),
+            ],
+            const SizedBox(height: 16),
+            ImageSettingsPanel(
+              options: options,
+              outputFormats: capabilities.outputFormats,
+              count: count,
+              resolution: _resolutionTier,
+              aspect: _aspectRatio,
+              quality: quality,
+              background: background,
+              outputFormat: outputFormat,
+              onCount: (value) => setState(() => _count = value),
+              onResolution: (value) => setState(() => _resolutionTier = value),
+              onAspect: (value) => setState(() => _aspectRatio = value),
+              onQuality: (value) => setState(() => _quality = value),
+              onBackground: (value) => setState(() => _background = value),
+              onOutputFormat: (value) => setState(() => _outputFormat = value),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: submit,
+                child: activeTask == ImageTaskKind.generate
+                    ? Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                            SizedBox(
+                                width: 20,
+                                height: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2)),
+                            SizedBox(width: 12),
+                            Flexible(child: Text(brand.generateLoadingText)),
+                          ])
+                    : Text(brand.generateButtonLabel,
+                        style: const TextStyle(fontSize: 18)),
               ),
-              const SizedBox(height: 24),
-              materializerState.when(
+            ),
+          ],
+          results: [
+            if (activeTask == ImageTaskKind.generate) ...[
+              const ImageTaskStatusCard(),
+              const SizedBox(height: 16),
+            ],
+            if ((materializerState.valueOrNull ?? []).isNotEmpty) ...[
+              Text('本次结果 · ${materializerState.valueOrNull!.length} 张',
+                  style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+            ],
+            AppEntrance(
+              identity: materializerState,
+              child: materializerState.when(
                 data: (items) {
-                  if (items.isEmpty) return const SizedBox();
+                  if (items.isEmpty)
+                    return const FrontendStateCard(
+                        title: '创作结果', message: '完成后图片会出现在这里。支持点击预览、缩放与保存。');
                   return Column(
                     children: List.generate(items.length, (index) {
                       final item = items[index];
@@ -827,7 +774,8 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                                       (result) => PreviewImageEntry(
                                         url: result['url']?.toString() ?? '',
                                         title: brand.generateActionLabel,
-                                        caption: _lastSubmittedPrompt,
+                                        caption: result['prompt']?.toString() ??
+                                            _lastSubmittedPrompt,
                                       ),
                                     )
                                     .where((entry) => entry.url.isNotEmpty)
@@ -842,21 +790,24 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
                     }),
                   );
                 },
-                error: (err, _) => Text(
-                  '${brand.generateErrorLabel}: ${friendlyError(err)}',
-                  style: TextStyle(color: brand.warningColor),
+                error: (err, _) => FrontendStateCard(
+                  title: brand.generateErrorLabel,
+                  message:
+                      '${friendlyError(err)}\n可调整提示词后重新提交；若请求超时，请先到图片记录查看结果。',
+                  icon: Icons.error_outline,
+                  isError: true,
                 ),
                 loading: () => Center(child: Text(brand.generateLoadingText)),
-              )
-            ],
-          ),
+              ),
+            )
+          ],
         ),
       ),
     );
   }
 
   Widget _buildPromptAssist(AppBrand brand) {
-    final copy = promptAssistCopyFor(brand);
+    final copy = promptAssistCopyFor(ref.read(brandProvider));
     final isIdea = _assistMode == _PromptAssistMode.idea;
     final isLoading =
         isIdea ? _isGeneratingIdeaPrompt : _isRecognizingImagePrompt;
@@ -893,7 +844,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     );
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 360 ? 8 : 14),
       decoration: BoxDecoration(
         color: brand.panelColor.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(14),
@@ -927,6 +878,8 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
               children: [
                 TextField(
                   controller: _ideaController,
+                  onTapOutside: (_) =>
+                      FocusManager.instance.primaryFocus?.unfocus(),
                   minLines: 1,
                   maxLines: 2,
                   style: const TextStyle(fontSize: 13, height: 1.28),
@@ -1167,7 +1120,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
   }
 
   Widget _candidateSwitcher(AppBrand brand) {
-    final copy = promptAssistCopyFor(brand);
+    final copy = promptAssistCopyFor(ref.read(brandProvider));
     final candidates = _activeCandidates;
     if (candidates.isEmpty) return const SizedBox.shrink();
     final index = _activeCandidateIndex.clamp(0, candidates.length - 1).toInt();
@@ -1175,7 +1128,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 12),
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 360 ? 8 : 12),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(12),
@@ -1183,35 +1136,17 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(Icons.auto_fix_high, size: 18, color: brand.primaryColor),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  copy.generateSwitcherLabel(index, candidates.length),
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ),
-              TextButton(
-                onPressed: () => _openAllCandidatesDialog(brand),
-                child: const Text('查看全部'),
-              ),
-              IconButton(
-                tooltip: copy.previousGenerateTooltip(),
-                onPressed: index <= 0
-                    ? null
-                    : () => _setActiveCandidateIndex(index - 1),
-                icon: const Icon(Icons.chevron_left),
-              ),
-              IconButton(
-                tooltip: copy.nextGenerateTooltip(),
-                onPressed: index >= candidates.length - 1
-                    ? null
-                    : () => _setActiveCandidateIndex(index + 1),
-                icon: const Icon(Icons.chevron_right),
-              ),
-            ],
+          PromptCandidateToolbar(
+            label: copy.generateSwitcherLabel(index, candidates.length),
+            color: brand.primaryColor,
+            onViewAll: () => _openAllCandidatesDialog(brand),
+            previousTooltip: copy.previousGenerateTooltip(),
+            nextTooltip: copy.nextGenerateTooltip(),
+            onPrevious:
+                index <= 0 ? null : () => _setActiveCandidateIndex(index - 1),
+            onNext: index >= candidates.length - 1
+                ? null
+                : () => _setActiveCandidateIndex(index + 1),
           ),
           const SizedBox(height: 6),
           _candidateText(candidate),
@@ -1243,7 +1178,7 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: brand.panelColor.withValues(alpha: 0.2),
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.88),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -1256,8 +1191,6 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
               Expanded(
                 child: Text(
                   '${brand.generateQuotaLabel}: $remain',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
@@ -1274,8 +1207,6 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
               Expanded(
                 child: Text(
                   '${brand.generateActionLabel} 记忆: $retentionText',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
@@ -1302,15 +1233,16 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
     ImageCapabilities capabilities,
     String selectedMode,
   ) {
-    return Row(
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 10,
+      runSpacing: 8,
       children: [
         Icon(Icons.alt_route_rounded, size: 18, color: brand.primaryColor),
-        const SizedBox(width: 12),
         Text(
           '线路:',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
-        const SizedBox(width: 10),
         SegmentedButton<String>(
           segments: const [
             ButtonSegment(value: 'vip', label: Text('VIP')),
@@ -1473,62 +1405,6 @@ class _MaterializerScreenState extends ConsumerState<MaterializerScreen> {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(message),
-    );
-  }
-
-  List<DropdownMenuItem<String>> _resolutionItems() {
-    return imageResolutionTiers
-        .map(
-          (item) => CompactDropdownField.centeredItem<String>(
-            item.value,
-            item.label,
-            context,
-          ),
-        )
-        .toList();
-  }
-
-  List<DropdownMenuItem<String>> _aspectItems() {
-    return imageAspectRatioOptions
-        .map(
-          (item) => CompactDropdownField.centeredItem<String>(
-            item.value,
-            item.label,
-            context,
-          ),
-        )
-        .toList();
-  }
-
-  List<DropdownMenuItem<String>> _items(List<ImageOption> options) {
-    return options
-        .map(
-          (item) => CompactDropdownField.centeredItem<String>(
-            item.value,
-            item.label,
-            context,
-          ),
-        )
-        .toList();
-  }
-
-  Widget _dropdownField<T>({
-    required String label,
-    required T value,
-    required double width,
-    double? menuWidth,
-    required List<DropdownMenuItem<T>> items,
-    required List<String> selectedLabels,
-    required ValueChanged<T?> onChanged,
-  }) {
-    return CompactDropdownField<T>(
-      label: label,
-      value: value,
-      width: width,
-      menuWidth: menuWidth,
-      items: items,
-      selectedLabels: selectedLabels,
-      onChanged: onChanged,
     );
   }
 

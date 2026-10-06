@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api_error.dart';
 import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
+import '../../core/frontend_widgets.dart';
 import '../../core/compact_save_notice.dart';
 import '../../core/providers.dart';
 import 'feedback_utils.dart';
@@ -200,7 +201,8 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
         label: const Text('提交反馈'),
       ),
       body: BrandBackground(
-        child: FutureBuilder<Map<String, dynamic>>(
+        child: FrontendPageFrame(
+            child: FutureBuilder<Map<String, dynamic>>(
           future: _future,
           builder: (context, snapshot) {
             final items = feedbackItems(snapshot.data);
@@ -231,7 +233,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
               ),
             );
           },
-        ),
+        )),
       ),
     );
   }
@@ -270,62 +272,40 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
           },
         ),
         const SizedBox(height: 12),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _filterChip(
-                activeFilterText,
-                !_hasActiveFilters,
-                () {
-                  if (!_hasActiveFilters) return;
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _filterChip(activeFilterText, !_hasActiveFilters, () {
+              if (!_hasActiveFilters) return;
+              FocusManager.instance.primaryFocus?.unfocus();
+              setState(() {
+                _type = '';
+                _status = '';
+                _keywordController.clear();
+                _page = 1;
+                _reload();
+              });
+            }),
+            ...feedbackTypes.map((item) =>
+                _filterChip(feedbackTypeLabel(item), _type == item, () {
                   FocusManager.instance.primaryFocus?.unfocus();
                   setState(() {
-                    _type = '';
-                    _status = '';
-                    _keywordController.clear();
+                    _type = _type == item ? '' : item;
                     _page = 1;
                     _reload();
                   });
-                },
-              ),
-              const SizedBox(width: 8),
-              ...feedbackTypes.map(
-                (item) => Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: _filterChip(
-                    feedbackTypeLabel(item),
-                    _type == item,
-                    () {
-                      FocusManager.instance.primaryFocus?.unfocus();
-                      setState(() {
-                        _type = _type == item ? '' : item;
-                        _page = 1;
-                        _reload();
-                      });
-                    },
-                  ),
-                ),
-              ),
-              ...feedbackStatuses.map(
-                (item) => Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: _filterChip(
-                    feedbackStatusLabel(item),
-                    _status == item,
-                    () {
-                      FocusManager.instance.primaryFocus?.unfocus();
-                      setState(() {
-                        _status = _status == item ? '' : item;
-                        _page = 1;
-                        _reload();
-                      });
-                    },
-                  ),
-                ),
-              ),
-            ],
-          ),
+                })),
+            ...feedbackStatuses.map((item) =>
+                _filterChip(feedbackStatusLabel(item), _status == item, () {
+                  FocusManager.instance.primaryFocus?.unfocus();
+                  setState(() {
+                    _status = _status == item ? '' : item;
+                    _page = 1;
+                    _reload();
+                  });
+                })),
+          ],
         ),
       ],
     );
@@ -359,25 +339,27 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: () => _openCompose(initialType: 'feedback'),
-                  icon: const Icon(Icons.feedback_outlined),
-                  label: const Text('提交反馈'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _openCompose(initialType: 'wish'),
-                  icon: const Icon(Icons.auto_awesome_outlined),
-                  label: const Text('提交许愿'),
-                ),
-              ),
-            ],
-          ),
+          LayoutBuilder(builder: (context, constraints) {
+            final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+            final columns = constraints.maxWidth >= 320 * scale ? 2 : 1;
+            final width = (constraints.maxWidth - (columns - 1) * 12) / columns;
+            return Wrap(spacing: 12, runSpacing: 12, children: [
+              SizedBox(
+                  width: width,
+                  child: FilledButton.icon(
+                    onPressed: () => _openCompose(initialType: 'feedback'),
+                    icon: const Icon(Icons.feedback_outlined),
+                    label: const Text('提交反馈'),
+                  )),
+              SizedBox(
+                  width: width,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _openCompose(initialType: 'wish'),
+                    icon: const Icon(Icons.auto_awesome_outlined),
+                    label: const Text('提交许愿'),
+                  )),
+            ]);
+          }),
         ],
       ),
     );

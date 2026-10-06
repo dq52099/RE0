@@ -561,9 +561,7 @@ class _GalleryDetailScreenState extends ConsumerState<GalleryDetailScreen> {
     final surface = Theme.of(context).colorScheme.surface;
     return SafeArea(
       top: false,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
+      child: Container(
         padding: EdgeInsets.fromLTRB(
           16,
           10,

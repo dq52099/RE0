@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_motion.dart';
 
 const String _cnFontFamily = 'sans-serif';
 const List<String> _cnFontFallback = [
@@ -11,6 +12,32 @@ const List<String> _cnFontFallback = [
 ];
 const String _cnHeadingFontFamily = 'sans-serif';
 const List<String> _cnHeadingFallback = _cnFontFallback;
+
+ThemeData _withThemeLines(ThemeData theme) {
+  final primary = theme.colorScheme.primary;
+  return theme.copyWith(
+    pageTransitionsTheme: const PageTransitionsTheme(builders: {
+      TargetPlatform.android: AppAndroidPageTransitionsBuilder(),
+      TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.linux: AppPageTransitionsBuilder(),
+      TargetPlatform.windows: AppPageTransitionsBuilder(),
+    }),
+    colorScheme: theme.colorScheme.copyWith(
+      outline: primary.withValues(alpha: 0.32),
+      outlineVariant: primary.withValues(alpha: 0.14),
+    ),
+    dividerTheme: DividerThemeData(
+      color: primary.withValues(alpha: 0.16),
+      thickness: 0.6,
+      space: 16,
+    ),
+    expansionTileTheme: theme.expansionTileTheme.copyWith(
+      shape: const Border(),
+      collapsedShape: const Border(),
+    ),
+  );
+}
 
 enum BrandStyle {
   botw,
@@ -186,7 +213,7 @@ class AppBrands {
       backgroundOverlay: backgroundOverlay,
       backgroundOverlayOpacity: backgroundOverlayOpacity,
       historyImageRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-      theme: theme,
+      theme: _withThemeLines(theme),
     );
   }
 
@@ -229,7 +256,7 @@ class AppBrands {
     backgroundOverlay: const Color(0xFF061417),
     backgroundOverlayOpacity: 0.68,
     historyImageRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-    theme: _botwTheme,
+    theme: _withThemeLines(_botwTheme),
   );
 
   static final re0 = AppBrand(
@@ -271,7 +298,7 @@ class AppBrands {
     backgroundOverlay: const Color(0xFFF8FBFF),
     backgroundOverlayOpacity: 0.72,
     historyImageRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-    theme: _re0Theme,
+    theme: _withThemeLines(_re0Theme),
   );
 
   static final genshin = _standard(

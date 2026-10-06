@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'compact_save_notice.dart';
 import 'image_cache_service.dart';
@@ -15,6 +18,20 @@ Future<SavedImage?> saveImageWithUserFlow(
 
   final brand = ref.read(brandProvider);
   final cache = ref.read(imageCacheProvider);
+  if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+    final saved = await cache.saveImageAs(imageUrl);
+    if (saved != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('已保存：${saved.file.path}'),
+        action: SnackBarAction(
+            label: '打开文件夹',
+            onPressed: () {
+              launchUrl(Uri.directory(saved.file.parent.path));
+            }),
+      ));
+    }
+    return saved;
+  }
   final alreadySaved = await cache.hasSavedImageForUrl(
     imageUrl,
     albumName: brand.galleryAlbumName,

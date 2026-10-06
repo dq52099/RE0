@@ -16,8 +16,6 @@ class ImageQuotaPriceLine extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       'VIP:${capabilities.effectiveVipQuotaPerImage}额度/张（${capabilities.vipMultiplierLabel}倍）  一般:${capabilities.generalQuotaPerImage}额度/张',
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
       style: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: accentColor.withValues(alpha: 0.88),
             fontWeight: FontWeight.w600,

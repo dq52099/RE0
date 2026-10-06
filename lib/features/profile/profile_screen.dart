@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:image_cropper/image_cropper.dart';
@@ -7,11 +8,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_error.dart';
+import '../../core/desktop_avatar_crop.dart';
 import '../../core/app_brand.dart';
 import '../../core/app_update_service.dart';
 import '../../core/brand_background.dart';
+import '../../core/frontend_widgets.dart';
+import '../../core/stable_form_dialog.dart';
 import '../../core/cached_gateway_image.dart';
-import '../../core/compact_dropdown_field.dart';
 import '../../core/compact_save_notice.dart';
 import '../../core/gateway_avatar.dart';
 import '../../core/level_rewards_sheet.dart';
@@ -84,6 +87,69 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     });
   }
 
+  Future<void> _refreshProfile() async {
+    try {
+      final user = await ref.read(gatewayClientProvider).checkAuth();
+      if (!mounted) return;
+      ref.read(authStateProvider.notifier).state = user;
+      ref.read(energyProvider.notifier).state =
+          user['quota_summary'] ?? ref.read(energyProvider);
+      ref.read(historyRetentionProvider.notifier).state =
+          historyRetentionSummaryFromUser(user,
+              fallback: ref.read(historyRetentionProvider));
+      setState(_refreshCacheSize);
+      await Future.wait([
+        _checkInStatusFuture!,
+        _dailyImageDrawFuture!,
+        _notificationsFuture!,
+      ]);
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(friendlyError(error, fallback: '刷新账号信息失败。'))));
+    }
+  }
+
+  Widget _sectionLabel(String title) => Padding(
+        padding: const EdgeInsets.fromLTRB(4, 12, 4, 12),
+        child: Text(title,
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(fontWeight: FontWeight.w700)),
+      );
+
+  Future<void> _chooseTheme() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+          child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('主题风格', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 12),
+          for (final theme in AppBrands.all)
+            ListTile(
+              leading: CircleAvatar(
+                  backgroundColor: theme.primaryColor,
+                  child:
+                      const Icon(Icons.palette_outlined, color: Colors.white)),
+              title: Text(theme.appTitle),
+              trailing: theme.id == ref.read(brandProvider).id
+                  ? const Icon(Icons.check_circle_outline)
+                  : null,
+              onTap: () {
+                ref.read(brandProvider.notifier).setBrand(theme.id);
+                Navigator.pop(sheetContext);
+              },
+            ),
+        ]),
+      )),
+    );
+  }
+
   Future<void> _clearCache() async {
     setState(() => _isClearingCache = true);
     try {
@@ -108,6 +174,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     try {
       final client = ref.read(gatewayClientProvider);
       await client.logout();
+      ref.read(generateImagesProvider.notifier).clear();
+      ref.read(editImagesProvider.notifier).clear();
       ref.read(authStateProvider.notifier).state = null;
       ref.read(historyRetentionProvider.notifier).state =
           historyRetentionSummaryFromUser(null);
@@ -206,31 +274,50 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
     if (picked == null) return;
 
-    final cropped = await ImageCropper().cropImage(
-      sourcePath: picked.path,
-      compressFormat: ImageCompressFormat.png,
-      maxWidth: 1024,
-      maxHeight: 1024,
-      uiSettings: [
-        AndroidUiSettings(
-          toolbarTitle: '裁剪头像',
-          toolbarColor: ref.read(brandProvider).primaryColor,
-          lockAspectRatio: true,
-          hideBottomControls: false,
-          toolbarWidgetColor: Colors.white,
-          activeControlsWidgetColor: ref.read(brandProvider).primaryColor,
-          initAspectRatio: CropAspectRatioPreset.square,
-          cropStyle: CropStyle.circle,
-          aspectRatioPresets: [CropAspectRatioPreset.square],
-        ),
-      ],
-    );
-    if (cropped == null) return;
+    if (!mounted) return;
+    File? desktopCrop;
+    String avatarPath;
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      try {
+        desktopCrop = await cropDesktopAvatar(context, picked.path);
+      } catch (_) {
+        if (mounted) showCenterNotice(context, '无法读取这张图片，请换一张重试。');
+        return;
+      }
+      if (desktopCrop == null) return;
+      avatarPath = desktopCrop.path;
+    } else {
+      final cropped = await ImageCropper().cropImage(
+        sourcePath: picked.path,
+        compressFormat: ImageCompressFormat.png,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: '裁剪头像',
+            toolbarColor: ref.read(brandProvider).primaryColor,
+            lockAspectRatio: true,
+            hideBottomControls: false,
+            toolbarWidgetColor: Colors.white,
+            activeControlsWidgetColor: ref.read(brandProvider).primaryColor,
+            initAspectRatio: CropAspectRatioPreset.square,
+            cropStyle: CropStyle.circle,
+            aspectRatioPresets: [CropAspectRatioPreset.square],
+          ),
+        ],
+      );
+      if (cropped == null) return;
+      avatarPath = cropped.path;
+    }
+    if (!mounted) {
+      if (desktopCrop != null) await desktopCrop.delete();
+      return;
+    }
 
     setState(() => _isUpdatingAvatar = true);
     try {
       final updated = await ref.read(gatewayClientProvider).updateMyAvatar(
-            cropped.path,
+            avatarPath,
           );
       ref.read(authStateProvider.notifier).state = updated;
       ref.read(energyProvider.notifier).state = updated['quota_summary'];
@@ -247,6 +334,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         SnackBar(content: Text(friendlyError(error, fallback: '头像上传失败。'))),
       );
     } finally {
+      if (desktopCrop != null) await desktopCrop.delete();
       if (mounted) {
         setState(() => _isUpdatingAvatar = false);
       }
@@ -254,12 +342,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _checkUpdate() async {
+    if (_isCheckingUpdate || _isDownloadingUpdate) return;
     setState(() => _isCheckingUpdate = true);
     try {
       final updateService = ref.read(appUpdateProvider);
-      final info = await updateService.checkForUpdate();
+      final info = await updateService
+          .checkGatewayUpdate(ref.read(gatewayClientProvider));
       if (!mounted) return;
-      setState(() => _latestUpdateInfo = info);
+      setState(() {
+        _latestUpdateInfo = info;
+        _isCheckingUpdate = false;
+      });
       if (!info.available) {
         showCenterNotice(context, '已是最新版本 ${updateService.currentVersionName}');
         return;
@@ -285,7 +378,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
     _hasAutoCheckedUpdate = true;
     try {
-      final info = await ref.read(appUpdateProvider).checkForUpdate();
+      final info = await ref
+          .read(appUpdateProvider)
+          .checkGatewayUpdate(ref.read(gatewayClientProvider));
       if (!mounted) return;
       setState(() => _latestUpdateInfo = info);
     } catch (_) {
@@ -408,184 +503,90 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final displayName =
         TextEditingController(text: user?['display_name']?.toString() ?? '');
     final canEditUsername = user?['can_edit_username'] != false;
-    final payload = await showDialog<Map<String, String>>(
+    final saved = await showFrontendDialog<bool>(
       context: context,
-      builder: (context) {
-        return _wideDialog(
-          title: '编辑个人资料',
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: username,
-                enabled: canEditUsername,
-                decoration: InputDecoration(
+      barrierDismissible: false,
+      controllers: [username, displayName],
+      builder: (_) => FrontendSaveDialog(
+        title: '编辑个人资料',
+        fields: [
+          TextField(
+              controller: username,
+              enabled: canEditUsername,
+              decoration: InputDecoration(
                   labelText: '账号',
-                  helperText:
-                      canEditUsername ? '可使用小写字母、数字、下划线或短横线' : '当前账号不允许修改账号名',
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: displayName,
-                decoration: const InputDecoration(labelText: '显示名称'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final nextUsername = username.text.trim();
-                final nextDisplayName = displayName.text.trim();
-                if (nextUsername.isEmpty || nextDisplayName.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('账号和显示名称不能为空。')),
-                  );
-                  return;
-                }
-                if (nextUsername.length < 4 || nextUsername.length > 24) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('账号长度需为 4 到 24 位。')),
-                  );
-                  return;
-                }
-                if (!RegExp(r'^[a-z][a-z0-9_-]{3,23}$')
-                    .hasMatch(nextUsername)) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('账号需以小写字母开头，只允许小写字母、数字、下划线和短横线。'),
-                    ),
-                  );
-                  return;
-                }
-                if (nextDisplayName.length < 2 || nextDisplayName.length > 32) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('显示名称长度需为 2 到 32 个字符。')),
-                  );
-                  return;
-                }
-                Navigator.pop(context, {
-                  'username': nextUsername,
-                  'display_name': nextDisplayName,
-                });
-              },
-              child: const Text('保存'),
-            ),
-          ],
-        );
-      },
+                  helperMaxLines: 3,
+                  helperText: canEditUsername
+                      ? '4–24 位，以小写字母开头，可包含数字、下划线或短横线'
+                      : '当前账号不允许修改账号名')),
+          const SizedBox(height: 16),
+          TextField(
+              controller: displayName,
+              decoration: const InputDecoration(
+                  labelText: '显示名称', helperText: '2–32 个字符')),
+        ],
+        onSave: () async {
+          final account = username.text.trim();
+          final name = displayName.text.trim();
+          if (canEditUsername &&
+              !RegExp(r'^[a-z][a-z0-9_-]{3,23}$').hasMatch(account)) {
+            throw const GatewayException(
+                '账号需为 4–24 位，以小写字母开头，只允许小写字母、数字、下划线和短横线。');
+          }
+          if (name.length < 2 || name.length > 32) {
+            throw const GatewayException('显示名称长度需为 2–32 个字符。');
+          }
+          final updated = await ref
+              .read(gatewayClientProvider)
+              .updateMyProfile(account, name);
+          if (!mounted) return;
+          ref.read(authStateProvider.notifier).state = updated;
+          ref.read(energyProvider.notifier).state =
+              updated['quota_summary'] ?? ref.read(energyProvider);
+          ref.read(historyRetentionProvider.notifier).state =
+              historyRetentionSummaryFromUser(updated,
+                  fallback: ref.read(historyRetentionProvider));
+        },
+      ),
     );
-    if (payload == null) return;
-    try {
-      final updated = await ref.read(gatewayClientProvider).updateMyProfile(
-            payload['username']!,
-            payload['display_name']!,
-          );
-      ref.read(authStateProvider.notifier).state = updated;
-      ref.read(energyProvider.notifier).state = updated['quota_summary'];
-      ref.read(historyRetentionProvider.notifier).state =
-          historyRetentionSummaryFromUser(
-        updated,
-        fallback: ref.read(historyRetentionProvider),
-      );
-      if (!mounted) return;
-      showCenterNotice(context, '个人资料已保存');
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyError(error, fallback: '个人资料保存失败。'))),
-      );
-    }
+    if (mounted && saved == true) showCenterNotice(context, '个人资料已保存');
   }
 
   Future<void> _changePassword() async {
     final current = TextEditingController();
     final next = TextEditingController();
     final confirm = TextEditingController();
-    final payload = await showDialog<Map<String, String>>(
+    final saved = await showFrontendDialog<bool>(
       context: context,
-      builder: (context) {
-        return _wideDialog(
-          title: '修改密码',
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: current,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: '当前密码'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: next,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: '新密码',
-                  helperText: '至少 10 位，包含大小写字母、数字和特殊字符',
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: confirm,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: '确认新密码'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (current.text.isEmpty || next.text.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('请填写当前密码和新密码。')),
-                  );
-                  return;
-                }
-                if (next.text.length < 10) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('新密码至少需要 10 位。')),
-                  );
-                  return;
-                }
-                if (next.text != confirm.text) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('两次输入的新密码不一致。')),
-                  );
-                  return;
-                }
-                Navigator.pop(context, {
-                  'current_password': current.text,
-                  'new_password': next.text,
-                });
-              },
-              child: const Text('保存'),
-            ),
-          ],
-        );
-      },
+      barrierDismissible: false,
+      controllers: [current, next, confirm],
+      builder: (_) => FrontendSaveDialog(
+        title: '修改密码',
+        fields: [
+          FrontendPasswordField(controller: current, label: '当前密码'),
+          const SizedBox(height: 16),
+          FrontendPasswordField(
+              controller: next,
+              label: '新密码',
+              helperText: '至少 10 位，包含大小写字母、数字和特殊字符'),
+          const SizedBox(height: 16),
+          FrontendPasswordField(controller: confirm, label: '确认新密码'),
+        ],
+        onSave: () async {
+          if (current.text.isEmpty || next.text.isEmpty) {
+            throw const GatewayException('请填写当前密码和新密码。');
+          }
+          if (next.text.length < 10)
+            throw const GatewayException('新密码至少需要 10 位。');
+          if (next.text != confirm.text)
+            throw const GatewayException('两次输入的新密码不一致。');
+          await ref
+              .read(gatewayClientProvider)
+              .changeMyPassword(current.text, next.text);
+        },
+      ),
     );
-    if (payload == null) return;
-    try {
-      await ref.read(gatewayClientProvider).changeMyPassword(
-            payload['current_password']!,
-            payload['new_password']!,
-          );
-      if (!mounted) return;
-      showCenterNotice(context, '密码已修改');
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyError(error, fallback: '密码修改失败。'))),
-      );
-    }
+    if (mounted && saved == true) showCenterNotice(context, '密码已修改');
   }
 
   Future<void> _bindEmail(Map<String, dynamic>? user) async {
@@ -595,8 +596,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     var binding = false;
     var cooldownSeconds = 0;
     Timer? cooldownTimer;
-    final payload = await showDialog<Map<String, String>>(
+    final payload = await showFrontendDialog<Map<String, String>>(
       context: context,
+      controllers: [email, code],
       barrierDismissible: false,
       builder: (dialogContext) {
         return StatefulBuilder(
@@ -715,38 +717,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     decoration: const InputDecoration(
                       labelText: '邮箱',
                       helperText: '绑定后可用邮箱密码登录和找回密码',
+                      helperMaxLines: 3,
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: code,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(labelText: '验证码'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      SizedBox(
-                        height: 56,
-                        child: OutlinedButton(
-                          onPressed:
-                              sending || cooldownSeconds > 0 ? null : sendCode,
-                          child: sending
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : Text(cooldownSeconds > 0
-                                  ? '${cooldownSeconds}s'
-                                  : '发送邮件'),
-                        ),
-                      ),
-                    ],
+                  FrontendFieldWithAction(
+                    field: TextField(
+                      controller: code,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: '验证码'),
+                    ),
+                    action: OutlinedButton(
+                      onPressed:
+                          sending || cooldownSeconds > 0 ? null : sendCode,
+                      child: sending
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Text(cooldownSeconds > 0
+                              ? '${cooldownSeconds}s'
+                              : '发送邮件'),
+                    ),
                   ),
                 ],
               ),
@@ -772,8 +765,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       },
     );
     cooldownTimer?.cancel();
-    email.dispose();
-    code.dispose();
+    if (!mounted) return;
     if (payload == null || payload['_updated'] == 'true') return;
     try {
       final updated = await ref
@@ -805,211 +797,209 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final systemTargetView = _systemTargetView(user);
 
     return Scaffold(
-      resizeToAvoidBottomInset: false,
-      appBar: AppBar(title: const Text('我的')),
+      resizeToAvoidBottomInset: true,
+      appBar: AppBar(title: const Text('我的'), actions: [
+        IconButton(
+            tooltip: '刷新账号信息',
+            onPressed: _refreshProfile,
+            icon: const Icon(Icons.refresh)),
+      ]),
       body: BrandBackground(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            _buildProfileCard(brand, user, hasSystemManagement),
-            const SizedBox(height: 16),
-            FutureBuilder<Map<String, dynamic>>(
-              future: _checkInStatusFuture,
-              builder: (context, snapshot) {
-                final status = snapshot.data ?? const <String, dynamic>{};
-                final signedToday = status['signed_today'] == true;
-                final reward = (status['today_reward'] as Map?) ??
-                    const <String, dynamic>{};
-                final subtitle = signedToday
-                    ? '已签到，奖励生图 ${reward['generate'] ?? 0} 次，改图 ${reward['edit'] ?? 0} 次\n${resetHintFromResponse(status)}'
-                    : '每日可随机获得 5-10 次生图和 2-5 次改图奖励\n${resetHintFromResponse(status)}';
-                return _menuCard(
-                  child: ListTile(
-                    leading: Icon(Icons.calendar_month_outlined,
-                        color: brand.successColor),
-                    title: const Text('每日签到'),
-                    subtitle: _menuSubtitle(subtitle),
-                    trailing: _isCheckingIn
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(
-                            signedToday ? '已签到' : '去签到',
-                            style: TextStyle(
-                              color: signedToday
-                                  ? brand.successColor
-                                  : brand.primaryColor,
-                              fontWeight: FontWeight.w600,
-                            ),
+        child: FrontendPageFrame(
+            child: RefreshIndicator(
+                onRefresh: _refreshProfile,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    _buildProfileCard(brand, user, hasSystemManagement),
+                    const SizedBox(height: 16),
+                    FutureBuilder<Map<String, dynamic>>(
+                      future: _checkInStatusFuture,
+                      builder: (context, snapshot) {
+                        final status =
+                            snapshot.data ?? const <String, dynamic>{};
+                        final signedToday = status['signed_today'] == true;
+                        final reward = (status['today_reward'] as Map?) ??
+                            const <String, dynamic>{};
+                        final subtitle = signedToday
+                            ? '已签到，奖励生图 ${reward['generate'] ?? 0} 次，改图 ${reward['edit'] ?? 0} 次\n${resetHintFromResponse(status)}'
+                            : '每日可随机获得 5-10 次生图和 2-5 次改图奖励\n${resetHintFromResponse(status)}';
+                        return _menuCard(
+                          child: ListTile(
+                            leading: Icon(Icons.calendar_month_outlined,
+                                color: brand.successColor),
+                            title: const Text('每日签到'),
+                            subtitle: _menuSubtitle(subtitle),
+                            trailing: _isCheckingIn
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : Text(
+                                    signedToday ? '已签到' : '去签到',
+                                    style: TextStyle(
+                                      color: signedToday
+                                          ? brand.successColor
+                                          : brand.primaryColor,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                            onTap: (_isCheckingIn || signedToday)
+                                ? null
+                                : _dailyCheckIn,
                           ),
-                    onTap:
-                        (_isCheckingIn || signedToday) ? null : _dailyCheckIn,
-                  ),
-                );
-              },
-            ),
-            _buildDailyImageDrawCard(brand),
-            _menuCard(
-              child: ListTile(
-                leading: Icon(Icons.collections_bookmark_outlined,
-                    color: brand.primaryColor),
-                title: const Text('我的画廊'),
-                subtitle: _menuSubtitle('查看收藏、点赞和自己发布到画廊的作品'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const GalleryCollectionsScreen(),
-                  ),
-                ),
-              ),
-            ),
-            FutureBuilder<Map<String, dynamic>>(
-              future: _notificationsFuture,
-              builder: (context, snapshot) {
-                final unread = int.tryParse(
-                      snapshot.data?['unread_count']?.toString() ?? '',
-                    ) ??
-                    0;
-                return _menuCard(
-                  child: ListTile(
-                    leading: Icon(Icons.notifications_none_outlined,
-                        color: brand.primaryColor),
-                    title: const Text('通知'),
-                    subtitle: _menuSubtitle('评论、点赞、收藏和反馈处理进度'),
-                    trailing: _notificationTrailing(unread),
-                    onTap: _openNotifications,
-                  ),
-                );
-              },
-            ),
-            _menuCard(
-              child: ListTile(
-                leading: Icon(Icons.person_outline, color: brand.primaryColor),
-                title: const Text('个人资料'),
-                subtitle: _menuSubtitle('查看并修改账号资料、密码与额度'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _showProfileDetails(brand, user),
-              ),
-            ),
-            _menuCard(
-              child: ListTile(
-                leading: Icon(Icons.forum_outlined, color: brand.primaryColor),
-                title: const Text('反馈与许愿'),
-                subtitle: _menuSubtitle('提交问题、建议，或希望新增的功能、模型、主题和参数'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: _openFeedback,
-              ),
-            ),
-            if (hasSystemManagement)
-              _menuCard(
-                child: ListTile(
-                  leading: Icon(
-                    Icons.admin_panel_settings,
-                    color: brand.warningColor,
-                  ),
-                  title: const Text('系统管理'),
-                  subtitle: _menuSubtitle('原生管理页：用户、密钥、系统设置与审计'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _openAdmin(targetView: systemTargetView),
-                ),
-              ),
-            if (hasSystemManagement)
-              _menuCard(
-                child: ListTile(
-                  leading: Icon(
-                    Icons.campaign_outlined,
-                    color: brand.warningColor,
-                  ),
-                  title: const Text('公告福利'),
-                  subtitle: _menuSubtitle('发布公告，给全员发放生图和改图额度'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _openAdmin(targetView: 'announcements'),
-                ),
-              ),
-            _menuCard(
-              child: ListTile(
-                leading:
-                    Icon(Icons.palette_outlined, color: brand.primaryColor),
-                title: const Text('主题风格'),
-                subtitle: _menuSubtitle(brand.appTitle),
-                trailing: SizedBox(
-                  width: 126,
-                  child: CompactDropdownField<String>(
-                    label: '主题',
-                    value: brand.id,
-                    width: 126,
-                    menuWidth: 126,
-                    items: AppBrands.all
-                        .map(
-                          (item) => CompactDropdownField.centeredItem<String>(
-                            item.id,
-                            item.appTitle,
-                            context,
+                        );
+                      },
+                    ),
+                    _buildDailyImageDrawCard(brand),
+                    _menuCard(
+                      child: ListTile(
+                        leading: Icon(Icons.collections_bookmark_outlined,
+                            color: brand.primaryColor),
+                        title: const Text('我的画廊'),
+                        subtitle: _menuSubtitle('查看收藏、点赞和自己发布到画廊的作品'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const GalleryCollectionsScreen(),
                           ),
-                        )
-                        .toList(),
-                    selectedLabels:
-                        AppBrands.all.map((item) => item.appTitle).toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        ref.read(brandProvider.notifier).setBrand(value);
-                      }
-                    },
-                  ),
-                ),
-              ),
-            ),
-            _menuCard(
-              child: ListTile(
-                leading: Icon(Icons.system_update, color: brand.primaryColor),
-                title: const Text('检查更新'),
-                subtitle: _menuSubtitle(
-                    '当前版本 ${ref.read(appUpdateProvider).currentVersionName}'),
-                trailing: _updateTrailing(),
-                onTap: (_isCheckingUpdate || _isDownloadingUpdate)
-                    ? null
-                    : _checkUpdate,
-              ),
-            ),
-            FutureBuilder<int>(
-              future: _cacheSizeFuture,
-              builder: (context, snapshot) {
-                return _menuCard(
-                  child: ListTile(
-                    leading: Icon(Icons.cached, color: brand.successColor),
-                    title: const Text('图片缓存'),
-                    subtitle: _menuSubtitle(
-                        '当前缓存 ${_formatBytes(snapshot.data ?? 0)}'),
-                    trailing: _isClearingCache
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.delete_outline),
-                    onTap: _isClearingCache ? null : _clearCache,
-                  ),
-                );
-              },
-            ),
-            _menuCard(
-              child: ListTile(
-                leading: Icon(Icons.logout, color: brand.warningColor),
-                title: const Text('退出登录'),
-                trailing: _isLoggingOut
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : null,
-                onTap: _isLoggingOut ? null : _logout,
-              ),
-            ),
-          ],
-        ),
+                        ),
+                      ),
+                    ),
+                    FutureBuilder<Map<String, dynamic>>(
+                      future: _notificationsFuture,
+                      builder: (context, snapshot) {
+                        final unread = int.tryParse(
+                              snapshot.data?['unread_count']?.toString() ?? '',
+                            ) ??
+                            0;
+                        return _menuCard(
+                          child: ListTile(
+                            leading: Icon(Icons.notifications_none_outlined,
+                                color: brand.primaryColor),
+                            title: const Text('通知'),
+                            subtitle: _menuSubtitle('评论、点赞、收藏和反馈处理进度'),
+                            trailing: _notificationTrailing(unread),
+                            onTap: _openNotifications,
+                          ),
+                        );
+                      },
+                    ),
+                    _sectionLabel('账号与帮助'),
+                    _menuCard(
+                      child: ListTile(
+                        leading: Icon(Icons.person_outline,
+                            color: brand.primaryColor),
+                        title: const Text('个人资料'),
+                        subtitle: _menuSubtitle('查看账号资料与额度，修改昵称、邮箱和密码'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => _showProfileDetails(brand, user),
+                      ),
+                    ),
+                    _menuCard(
+                      child: ListTile(
+                        leading: Icon(Icons.forum_outlined,
+                            color: brand.primaryColor),
+                        title: const Text('反馈与许愿'),
+                        subtitle: _menuSubtitle('提交问题、建议，或希望新增的功能、模型、主题和参数'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: _openFeedback,
+                      ),
+                    ),
+                    if (hasSystemManagement) _sectionLabel('管理工具'),
+                    if (hasSystemManagement)
+                      _menuCard(
+                        child: ListTile(
+                          leading: Icon(
+                            Icons.admin_panel_settings,
+                            color: brand.warningColor,
+                          ),
+                          title: const Text('系统管理'),
+                          subtitle: _menuSubtitle('管理用户、服务线路、系统设置与备份'),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => _openAdmin(targetView: systemTargetView),
+                        ),
+                      ),
+                    if (hasSystemManagement)
+                      _menuCard(
+                        child: ListTile(
+                          leading: Icon(
+                            Icons.campaign_outlined,
+                            color: brand.warningColor,
+                          ),
+                          title: const Text('公告福利'),
+                          subtitle: _menuSubtitle('发布公告，给全员发放生图和改图额度'),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => _openAdmin(targetView: 'announcements'),
+                        ),
+                      ),
+                    _sectionLabel('应用设置'),
+                    _menuCard(
+                      child: ListTile(
+                        leading: Icon(Icons.palette_outlined,
+                            color: brand.primaryColor),
+                        title: const Text('主题风格'),
+                        subtitle: _menuSubtitle(brand.appTitle),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: _chooseTheme,
+                      ),
+                    ),
+                    _menuCard(
+                      child: ListTile(
+                        leading: Icon(Icons.system_update,
+                            color: brand.primaryColor),
+                        title: const Text('检查更新'),
+                        subtitle: _menuSubtitle(
+                            '当前版本 ${ref.read(appUpdateProvider).currentVersionName}'),
+                        trailing: _updateTrailing(),
+                        onTap: (_isCheckingUpdate || _isDownloadingUpdate)
+                            ? null
+                            : _checkUpdate,
+                      ),
+                    ),
+                    FutureBuilder<int>(
+                      future: _cacheSizeFuture,
+                      builder: (context, snapshot) {
+                        return _menuCard(
+                          child: ListTile(
+                            leading:
+                                Icon(Icons.cached, color: brand.successColor),
+                            title: const Text('图片缓存'),
+                            subtitle: _menuSubtitle(
+                                '当前缓存 ${_formatBytes(snapshot.data ?? 0)}'),
+                            trailing: _isClearingCache
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.delete_outline),
+                            onTap: _isClearingCache ? null : _clearCache,
+                          ),
+                        );
+                      },
+                    ),
+                    _menuCard(
+                      child: ListTile(
+                        leading: Icon(Icons.logout, color: brand.warningColor),
+                        title: const Text('退出登录'),
+                        trailing: _isLoggingOut
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : null,
+                        onTap: _isLoggingOut ? null : _logout,
+                      ),
+                    ),
+                  ],
+                ))),
       ),
     );
   }
@@ -1041,72 +1031,84 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => _openAvatarPreview(user),
-                      child: _avatar(user, brand),
-                    ),
-                    Positioned(
-                      right: -2,
-                      bottom: -2,
-                      child: Material(
-                        color: Theme.of(context).colorScheme.surface,
-                        elevation: 4,
-                        shadowColor: Colors.black.withValues(alpha: 0.16),
-                        shape: const CircleBorder(),
-                        child: InkWell(
-                          customBorder: const CircleBorder(),
-                          onTap:
-                              _isUpdatingAvatar ? null : _pickAndUploadAvatar,
-                          child: SizedBox(
-                            width: 30,
-                            height: 30,
-                            child: Center(
-                              child: _isUpdatingAvatar
-                                  ? const SizedBox(
-                                      width: 15,
-                                      height: 15,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2),
-                                    )
-                                  : Icon(
-                                      Icons.edit,
-                                      size: 15,
-                                      color: brand.primaryColor,
-                                    ),
-                            ),
+            LayoutBuilder(builder: (context, constraints) {
+              final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+              final avatar = Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _openAvatarPreview(user),
+                    child: _avatar(user, brand),
+                  ),
+                  Positioned(
+                    right: -2,
+                    bottom: -2,
+                    child: Material(
+                      color: Theme.of(context).colorScheme.surface,
+                      elevation: 4,
+                      shadowColor: Colors.black.withValues(alpha: 0.16),
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: _isUpdatingAvatar ? null : _pickAndUploadAvatar,
+                        child: SizedBox(
+                          width: 30,
+                          height: 30,
+                          child: Center(
+                            child: _isUpdatingAvatar
+                                ? const SizedBox(
+                                    width: 15,
+                                    height: 15,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : Icon(
+                                    Icons.edit,
+                                    size: 15,
+                                    color: brand.primaryColor,
+                                  ),
                           ),
                         ),
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        user?['display_name']?.toString() ?? '未知用户',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text('@${user?['username'] ?? '-'}'),
-                    ],
                   ),
-                ),
+                ],
+              );
+              final identity = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    user?['display_name']?.toString() ?? '未知用户',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text('@${user?['username'] ?? '-'}'),
+                ],
+              );
+              final details = Row(children: [
+                Expanded(child: identity),
                 if (hasSystemManagement)
                   Icon(Icons.verified_user, color: brand.warningColor),
-              ],
-            ),
+              ]);
+              if (constraints.maxWidth < 94 + 120 * scale) {
+                return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      avatar,
+                      const SizedBox(height: 12),
+                      details,
+                    ]);
+              }
+              return Row(children: [
+                avatar,
+                const SizedBox(width: 14),
+                Expanded(child: details),
+              ]);
+            }),
             const SizedBox(height: 18),
             Align(
               alignment: Alignment.centerLeft,
@@ -1121,7 +1123,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                _chip(
+                _actionChip(
                   brand,
                   '等级',
                   levelInfo['label']?.toString() ?? 'LV0',
@@ -1133,7 +1135,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     client: ref.read(gatewayClientProvider),
                   ),
                 ),
-                _chip(
+                _actionChip(
                   brand,
                   '积分',
                   '${user?['points'] ?? 0}',
@@ -1144,20 +1146,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     accentColor: brand.primaryColor,
                   ),
                 ),
-                _chip(brand, '生图', _quotaText(generateQuota)),
-                _chip(brand, '改图', _quotaText(editQuota)),
-                _chip(
-                  brand,
-                  '生图记忆',
-                  _retentionText(generateRetention),
-                  icon: Icons.collections_bookmark_outlined,
-                ),
-                _chip(
-                  brand,
-                  '改图记忆',
-                  _retentionText(editRetention),
-                  icon: Icons.history_edu_outlined,
-                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                _statusChip('生图', _quotaText(generateQuota)),
+                _statusChip('改图', _quotaText(editQuota)),
+                _statusChip('生图保留余量', _retentionText(generateRetention)),
+                _statusChip('改图保留余量', _retentionText(editRetention)),
               ],
             ),
           ],
@@ -1166,35 +1165,65 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _chip(
+  Widget _actionChip(
     AppBrand brand,
     String label,
     String value, {
-    IconData? icon,
-    VoidCallback? onTap,
+    required IconData icon,
+    required VoidCallback onTap,
   }) {
-    final content = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        border: Border.all(color: brand.primaryColor.withValues(alpha: 0.6)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('$label: $value'),
-          if (icon != null) ...[
-            const SizedBox(width: 6),
-            Icon(icon, size: 15, color: brand.primaryColor),
-          ],
-        ],
+    return Semantics(
+      button: true,
+      child: Material(
+        color: brand.primaryColor.withValues(alpha: 0.09),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: brand.primaryColor.withValues(alpha: 0.35)),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 48),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 18, color: brand.primaryColor),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    '$label: $value',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: brand.primaryColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right, size: 18, color: brand.primaryColor),
+              ],
+            ),
+          ),
+        ),
       ),
     );
-    if (onTap == null) return content;
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: content,
+  }
+
+  Widget _statusChip(String label, String value) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: colors.onSurface.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        '$label: $value',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colors.onSurfaceVariant,
+            ),
+      ),
     );
   }
 
@@ -1418,7 +1447,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       }
     }
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 420),
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 260),
       switchInCurve: Curves.easeOutCubic,
       switchOutCurve: Curves.easeInCubic,
       transitionBuilder: (child, animation) {
@@ -1592,23 +1623,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        _chip(
-                          brand,
+                        _statusChip(
                           '评分',
                           '${todayDraw['rarity']?.toString() ?? 'R'} · ${todayDraw['quality_score']?.toString() ?? 0}',
-                          icon: Icons.stars_outlined,
                         ),
-                        _chip(
-                          brand,
+                        _statusChip(
                           '清晰度',
                           todayDraw['quality_mode_label']?.toString() ?? 'Auto',
-                          icon: Icons.tune,
                         ),
-                        _chip(
-                          brand,
+                        _statusChip(
                           '线路',
                           todayDraw['image_mode_label']?.toString() ?? '一般',
-                          icon: Icons.alt_route_rounded,
                         ),
                       ],
                     ),
@@ -1723,7 +1748,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     required Widget content,
     required List<Widget> actions,
   }) {
-    return Dialog(
+    return KeyboardStableDialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),

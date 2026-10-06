@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../../core/api_error.dart';
 import '../../core/app_brand.dart';
 import '../../core/brand_background.dart';
+import '../../core/frontend_widgets.dart';
 import '../../core/cached_gateway_image.dart';
 import '../../core/compact_save_notice.dart';
 import '../../core/image_capabilities.dart';
@@ -44,6 +45,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   final Set<String> _retryingKeys = {};
   Timer? _searchDebounce;
   int _page = 1;
+  int _loadedPage = 1;
   int _pageSize = 10;
   int _total = 0;
   int _totalPages = 1;
@@ -89,7 +91,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   void didUpdateWidget(covariant CompendiumScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.refreshToken != widget.refreshToken) {
-      _resetFiltersAndReload();
+      _refresh();
     }
   }
 
@@ -123,6 +125,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
       }
     });
 
+    final requestedPage = _page;
     try {
       final response = await ref.read(gatewayClientProvider).getHistory(
             _page,
@@ -139,8 +142,9 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
           int.tryParse(response['total_pages']?.toString() ?? '') ?? _page;
       final total =
           int.tryParse(response['total']?.toString() ?? '') ?? nextItems.length;
-      if (!mounted) return;
+      if (!mounted || _pendingReset) return;
       setState(() {
+        _loadedPage = requestedPage;
         _items.clear();
         _items.addAll(nextItems);
         _total = total;
@@ -150,7 +154,10 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = friendlyError(error, fallback: '无法读取记忆回廊。'));
+      setState(() {
+        _page = _loadedPage;
+        _error = friendlyError(error, fallback: '无法读取图片记录。');
+      });
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -175,6 +182,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
   }
 
   Future<void> _refresh() async {
+    _searchDebounce?.cancel();
     await _load(reset: true);
   }
 
@@ -298,7 +306,7 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('删除图片记录'),
-        content: const Text('删除后会从当前手机的记忆回廊中移除，并清理对应图片缓存。'),
+        content: const Text('将删除这条图片记录并清理对应缓存。删除后无法撤销。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -714,69 +722,106 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
         ],
       ),
       body: BrandBackground(
-        child: RefreshIndicator(
-          onRefresh: _refresh,
-          child: CustomScrollView(
-            controller: _scrollController,
-            cacheExtent: 1200,
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            slivers: [
-              SliverToBoxAdapter(
-                child: Column(
-                  children: [
-                    _searchBar(brand),
-                    _filterBar(brand),
-                  ],
-                ),
-              ),
-              if (_error != null && _items.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: _errorState(_error!),
-                )
-              else if (_items.isEmpty && _isLoading)
-                const SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (_items.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(child: Text(brand.emptyHistoryText)),
-                )
-              else if (visibleItems.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                    child: Text(
-                        _query.isEmpty ? brand.emptyHistoryText : '没有匹配的图片记录'),
-                  ),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.all(16),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final item = visibleItems[index];
-                        return KeyedSubtree(
-                          key: ValueKey(item['id'] ?? item['url'] ?? index),
-                          child: _historyCard(brand, item),
-                        );
-                      },
-                      childCount: visibleItems.length,
+        child: FrontendPageFrame(
+            maxWidth: 1440,
+            child: RefreshIndicator(
+              onRefresh: _refresh,
+              child: CustomScrollView(
+                controller: _scrollController,
+                cacheExtent: 1200,
+                physics: const AlwaysScrollableScrollPhysics(),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Column(
+                      children: [
+                        _searchBar(brand),
+                        _filterBar(brand),
+                      ],
                     ),
                   ),
-                ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                  child: _pageControls(),
-                ),
+                  if (_error != null && _items.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: _errorState(_error!),
+                    )
+                  else if (_items.isEmpty && _isLoading)
+                    const SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_items.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: FrontendStateCard(
+                            title: brand.emptyHistoryText,
+                            message: '生图和改图的结果会保存在这里。成功图片可以保存、分享或发布到画廊。',
+                          )),
+                    )
+                  else if (visibleItems.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: FrontendStateCard(
+                            title: '没有匹配的图片记录',
+                            message: '试试其他关键词，或清除筛选。',
+                            actionLabel: '清除筛选',
+                            onAction: _resetFiltersAndReload,
+                          )),
+                    )
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.all(16),
+                      sliver:
+                          SliverLayoutBuilder(builder: (context, constraints) {
+                        final columns =
+                            constraints.crossAxisExtent >= 1000 ? 2 : 1;
+                        return SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                          (context, row) => Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                for (var column = 0;
+                                    column < columns;
+                                    column++) ...[
+                                  if (column > 0) const SizedBox(width: 20),
+                                  Expanded(
+                                      child: row * columns + column <
+                                              visibleItems.length
+                                          ? _historyCard(
+                                              brand,
+                                              visibleItems[
+                                                  row * columns + column])
+                                          : const SizedBox.shrink()),
+                                ]
+                              ]),
+                          childCount: (visibleItems.length / columns).ceil(),
+                        ));
+                      }),
+                    ),
+                  if (_error != null && _items.isNotEmpty)
+                    SliverToBoxAdapter(
+                        child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: FrontendStateCard(
+                                title: '刷新记录失败',
+                                message: _error!,
+                                isError: true,
+                                icon: Icons.cloud_off_outlined,
+                                onAction: _isLoading ? null : _refresh))),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      child: _pageControls(),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
+            )),
       ),
     );
   }
@@ -1006,26 +1051,11 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
     required bool selected,
     required VoidCallback onSelected,
   }) {
-    final width = label.length >= 5 ? 108.0 : 88.0;
-    return SizedBox(
-      width: width,
-      child: ChoiceChip(
-        showCheckmark: false,
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        visualDensity: VisualDensity.compact,
-        labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-        label: Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.left,
-          ),
-        ),
-        selected: selected,
-        onSelected: (_) => onSelected(),
-      ),
+    return ChoiceChip(
+      showCheckmark: false,
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onSelected(),
     );
   }
 
