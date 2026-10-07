@@ -11,6 +11,8 @@ import 'package:re0/core/image_capabilities.dart';
 import 'package:re0/features/home/home_screen.dart';
 
 import 'frontend_management_test.dart' as fixtures;
+import 'admin_management_test.dart' as admin;
+import 'mobile_admin_regression_test.dart' as entities;
 
 Future<void> capture(
     WidgetTester tester, GlobalKey boundary, String name) async {
@@ -197,4 +199,34 @@ void main() {
       expect(tester.takeException(), isNull);
     }, variant: TargetPlatformVariant({TargetPlatform.windows}));
   }
+  testWidgets(
+      'Group mode selection stays visible and saves without a parent rebuild',
+      (tester) async {
+    final gateway = entities.EntityGateway();
+    await admin.mountAdmin(tester, gateway,
+        view: 'groups',
+        size: const Size(1000, 820),
+        extraPermissions: ['group.view', 'group.manage']);
+    final card =
+        find.ancestor(of: find.text('普通操作员'), matching: find.byType(Card));
+    await tester
+        .tap(find.descendant(of: card, matching: find.byIcon(Icons.edit)));
+    await tester.pumpAndSettle();
+    final mode = find.byWidgetPredicate(
+        (widget) => widget is CompactDropdownField && widget.label == '默认生图模式');
+    await tester.ensureVisible(mode);
+    await tester.pumpAndSettle();
+    await tester.tap(mode);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(MenuItemButton, '一般模式'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<CompactDropdownField>(mode).value, 'general');
+    await tester.tap(find.byType(CheckboxListTile).last);
+    await tester.pumpAndSettle();
+    expect(tester.widget<CompactDropdownField>(mode).value, 'general');
+    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.pumpAndSettle();
+    expect(gateway.saved!['image_mode'], 'general');
+    expect(tester.takeException(), isNull);
+  }, variant: TargetPlatformVariant({TargetPlatform.windows}));
 }

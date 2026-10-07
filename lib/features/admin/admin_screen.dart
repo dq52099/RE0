@@ -4469,21 +4469,29 @@ class _AdminContentState extends ConsumerState<_AdminContent>
     Map<String, String> labels = const {},
   }) {
     final choices = <String>{...items, if (value.isNotEmpty) value}.toList();
-    return LayoutBuilder(
-        builder: (context, constraints) => CompactDropdownField<String>(
-              label: label,
-              width: constraints.maxWidth,
-              value: value.isEmpty && !choices.contains('') ? null : value,
-              items: choices
-                  .map((item) => DropdownMenuItem<String>(
-                      value: item, child: Text(labels[item] ?? item)))
-                  .toList(),
-              selectedLabels:
-                  choices.map((item) => labels[item] ?? item).toList(),
-              onChanged: (next) {
-                if (next != null) onChanged(next);
-              },
-            ));
+    String? current = value.isEmpty && !choices.contains('') ? null : value;
+    // Some entity dialogs keep extra fields as widget instances and update
+    // their payload variables without rebuilding the parent. Keep the same
+    // selection behavior as the previous form field in those dialogs.
+    return StatefulBuilder(
+        builder: (context, updateField) => LayoutBuilder(
+            builder: (context, constraints) => CompactDropdownField<String>(
+                  label: label,
+                  width: constraints.maxWidth,
+                  value: current,
+                  items: choices
+                      .map((item) => DropdownMenuItem<String>(
+                          value: item, child: Text(labels[item] ?? item)))
+                      .toList(),
+                  selectedLabels:
+                      choices.map((item) => labels[item] ?? item).toList(),
+                  onChanged: (next) {
+                    if (next != null) {
+                      updateField(() => current = next);
+                      onChanged(next);
+                    }
+                  },
+                )));
   }
 
   Future<void> _probeProviderHealth() async {
