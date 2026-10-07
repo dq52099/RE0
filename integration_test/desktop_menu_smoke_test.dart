@@ -17,6 +17,8 @@ import '../test/frontend_management_test.dart' as frontend;
 // responses and local preferences are fixtures; no real generation is submitted.
 Future<void> resizeNativeWindow(
     WidgetTester tester, int width, int height) async {
+  width = (width * tester.view.devicePixelRatio).round();
+  height = (height * tester.view.devicePixelRatio).round();
   final script = r'''
 Add-Type @'
 using System;
@@ -107,9 +109,14 @@ void main() {
         await checkMenu(
             tester, frontend.boundary, label, 'native-$width-$label');
       }
-      await tester.ensureVisible(find.text('高级设置'));
-      await tester.tap(find.text('高级设置'));
-      await tester.pumpAndSettle();
+      // Remounting the same screen preserves its expansion state. Check it
+      // before clicking so a resize cannot accidentally collapse the section.
+      if (field('质量').evaluate().isEmpty) {
+        await tester.ensureVisible(find.text('高级设置'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('高级设置'));
+        await tester.pumpAndSettle();
+      }
       for (final label in ['质量', '背景', '文件格式']) {
         await checkMenu(
             tester, frontend.boundary, label, 'native-$width-$label');
