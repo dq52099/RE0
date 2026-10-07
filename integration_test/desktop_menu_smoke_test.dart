@@ -17,6 +17,7 @@ import '../test/frontend_management_test.dart' as frontend;
 // responses and local preferences are fixtures; no real generation is submitted.
 Future<void> resizeNativeWindow(
     WidgetTester tester, int width, int height) async {
+  final logicalSize = Size(width.toDouble(), height.toDouble());
   width = (width * tester.view.devicePixelRatio).round();
   height = (height * tester.view.devicePixelRatio).round();
   final script = r'''
@@ -24,12 +25,14 @@ Add-Type @'
 using System;
 using System.Runtime.InteropServices;
 public class RE0TestWindow {
+  [DllImport("user32.dll")] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr value);
   [StructLayout(LayoutKind.Sequential)] public struct Rect { public int L,T,R,B; }
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out Rect r);
   [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out Rect r);
   [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h,int x,int y,int w,int hgt,bool repaint);
 }
 '@
+[RE0TestWindow]::SetThreadDpiAwarenessContext([IntPtr]::new(-4)) | Out-Null
 $re0Handle = (Get-Process -Id __PROCESS__).MainWindowHandle
 if ($re0Handle -eq 0) { throw 'Native window missing' }
 $re0Outer = New-Object RE0TestWindow+Rect
@@ -46,6 +49,15 @@ $re0ExtraHeight = $re0Outer.B - $re0Outer.T - $re0Client.B
   final result = await tester.runAsync(() => Process.run(
       'powershell', ['-NoProfile', '-NonInteractive', '-Command', script]));
   expect(result!.exitCode, 0, reason: result.stderr.toString());
+  for (var attempt = 0; attempt < 30; attempt++) {
+    await tester.pump(const Duration(milliseconds: 100));
+    final actual = tester.view.physicalSize / tester.view.devicePixelRatio;
+    if ((actual.width - logicalSize.width).abs() <= 2 &&
+        (actual.height - logicalSize.height).abs() <= 2) break;
+  }
+  final actual = tester.view.physicalSize / tester.view.devicePixelRatio;
+  expect(actual.width, closeTo(logicalSize.width, 2));
+  expect(actual.height, closeTo(logicalSize.height, 2));
   await tester.pumpAndSettle();
 }
 
