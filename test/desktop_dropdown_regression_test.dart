@@ -227,6 +227,10 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '保存'));
     await tester.pumpAndSettle();
     expect(gateway.saved!['image_mode'], 'general');
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   }, variant: TargetPlatformVariant({TargetPlatform.windows}));
 }
