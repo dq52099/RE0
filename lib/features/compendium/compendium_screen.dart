@@ -1382,7 +1382,8 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
         children: [
           Icon(icon, size: 14),
           const SizedBox(width: 6),
-          Text(text, style: Theme.of(context).textTheme.bodySmall),
+          Flexible(
+              child: Text(text, style: Theme.of(context).textTheme.bodySmall)),
         ],
       ),
     );
@@ -1464,13 +1465,14 @@ class _CompendiumScreenState extends ConsumerState<CompendiumScreen>
         children: [
           Icon(icon, size: 14, color: color),
           const SizedBox(width: 4),
-          Text(
+          Flexible(
+              child: Text(
             label,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: color,
                   fontWeight: FontWeight.w700,
                 ),
-          ),
+          )),
         ],
       ),
     );

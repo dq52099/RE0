@@ -26,6 +26,12 @@ jobs:
           RE0_CAPTURE_MENUS: native-windows
           RE0_MENU_EVIDENCE: ${{ github.workspace }}/evidence/screenshots/menu-fixes-20261007
         run: |
+          if (Test-Path 'C:/Windows/Fonts/msyh.ttc') {
+            $env:RE0_CJK_FONT = 'C:/Windows/Fonts/msyh.ttc'
+          } else {
+            $env:RE0_CJK_FONT = "$env:RUNNER_TEMP/re0-menu-cjk.ttf"
+            Invoke-WebRequest 'https://raw.githubusercontent.com/google/fonts/main/ofl/notosanssc/NotoSansSC%5Bwght%5D.ttf' -OutFile $env:RE0_CJK_FONT
+          }
           flutter test integration_test/desktop_menu_smoke_test.dart -d windows --reporter expanded
           if ($LASTEXITCODE) { throw 'Native menu verification failed' }
       - name: Verify installation, launch and removal

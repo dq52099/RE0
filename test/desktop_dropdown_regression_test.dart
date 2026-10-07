@@ -35,10 +35,10 @@ Future<void> loadMenuFonts() async {
       Platform.environment['FLUTTER_ROOT'] ?? '/home/ubuntu/flutter';
   final fonts = <String, String>{
     'FrontendEvidence': Platform.isWindows
-        ? 'C:/Windows/Fonts/msyh.ttc'
+        ? Platform.environment['RE0_CJK_FONT'] ?? 'C:/Windows/Fonts/msyh.ttc'
         : '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
     'AdminEvidence': Platform.isWindows
-        ? 'C:/Windows/Fonts/msyh.ttc'
+        ? Platform.environment['RE0_CJK_FONT'] ?? 'C:/Windows/Fonts/msyh.ttc'
         : '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
     'MaterialIcons':
         '$flutterRoot/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',

@@ -41,6 +41,7 @@ class _CompactDropdownFieldState<T> extends State<CompactDropdownField<T>> {
   final _focus = FocusNode();
   List<FocusNode> _itemFocus = [];
   bool _open = false;
+  bool _openedWithKeyboard = false;
 
   @override
   void initState() {
@@ -79,6 +80,7 @@ class _CompactDropdownFieldState<T> extends State<CompactDropdownField<T>> {
 
   void _openFromKeyboard() {
     if (widget.items.isEmpty) return;
+    _openedWithKeyboard = true;
     _controller.open();
     final selected = widget.items
         .indexWhere((item) => item.value == widget.value && item.enabled);
@@ -117,13 +119,13 @@ class _CompactDropdownFieldState<T> extends State<CompactDropdownField<T>> {
         alignmentOffset: const Offset(0, 6),
         consumeOutsideTap: false,
         onOpen: () {
-          FocusManager.instance.primaryFocus?.unfocus();
           setState(() => _open = true);
         },
         onClose: () {
           if (mounted) {
             setState(() => _open = false);
-            _focus.requestFocus();
+            if (_openedWithKeyboard) _focus.requestFocus();
+            _openedWithKeyboard = false;
           }
         },
         style: MenuStyle(
@@ -182,6 +184,9 @@ class _CompactDropdownFieldState<T> extends State<CompactDropdownField<T>> {
         ],
         builder: (context, controller, child) => CallbackShortcuts(
           bindings: {
+            if (_open)
+              const SingleActivator(LogicalKeyboardKey.escape):
+                  _controller.close,
             const SingleActivator(LogicalKeyboardKey.arrowDown):
                 _openFromKeyboard,
             const SingleActivator(LogicalKeyboardKey.arrowUp):
@@ -200,6 +205,7 @@ class _CompactDropdownFieldState<T> extends State<CompactDropdownField<T>> {
                 onTap: widget.items.isEmpty
                     ? null
                     : () {
+                        _openedWithKeyboard = false;
                         controller.isOpen
                             ? controller.close()
                             : controller.open();
