@@ -102,8 +102,8 @@ void main() {
   testWidgets('Windows native generation and management menus', (tester) async {
     expect(Platform.isWindows, isTrue);
     final metrics = <Map<String, dynamic>>[];
-    for (final width in [1000, 1360]) {
-      await resizeNativeWindow(tester, width, 820);
+    for (final width in [900, 1000]) {
+      await resizeNativeWindow(tester, width, width == 900 ? 600 : 700);
       await frontend.mount(
           tester, const HomeScreen(), frontend.FrontendGateway(),
           configureView: false);
