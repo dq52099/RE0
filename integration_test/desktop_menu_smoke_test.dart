@@ -98,6 +98,7 @@ Future<void> checkMenu(
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  WidgetController.hitTestWarningShouldBeFatal = true;
   setUpAll(evidence.loadMenuFonts);
   testWidgets('Windows native generation and management menus', (tester) async {
     expect(Platform.isWindows, isTrue);
@@ -146,8 +147,11 @@ void main() {
     for (final label in ['角色', '用户组']) {
       await checkMenu(tester, admin.boundaryKey, label, 'native-admin-$label');
     }
+    await tester.ensureVisible(field('角色'));
+    await tester.pumpAndSettle();
     await tester.tap(field('角色'));
     await tester.pumpAndSettle();
+    expect(find.byType(MenuItemButton), findsWidgets);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
