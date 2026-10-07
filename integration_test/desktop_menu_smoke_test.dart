@@ -134,7 +134,17 @@ void main() {
     for (final label in ['角色', '用户组']) {
       await checkMenu(tester, admin.boundaryKey, label, 'native-admin-$label');
     }
+    await tester.tap(field('角色'));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byType(MenuItemButton), findsNothing);
+    expect(find.byType(Dialog), findsOneWidget);
+    // Management forms deliberately require an explicit Cancel/Save; their
+    // barrier is not dismissible, including with Escape.
+    await tester.tap(find.widgetWithText(TextButton, '取消'));
     await tester.pumpAndSettle();
     expect(find.byType(Dialog), findsNothing);
     final root = Platform.environment['RE0_MENU_EVIDENCE'] ??

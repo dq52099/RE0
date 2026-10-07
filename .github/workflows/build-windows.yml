@@ -1,11 +1,17 @@
 name: Build Windows
 on:
   workflow_dispatch:
+    inputs:
+      verified_build_run:
+        description: 'Reuse an installer only when production source is identical (optional CI run ID)'
+        required: false
+        default: ''
   push:
     branches: ['build/windows-*']
     tags: ['windows-v*']
 permissions:
   contents: read
+  actions: read
 jobs:
   windows:
     runs-on: windows-latest
@@ -18,8 +24,30 @@ jobs:
           channel: stable
           cache: true
       - name: Build installer and portable archive
+        if: inputs.verified_build_run == ''
         shell: pwsh
         run: ./scripts/build-windows.ps1
+      - name: Reuse verified installer when only the UI check changed
+        if: inputs.verified_build_run != ''
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RE0_BUILD_RUN: ${{ inputs.verified_build_run }}
+        run: |
+          $re0Run = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:RE0_BUILD_RUN" | ConvertFrom-Json
+          if ($LASTEXITCODE -or $re0Run.status -ne 'completed') { throw 'Build run must be complete' }
+          $re0Jobs = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:RE0_BUILD_RUN/jobs" | ConvertFrom-Json
+          $re0Build = @($re0Jobs.jobs.steps | Where-Object name -eq 'Build installer and portable archive')
+          if ($re0Build.Count -ne 1 -or $re0Build[0].conclusion -ne 'success') { throw 'Build and full checks must have passed' }
+          $re0Diff = gh api "repos/$env:GITHUB_REPOSITORY/compare/$($re0Run.head_sha)...$env:GITHUB_SHA" | ConvertFrom-Json
+          if ($LASTEXITCODE -or $re0Diff.status -notin @('ahead','identical')) { throw 'Cannot verify source ancestry' }
+          $re0Changes = @($re0Diff.files | Where-Object filename -notin @('.github/workflows/build-windows.yml','integration_test/desktop_menu_smoke_test.dart'))
+          if ($re0Changes.Count) { throw 'Production source changed; a new build is required' }
+          gh run download $env:RE0_BUILD_RUN -R $env:GITHUB_REPOSITORY -n RE0-windows-x64 -D build/release
+          if ($LASTEXITCODE) { throw 'Artifact download failed' }
+          $re0Manifest = Get-Content build/release/manifest.json -Raw | ConvertFrom-Json
+          $re0Installer = Get-Item "build/release/$($re0Manifest.file_name)"
+          if ($re0Installer.Length -ne $re0Manifest.file_size -or (Get-FileHash $re0Installer -Algorithm SHA256).Hash.ToLowerInvariant() -ne $re0Manifest.sha256) { throw 'Artifact checksum mismatch' }
       - name: Open generation and management menus in a native Windows window
         shell: pwsh
         env:
