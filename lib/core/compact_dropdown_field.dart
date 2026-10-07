@@ -120,6 +120,22 @@ class _CompactDropdownFieldState<T> extends State<CompactDropdownField<T>> {
         consumeOutsideTap: false,
         onOpen: () {
           setState(() => _open = true);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted ||
+                !_controller.isOpen ||
+                selected < 0 ||
+                selected >= _itemFocus.length) return;
+            final itemContext = _itemFocus[selected].context;
+            final render = itemContext?.findRenderObject();
+            if (itemContext != null && render != null) {
+              // Scroll only the menu, so revealing the current choice cannot
+              // move the page and dismiss its anchored menu.
+              Scrollable.maybeOf(itemContext)?.position.ensureVisible(render,
+                  alignment: .5,
+                  alignmentPolicy:
+                      ScrollPositionAlignmentPolicy.keepVisibleAtEnd);
+            }
+          });
         },
         onClose: () {
           if (mounted) {

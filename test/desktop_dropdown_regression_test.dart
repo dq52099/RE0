@@ -173,6 +173,14 @@ void main() {
       expect(find.byType(MenuItemButton), findsNothing);
       await tester.tap(field);
       await tester.pumpAndSettle();
+      final selectedRect =
+          tester.getRect(find.widgetWithText(MenuItemButton, labels.last));
+      final menuRect = tester.getRect(find.byWidgetPredicate((widget) =>
+          widget is Material &&
+          widget.elevation == 4 &&
+          widget.type == MaterialType.canvas));
+      expect(selectedRect.top, greaterThanOrEqualTo(menuRect.top));
+      expect(selectedRect.bottom, lessThanOrEqualTo(menuRect.bottom));
       await tester.tapAt(const Offset(20, 20));
       await tester.pumpAndSettle();
       expect(find.byType(MenuItemButton), findsNothing);

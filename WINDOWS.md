@@ -17,6 +17,8 @@ Windows 构建机需 Flutter 3.41.9、Visual Studio 2022 的“使用 C++ 的桌
 
 GitHub Actions 的 `Build Windows` 工作流使用 `windows-latest` 构建、运行测试，实际安装并启动程序验证窗口响应，然后卸载。安装包和验证证据通过 Actions artifact 交付，不自动发布 GitHub Release。
 
+工作流还会在真实 Windows 窗口中运行 `integration_test/desktop_menu_smoke_test.dart`，打开并选择生图六类参数和用户编辑下拉框，检查菜单边界并保存展开截图。此项使用测试网关响应，不提交实际生图或修改服务器账户；窗口尺寸与截图保存在 artifact 的 `menu-evidence/`。
+
 ## 独立更新
 
 Windows 从 `https://work.6688667.xyz/boxying-desktop/manifest.json` 检查更新。只接受 `windows-x64`、同目录 HTTPS `.exe` 和有效 SHA-256；下载后校验通过才启动安装器。Android 的强制升级配置不会拦截 Windows。将经过验证的产物放入该目录，再原子替换 manifest 即可发布。
