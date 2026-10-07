@@ -488,8 +488,7 @@ class _AdminContentState extends ConsumerState<_AdminContent>
         final filtered = data.users
             .where((user) =>
                 (_userStatus == 'all' ||
-                    boolish(user['is_active']) ==
-                        (_userStatus == 'active')) &&
+                    boolish(user['is_active']) == (_userStatus == 'active')) &&
                 (query.isEmpty ||
                     [
                       'username',
@@ -4443,23 +4442,23 @@ class _AdminContentState extends ConsumerState<_AdminContent>
     required List<Map<String, dynamic>> items,
     required void Function(String value) onChanged,
   }) {
-    return DropdownButtonFormField<String>(
-      isExpanded: true,
-      initialValue:
-          items.any((item) => item['id'].toString() == value) ? value : null,
-      decoration: InputDecoration(labelText: label),
-      items: items
-          .map(
-            (item) => DropdownMenuItem<String>(
-              value: _text(item['id']),
-              child: Text(_text(item['name'])),
-            ),
-          )
-          .toList(),
-      onChanged: (value) {
-        if (value != null) onChanged(value);
-      },
-    );
+    return LayoutBuilder(
+        builder: (context, constraints) => CompactDropdownField<String>(
+              label: label,
+              width: constraints.maxWidth,
+              value: items.any((item) => item['id'].toString() == value)
+                  ? value
+                  : null,
+              items: items
+                  .map((item) => DropdownMenuItem<String>(
+                      value: _text(item['id']),
+                      child: Text(_text(item['name']))))
+                  .toList(),
+              selectedLabels: items.map((item) => _text(item['name'])).toList(),
+              onChanged: (next) {
+                if (next != null) onChanged(next);
+              },
+            ));
   }
 
   Widget _stringDropdown(
@@ -4470,18 +4469,21 @@ class _AdminContentState extends ConsumerState<_AdminContent>
     Map<String, String> labels = const {},
   }) {
     final choices = <String>{...items, if (value.isNotEmpty) value}.toList();
-    return DropdownButtonFormField<String>(
-      isExpanded: true,
-      initialValue: value.isEmpty && !choices.contains('') ? null : value,
-      decoration: InputDecoration(labelText: label),
-      items: choices
-          .map((item) => DropdownMenuItem<String>(
-              value: item, child: Text(labels[item] ?? item)))
-          .toList(),
-      onChanged: (value) {
-        if (value != null) onChanged(value);
-      },
-    );
+    return LayoutBuilder(
+        builder: (context, constraints) => CompactDropdownField<String>(
+              label: label,
+              width: constraints.maxWidth,
+              value: value.isEmpty && !choices.contains('') ? null : value,
+              items: choices
+                  .map((item) => DropdownMenuItem<String>(
+                      value: item, child: Text(labels[item] ?? item)))
+                  .toList(),
+              selectedLabels:
+                  choices.map((item) => labels[item] ?? item).toList(),
+              onChanged: (next) {
+                if (next != null) onChanged(next);
+              },
+            ));
   }
 
   Future<void> _probeProviderHealth() async {

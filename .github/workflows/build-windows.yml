@@ -1,0 +1,48 @@
+name: Build Windows
+on:
+  workflow_dispatch:
+  push:
+    branches: ['build/windows-*']
+    tags: ['windows-v*']
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.9'
+          channel: stable
+          cache: true
+      - name: Build installer and portable archive
+        shell: pwsh
+        run: ./scripts/build-windows.ps1
+      - name: Open generation and management menus in a native Windows window
+        shell: pwsh
+        env:
+          RE0_CAPTURE_MENUS: native-windows
+          RE0_MENU_EVIDENCE: ${{ github.workspace }}/evidence/screenshots/menu-fixes-20261007
+        run: |
+          flutter test integration_test/desktop_menu_smoke_test.dart -d windows --reporter expanded
+          if ($LASTEXITCODE) { throw 'Native menu verification failed' }
+      - name: Verify installation, launch and removal
+        shell: pwsh
+        run: ./scripts/smoke-windows.ps1
+      - name: Collect opened menu evidence
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path 'evidence/screenshots/menu-fixes-20261007/native-windows') {
+            New-Item -ItemType Directory -Force build/release | Out-Null
+            Copy-Item 'evidence/screenshots/menu-fixes-20261007/native-windows' build/release/menu-evidence -Recurse -Force
+          }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: RE0-windows-x64
+          path: build/release/
+          if-no-files-found: error
+          retention-days: 14

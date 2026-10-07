@@ -143,11 +143,15 @@ class FixtureImageCache extends ImageCacheService {
 final boundary = GlobalKey();
 
 Future<void> mount(WidgetTester tester, Widget screen, FrontendGateway gateway,
-    {Size size = const Size(430, 900), double scale = 1}) async {
-  tester.view.physicalSize = size;
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.resetPhysicalSize);
-  addTearDown(tester.view.resetDevicePixelRatio);
+    {Size size = const Size(430, 900),
+    double scale = 1,
+    bool configureView = true}) async {
+  if (configureView) {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+  }
   SharedPreferences.setMockInitialValues({'active_brand': 're0'});
   final prefs = await SharedPreferences.getInstance();
   final theme = AppBrands.byId('re0').theme;

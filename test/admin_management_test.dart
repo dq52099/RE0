@@ -137,17 +137,20 @@ Future<void> mountAdmin(WidgetTester tester, ManagementGateway gateway,
     Size size = const Size(430, 900),
     double scale = 1,
     List<String> extraPermissions = const [],
-    ThemeData? theme}) async {
-  tester.view.physicalSize = size;
-  tester.view.devicePixelRatio = 1;
+    ThemeData? theme,
+    bool configureView = true}) async {
+  if (configureView) {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+  }
   addTearDown(() async {
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
   });
-  addTearDown(tester.view.resetPhysicalSize);
-  addTearDown(tester.view.resetDevicePixelRatio);
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
   await tester.pumpWidget(RepaintBoundary(

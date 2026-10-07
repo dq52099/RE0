@@ -1,6 +1,6 @@
 name: re0
 description: 从零开始的异世界生图
-version: 1.2.41+10241
+version: 1.2.42+10242
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -21,6 +21,8 @@ dependencies:
   url_launcher: ^6.2.1
 
 dev_dependencies:
+  integration_test:
+    sdk: flutter
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0

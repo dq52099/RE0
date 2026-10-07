@@ -1,6 +1,10 @@
-import 'package:flutter/material.dart';
+import 'dart:math' as math;
 
-class CompactDropdownField<T> extends StatelessWidget {
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+/// A select field with a readable menu width independent of its anchor.
+class CompactDropdownField<T> extends StatefulWidget {
   const CompactDropdownField({
     super.key,
     required this.label,
@@ -13,7 +17,7 @@ class CompactDropdownField<T> extends StatelessWidget {
   });
 
   final String label;
-  final T value;
+  final T? value;
   final double width;
   final double? menuWidth;
   final List<DropdownMenuItem<T>> items;
@@ -21,108 +25,209 @@ class CompactDropdownField<T> extends StatelessWidget {
   final ValueChanged<T?> onChanged;
 
   @override
-  Widget build(BuildContext context) {
-    const menuSafetyInset = 8.0;
-    final maxMenuWidth =
-        width > menuSafetyInset ? width - menuSafetyInset : width;
-    final requestedMenuWidth = menuWidth ?? maxMenuWidth;
-    final resolvedMenuWidth =
-        requestedMenuWidth > maxMenuWidth ? maxMenuWidth : requestedMenuWidth;
-    final selectedIndex = items.indexWhere((item) => item.value == value);
-    final selectedLabel =
-        selectedIndex >= 0 && selectedIndex < selectedLabels.length
-            ? selectedLabels[selectedIndex]
-            : value.toString();
-    final theme = Theme.of(context);
-    final bodyStyle = theme.textTheme.bodyMedium?.copyWith(
-      fontWeight: FontWeight.w400,
-      height: 1.3,
-    );
-    final labelStyle = theme.textTheme.bodyMedium?.copyWith(
-      fontSize: 15,
-      fontWeight: FontWeight.w400,
-      height: 1.15,
-    );
-    final decoration = InputDecoration(
-      labelText: label,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      labelStyle: labelStyle,
-      floatingLabelStyle: labelStyle,
-    );
-
-    return SizedBox(
-      width: width,
-      child: Listener(
-        onPointerDown: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-        child: PopupMenuButton<T>(
-          initialValue: value,
-          tooltip: '',
-          padding: EdgeInsets.zero,
-          position: PopupMenuPosition.under,
-          offset: Offset(width - resolvedMenuWidth, 4),
-          constraints: BoxConstraints.tightFor(width: resolvedMenuWidth),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          itemBuilder: (context) => items
-              .map(
-                (item) => PopupMenuItem<T>(
-                  value: item.value,
-                  enabled: item.enabled,
-                  height: 42,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: Center(child: item.child),
-                  ),
-                ),
-              )
-              .toList(),
-          onSelected: (next) {
-            FocusManager.instance.primaryFocus?.unfocus();
-            onChanged(next);
-          },
-          child: InputDecorator(
-            decoration: decoration,
-            isEmpty: selectedLabel.isEmpty,
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    selectedLabel,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: bodyStyle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                const Icon(Icons.expand_more, size: 18),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  State<CompactDropdownField<T>> createState() =>
+      _CompactDropdownFieldState<T>();
 
   static DropdownMenuItem<T> centeredItem<T>(
     T value,
     String label,
     BuildContext context,
-  ) {
-    return DropdownMenuItem<T>(
-      value: value,
-      alignment: AlignmentDirectional.center,
-      child: Directionality(
-        textDirection: TextDirection.ltr,
-        child: Center(
-          child: Text(
-            label,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w400,
-                  height: 1.3,
+  ) =>
+      DropdownMenuItem<T>(value: value, child: Text(label));
+}
+
+class _CompactDropdownFieldState<T> extends State<CompactDropdownField<T>> {
+  final _controller = MenuController();
+  final _focus = FocusNode();
+  List<FocusNode> _itemFocus = [];
+  bool _open = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _resetItemFocus();
+  }
+
+  @override
+  void didUpdateWidget(CompactDropdownField<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.items.length != widget.items.length) {
+      _controller.close();
+      _resetItemFocus();
+    }
+  }
+
+  void _resetItemFocus() {
+    for (final node in _itemFocus) {
+      node.dispose();
+    }
+    _itemFocus = List.generate(widget.items.length, (_) => FocusNode());
+  }
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    for (final node in _itemFocus) {
+      node.dispose();
+    }
+    super.dispose();
+  }
+
+  String _label(int index) => index < widget.selectedLabels.length
+      ? widget.selectedLabels[index]
+      : widget.items[index].value?.toString() ?? '';
+
+  void _openFromKeyboard() {
+    if (widget.items.isEmpty) return;
+    _controller.open();
+    final selected = widget.items
+        .indexWhere((item) => item.value == widget.value && item.enabled);
+    final index = selected >= 0
+        ? selected
+        : widget.items.indexWhere((item) => item.enabled);
+    if (index >= 0) _itemFocus[index].requestFocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final media = MediaQuery.of(context);
+    final selected =
+        widget.items.indexWhere((item) => item.value == widget.value);
+    final text =
+        selected >= 0 ? _label(selected) : widget.value?.toString() ?? '';
+    final menuWidth = math.min(
+      math.max(widget.menuWidth ?? widget.width, 224.0),
+      math.min(440.0, media.size.width - 24),
+    );
+    final menuHeight = math.min(360.0,
+        math.max(96.0, media.size.height - media.viewInsets.bottom - 32));
+    final bodyStyle = theme.textTheme.bodyMedium?.copyWith(
+      fontWeight: FontWeight.w400,
+      height: 1.4,
+    );
+
+    return SizedBox(
+      width: widget.width,
+      child: MenuAnchor(
+        controller: _controller,
+        childFocusNode: _focus,
+        crossAxisUnconstrained: false,
+        alignmentOffset: const Offset(0, 6),
+        consumeOutsideTap: false,
+        onOpen: () {
+          FocusManager.instance.primaryFocus?.unfocus();
+          setState(() => _open = true);
+        },
+        onClose: () {
+          if (mounted) {
+            setState(() => _open = false);
+            _focus.requestFocus();
+          }
+        },
+        style: MenuStyle(
+          alignment: AlignmentDirectional.bottomStart,
+          backgroundColor: WidgetStatePropertyAll(scheme.surface),
+          surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+          shadowColor:
+              WidgetStatePropertyAll(scheme.primary.withValues(alpha: .16)),
+          elevation: const WidgetStatePropertyAll(4),
+          side:
+              WidgetStatePropertyAll(BorderSide(color: scheme.outlineVariant)),
+          shape: WidgetStatePropertyAll(
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+          padding: const WidgetStatePropertyAll(EdgeInsets.all(6)),
+          minimumSize: WidgetStatePropertyAll(Size(menuWidth, 0)),
+          maximumSize: WidgetStatePropertyAll(Size(menuWidth, menuHeight)),
+          visualDensity: VisualDensity.standard,
+        ),
+        menuChildren: [
+          for (var i = 0; i < widget.items.length; i++)
+            MenuItemButton(
+              focusNode: _itemFocus[i],
+              onPressed: widget.items[i].enabled
+                  ? () {
+                      widget.onChanged(widget.items[i].value);
+                    }
+                  : null,
+              style: ButtonStyle(
+                minimumSize: const WidgetStatePropertyAll(Size(0, 44)),
+                padding: const WidgetStatePropertyAll(
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
+                foregroundColor: WidgetStateProperty.resolveWith(
+                    (states) => states.contains(WidgetState.disabled)
+                        ? scheme.onSurface.withValues(alpha: .38)
+                        : i == selected
+                            ? scheme.primary
+                            : scheme.onSurface),
+                backgroundColor: WidgetStateProperty.resolveWith((states) =>
+                    i == selected ||
+                            states.contains(WidgetState.focused) ||
+                            states.contains(WidgetState.hovered)
+                        ? scheme.primary.withValues(alpha: .09)
+                        : Colors.transparent),
+                shape: WidgetStatePropertyAll(RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8))),
+                textStyle: WidgetStatePropertyAll(bodyStyle),
+              ),
+              trailingIcon: SizedBox(
+                  width: 18,
+                  child: i == selected
+                      ? Icon(Icons.check_rounded,
+                          size: 18, color: scheme.primary)
+                      : null),
+              child: Text(_label(i), softWrap: true),
+            ),
+        ],
+        builder: (context, controller, child) => CallbackShortcuts(
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.arrowDown):
+                _openFromKeyboard,
+            const SingleActivator(LogicalKeyboardKey.arrowUp):
+                _openFromKeyboard,
+          },
+          child: Semantics(
+            button: true,
+            expanded: _open,
+            label: widget.label,
+            value: text,
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                focusNode: _focus,
+                borderRadius: BorderRadius.circular(12),
+                onTap: widget.items.isEmpty
+                    ? null
+                    : () {
+                        controller.isOpen
+                            ? controller.close()
+                            : controller.open();
+                      },
+                child: InputDecorator(
+                  isFocused: _open,
+                  isEmpty: text.isEmpty,
+                  decoration: InputDecoration(
+                    labelText: widget.label,
+                    enabled: widget.items.isNotEmpty,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                    labelStyle: theme.textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w400),
+                  ),
+                  child: Row(children: [
+                    Expanded(
+                        child: Text(text,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: bodyStyle)),
+                    const SizedBox(width: 8),
+                    Icon(_open ? Icons.expand_less : Icons.expand_more,
+                        size: 18, color: scheme.primary),
+                  ]),
                 ),
+              ),
+            ),
           ),
         ),
       ),

@@ -30,6 +30,6 @@ $manifest = [ordered]@{
   file_name=$installer.Name; file_size=$installer.Length
   sha256=(Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
   download_url="https://work.6688667.xyz/boxying-desktop/$($installer.Name)"
-  release_notes='首次 Windows 安装版：自适应创作工作台、键盘操作、图片另存为、桌面头像裁剪与独立更新。'
+  release_notes='修复图片参数、画廊筛选与后台下拉菜单：主题色、选中标记、长选项换行、滚动条与窗口边缘避让；同步修复管理状态、表单标签和切页晃动。'
 }
 $manifest | ConvertTo-Json | Set-Content -Encoding utf8 build/release/manifest.json
